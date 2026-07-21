@@ -233,7 +233,24 @@
     .atalho-feedback{margin-top:10px;font-size:12px;border-radius:12px;padding:9px 11px;display:none}
     .atalho-feedback.success{color:#1a7f37;background:#dafbe1;border:1px solid #a8d9b4}
     .atalho-feedback.error{color:#b91c1c;background:#fef2f2;border:1px solid #fca5a5}
+    .ap-card{border:1px solid var(--line);border-left:5px solid #94a3b8;border-radius:14px;padding:14px 16px;background:#f8fafc;margin-bottom:10px}
+    .ap-card.st-assistencia{border-left-color:var(--danger);background:#fef2f2}
+    .ap-card.st-concluido{border-left-color:#1a7f37;background:#f0fdf4}
+    .ap-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    .ap-card-nome{font-weight:800;font-size:14px;color:var(--ink)}
+    .ap-card-imei{font-size:12px;color:var(--muted);font-family:ui-monospace,Menlo,Consolas,monospace;margin-top:2px}
+    .ap-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap;background:rgba(148,163,184,.18);color:#475569}
+    .ap-card.st-assistencia .ap-badge{background:rgba(229,62,62,.12);color:#b91c1c}
+    .ap-card.st-concluido .ap-badge{background:rgba(26,127,55,.12);color:#1a7f37}
+    .ap-card-meta{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.7}
+    .ap-card-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+    .ap-card-actions button{width:auto;padding:7px 12px;font-size:12px;border-radius:9px;background:#fff;border:1px solid var(--line);color:var(--brand);font-weight:700;cursor:pointer;font-family:inherit}
+    .ap-card-actions button:hover{background:var(--card-soft)}
+    .ap-hist-item{padding:12px 0;border-bottom:1px solid var(--line)}
+    .ap-hist-item:last-child{border-bottom:none}
+    .ap-empty{padding:26px 10px;text-align:center;color:var(--muted);font-size:13px}
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <header>
@@ -254,6 +271,7 @@
     <div class="tab-nav">
       <button class="tab-btn active" onclick="trocarTab('simulador',this)">📱 Simulador</button>
       <button class="tab-btn" onclick="trocarTab('atalhos',this)">⚡ Gerador de Atalhos</button>
+      <button class="tab-btn" onclick="trocarTab('aparelhos',this)">📦 Controle de Aparelhos</button>
     </div>
   </div>
   <div style="max-width:1120px;margin:0 auto;padding:0 16px">
@@ -410,7 +428,122 @@
         </div>
       </div>
     </div><!-- /tab-atalhos -->
+
+    <!-- TAB APARELHOS -->
+    <div class="tab-pane" id="tab-aparelhos">
+      <main class="grid" style="margin-top:20px">
+        <section class="card">
+          <h2 class="title">Cadastrar / Editar Aparelho</h2>
+          <p class="section-copy">Registre a entrada de um aparelho. Se o IMEI já existir, você pode ver o histórico ou registrar uma nova passagem.</p>
+
+          <div class="fieldset">
+            <p class="fieldset-title">Aparelho</p>
+            <div class="row">
+              <div>
+                <label for="ap-nome">Nome do aparelho</label>
+                <input id="ap-nome" type="text" list="lista-iphones" placeholder="Ex.: iPhone 13" autocomplete="off">
+              </div>
+              <div>
+                <label for="ap-gb">Gigas</label>
+                <select id="ap-gb">
+                  <option value="">GB (opcional)</option>
+                  <option>64GB</option><option>128GB</option><option>256GB</option><option>512GB</option><option>1TB</option>
+                </select>
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <label for="ap-cor">Cor</label>
+                <input id="ap-cor" type="text" placeholder="Ex.: Preto" autocomplete="off">
+              </div>
+              <div>
+                <label for="ap-imei">IMEI</label>
+                <input id="ap-imei" type="text" placeholder="15 dígitos" autocomplete="off" oninput="checarImei(this.value)">
+              </div>
+            </div>
+            <div id="ap-imei-hint" class="input-hint"></div>
+          </div>
+
+          <div class="fieldset">
+            <p class="fieldset-title">Entrada</p>
+            <div class="row">
+              <div>
+                <label for="ap-origem">De onde está vindo</label>
+                <input id="ap-origem" type="text" placeholder="Ex.: Cliente, Fornecedor, Retorno de assistência..." autocomplete="off">
+              </div>
+              <div>
+                <label for="ap-data-entrada">Data de entrada</label>
+                <input id="ap-data-entrada" type="date">
+              </div>
+            </div>
+            <label for="ap-cadastrador">Cadastrado por <span style="color:var(--danger)">*</span></label>
+            <input id="ap-cadastrador" type="text" placeholder="Seu nome (obrigatório)" autocomplete="off">
+          </div>
+
+          <div class="fieldset">
+            <p class="fieldset-title">Saída (preencha quando o aparelho sair da loja)</p>
+            <label style="margin-top:0" for="ap-destino">Situação / Destino</label>
+            <select id="ap-destino" onchange="onDestinoChange()">
+              <option value="">Aguardando (ainda em estoque)</option>
+              <option value="vendido">Vendido</option>
+              <option value="garantia">Retirado por cliente de garantia</option>
+              <option value="assistencia">Enviado para assistência</option>
+              <option value="troca">Troca para cliente</option>
+            </select>
+            <div id="ap-assistencia-wrap" style="display:none">
+              <label for="ap-assistencia-nome">Qual assistência</label>
+              <input id="ap-assistencia-nome" type="text" placeholder="Nome da assistência técnica" autocomplete="off">
+            </div>
+            <div id="ap-saida-wrap" style="display:none">
+              <label for="ap-data-saida">Data de saída</label>
+              <input id="ap-data-saida" type="date">
+            </div>
+            <label for="ap-obs">Observação</label>
+            <textarea id="ap-obs" rows="2" style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-size:14px;font-family:inherit;color:var(--ink);outline:none;resize:vertical" placeholder="Ex.: novo defeito apresentado, detalhes da troca..."></textarea>
+          </div>
+
+          <div class="actions">
+            <button type="button" class="btn" id="ap-btn-salvar" onclick="salvarAparelho()">Cadastrar Aparelho</button>
+            <button type="button" class="btn ghost" id="ap-btn-cancelar-edicao" style="display:none" onclick="cancelarEdicaoAparelho()">Cancelar edição</button>
+            <button type="button" class="btn ghost" onclick="limparFormAparelho()">Limpar</button>
+          </div>
+          <div id="ap-feedback" class="feedback" aria-live="polite"></div>
+        </section>
+
+        <section class="card">
+          <h2 class="title">Aparelhos cadastrados</h2>
+          <p class="section-copy">Acompanhe onde cada aparelho está.</p>
+
+          <div class="seg" role="group" id="ap-filtros" style="margin-bottom:12px">
+            <label><input type="radio" name="ap-filtro" value="todos" checked onchange="renderAparelhos()"> Todos<span id="ap-count-todos"></span></label>
+            <label><input type="radio" name="ap-filtro" value="aguardando" onchange="renderAparelhos()"> 🔘 Aguardando<span id="ap-count-aguardando"></span></label>
+            <label><input type="radio" name="ap-filtro" value="assistencia" onchange="renderAparelhos()"> 🔴 Assistência<span id="ap-count-assistencia"></span></label>
+            <label><input type="radio" name="ap-filtro" value="concluido" onchange="renderAparelhos()"> 🟢 Concluídos<span id="ap-count-concluido"></span></label>
+          </div>
+          <input id="ap-busca" type="text" placeholder="Buscar por nome, IMEI, cor ou origem..." oninput="renderAparelhos()" autocomplete="off" style="margin-bottom:14px">
+
+          <div id="ap-lista"></div>
+        </section>
+      </main>
+    </div><!-- /tab-aparelhos -->
   </div><!-- /tab container -->
+
+  <!-- Histórico do Aparelho Modal -->
+  <div id="ap-hist-modal" class="admin-modal" aria-hidden="true">
+    <div class="admin-panel" role="dialog" aria-modal="true">
+      <div class="admin-header">
+        <div>
+          <h2 class="admin-title" id="ap-hist-title">Histórico do aparelho</h2>
+          <p style="margin:6px 0 0;color:var(--muted);font-size:14px">Todas as passagens registradas para este IMEI.</p>
+        </div>
+        <button type="button" class="admin-close" onclick="fecharHistoricoAparelho()">✕ Fechar</button>
+      </div>
+      <div id="ap-hist-lista"></div>
+      <div class="admin-actions">
+        <button type="button" class="btn ghost" onclick="novaPassagemAtual()">➕ Registrar nova passagem para este IMEI</button>
+      </div>
+    </div>
+  </div>
 
   <footer>
     <div class="footer-row">
@@ -951,6 +1084,226 @@
   }
 
   // =====================================================================
+  // CONTROLE DE APARELHOS (Supabase — dados na nuvem, sincronizados entre computadores)
+  // =====================================================================
+  const SUPABASE_URL='https://gcawgwnthuqijgamkvhv.supabase.co';
+  const SUPABASE_KEY='sb_publishable_dKxYwbmA8K96WijpCS2HEA_WtqxUZdl';
+  const sbClient=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  let _apEditandoId=null,_apHistImei=null,_apCache=[],_apCarregando=false;
+
+  function toRow(o){return{id:o.id,nome:o.nome||null,gb:o.gb||null,cor:o.cor||null,imei:o.imei,origem:o.origem||null,cadastrador:o.cadastrador,data_entrada:o.dataEntrada||null,destino:o.destino||null,assistencia_nome:o.assistenciaNome||null,data_saida:o.dataSaida||null,obs:o.obs||null,criado_em:o.criadoEm}}
+  function fromRow(r){return{id:r.id,nome:r.nome||'',gb:r.gb||'',cor:r.cor||'',imei:r.imei||'',origem:r.origem||'',cadastrador:r.cadastrador||'',dataEntrada:r.data_entrada||'',destino:r.destino||'',assistenciaNome:r.assistencia_nome||'',dataSaida:r.data_saida||'',obs:r.obs||'',criadoEm:r.criado_em}}
+  function getAparelhos(){return _apCache}
+
+  async function carregarAparelhos(mostrarErro){
+    _apCarregando=true;
+    const{data,error}=await sbClient.from('aparelhos').select('*').order('criado_em',{ascending:false});
+    _apCarregando=false;
+    if(error){console.error(error);if(mostrarErro!==false)mostrarApFeedback('error','Não foi possível carregar os aparelhos. Verifique sua internet.');return}
+    _apCache=(data||[]).map(fromRow);
+    renderAparelhos();
+  }
+
+  function hojeISO(){return new Date().toISOString().slice(0,10)}
+  function fmtDataAp(iso){if(!iso)return'—';const p=iso.split('-');return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso}
+  function diasEntre(iso){if(!iso)return null;const d1=new Date(iso+'T00:00:00');const d2=new Date();return Math.max(0,Math.floor((d2-d1)/86400000))}
+  function mostrarApFeedback(tipo,msg){const el=document.getElementById('ap-feedback');el.className=`feedback ${tipo}`;el.textContent=msg;el.style.display='block';if(tipo==='success')setTimeout(ocultarApFeedback,3000)}
+  function ocultarApFeedback(){const el=document.getElementById('ap-feedback');el.style.display='none';el.textContent='';el.className='feedback'}
+
+  function statusInfo(item){
+    if(item.destino==='assistencia')return{cls:'st-assistencia',label:'🔴 Na assistência',cat:'assistencia'};
+    if(item.destino==='vendido')return{cls:'st-concluido',label:'🟢 Vendido',cat:'concluido'};
+    if(item.destino==='garantia')return{cls:'st-concluido',label:'🟢 Retirado (garantia)',cat:'concluido'};
+    if(item.destino==='troca')return{cls:'st-concluido',label:'🟢 Troca concluída',cat:'concluido'};
+    return{cls:'st-aguardando',label:'🔘 Aguardando',cat:'aguardando'};
+  }
+  function montarMetaHtml(item){
+    const l=[];
+    l.push(`Origem: ${esc(item.origem||'—')}`);
+    l.push(`Cadastrado por: ${esc(item.cadastrador||'—')}`);
+    l.push(`Entrada: ${fmtDataAp(item.dataEntrada)}`);
+    if(item.destino==='assistencia')l.push(`Assistência: ${esc(item.assistenciaNome||'—')}`);
+    if(item.destino)l.push(`Saída: ${fmtDataAp(item.dataSaida)}`);
+    if(item.obs)l.push(`Obs: ${esc(item.obs)}`);
+    return l.join('<br>');
+  }
+
+  function onDestinoChange(){
+    const v=document.getElementById('ap-destino').value;
+    document.getElementById('ap-assistencia-wrap').style.display=v==='assistencia'?'block':'none';
+    document.getElementById('ap-saida-wrap').style.display=v?'block':'none';
+    const saidaEl=document.getElementById('ap-data-saida');
+    if(v && !saidaEl.value)saidaEl.value=hojeISO();
+  }
+
+  function checarImei(val){
+    const hint=document.getElementById('ap-imei-hint');
+    const imei=val.trim();
+    if(!imei||_apEditandoId){hint.classList.remove('show');hint.innerHTML='';return}
+    const qtd=getAparelhos().filter(a=>a.imei===imei).length;
+    if(qtd){
+      hint.innerHTML=`Este IMEI já tem ${qtd} passagem(ns) registrada(s). <a href="#" onclick="verHistoricoAparelho('${esc(imei)}');return false" style="color:var(--brand);font-weight:700">Ver histórico</a>`;
+      hint.classList.add('show');
+    }else{hint.classList.remove('show');hint.innerHTML=''}
+  }
+
+  function resetFormAparelho(manterCadastrador){
+    const cad=document.getElementById('ap-cadastrador').value;
+    ['ap-nome','ap-cor','ap-imei','ap-origem','ap-assistencia-nome','ap-cadastrador'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('ap-gb').value='';
+    document.getElementById('ap-destino').value='';
+    document.getElementById('ap-data-saida').value='';
+    document.getElementById('ap-obs').value='';
+    document.getElementById('ap-data-entrada').value=hojeISO();
+    if(manterCadastrador)document.getElementById('ap-cadastrador').value=cad;
+    onDestinoChange();
+    const hint=document.getElementById('ap-imei-hint');hint.classList.remove('show');hint.innerHTML='';
+  }
+  function limparFormAparelho(){_apEditandoId=null;document.getElementById('ap-btn-salvar').textContent='Cadastrar Aparelho';document.getElementById('ap-btn-cancelar-edicao').style.display='none';resetFormAparelho(false);ocultarApFeedback()}
+  function cancelarEdicaoAparelho(){limparFormAparelho()}
+
+  async function salvarAparelho(){
+    const nome=document.getElementById('ap-nome').value.trim();
+    const gb=document.getElementById('ap-gb').value;
+    const cor=document.getElementById('ap-cor').value.trim();
+    const imei=document.getElementById('ap-imei').value.trim();
+    const origem=document.getElementById('ap-origem').value.trim();
+    const cadastrador=document.getElementById('ap-cadastrador').value.trim();
+    const dataEntrada=document.getElementById('ap-data-entrada').value||hojeISO();
+    const destino=document.getElementById('ap-destino').value;
+    const assistenciaNome=document.getElementById('ap-assistencia-nome').value.trim();
+    const dataSaida=document.getElementById('ap-data-saida').value;
+    const obs=document.getElementById('ap-obs').value.trim();
+
+    if(!nome){mostrarApFeedback('error','Informe o nome do aparelho.');return}
+    if(!imei){mostrarApFeedback('error','Informe o IMEI do aparelho.');return}
+    if(!cadastrador){mostrarApFeedback('error','O campo "Cadastrado por" é obrigatório.');return}
+    if(destino==='assistencia'&&!assistenciaNome){mostrarApFeedback('error','Informe para qual assistência o aparelho foi enviado.');return}
+    if(destino&&!dataSaida){mostrarApFeedback('error','Informe a data de saída.');return}
+
+    const isEdit=!!_apEditandoId;
+    const anterior=isEdit?_apCache.find(a=>a.id===_apEditandoId):null;
+    const id=isEdit?_apEditandoId:(Date.now()+'-'+Math.random().toString(36).slice(2,7));
+    const registro={id,nome,gb,cor,imei,origem,cadastrador,dataEntrada,destino,assistenciaNome,dataSaida,obs,criadoEm:anterior?anterior.criadoEm:Date.now()};
+
+    const btn=document.getElementById('ap-btn-salvar');
+    const txtOriginal=btn.textContent;
+    btn.disabled=true;btn.textContent='Salvando...';
+    const row=toRow(registro);
+    const{error}=isEdit?await sbClient.from('aparelhos').update(row).eq('id',id):await sbClient.from('aparelhos').insert(row);
+    btn.disabled=false;btn.textContent=txtOriginal;
+
+    if(error){console.error(error);mostrarApFeedback('error','Erro ao salvar no banco de dados. Verifique sua internet e tente novamente.');return}
+
+    if(isEdit){
+      const idx=_apCache.findIndex(a=>a.id===id);
+      if(idx>-1)_apCache[idx]=registro;
+      mostrarApFeedback('success','✓ Registro atualizado com sucesso!');
+    }else{
+      _apCache.unshift(registro);
+      mostrarApFeedback('success','✓ Aparelho cadastrado com sucesso!');
+    }
+    _apEditandoId=null;
+    document.getElementById('ap-btn-salvar').textContent='Cadastrar Aparelho';
+    document.getElementById('ap-btn-cancelar-edicao').style.display='none';
+    resetFormAparelho(true);
+    renderAparelhos();
+  }
+
+  function editarAparelho(id){
+    const item=getAparelhos().find(a=>a.id===id);
+    if(!item)return;
+    _apEditandoId=id;
+    document.getElementById('ap-nome').value=item.nome||'';
+    document.getElementById('ap-gb').value=item.gb||'';
+    document.getElementById('ap-cor').value=item.cor||'';
+    document.getElementById('ap-imei').value=item.imei||'';
+    document.getElementById('ap-origem').value=item.origem||'';
+    document.getElementById('ap-cadastrador').value=item.cadastrador||'';
+    document.getElementById('ap-data-entrada').value=item.dataEntrada||'';
+    document.getElementById('ap-destino').value=item.destino||'';
+    document.getElementById('ap-assistencia-nome').value=item.assistenciaNome||'';
+    document.getElementById('ap-data-saida').value=item.dataSaida||'';
+    document.getElementById('ap-obs').value=item.obs||'';
+    onDestinoChange();
+    document.getElementById('ap-imei-hint').classList.remove('show');
+    document.getElementById('ap-btn-salvar').textContent='Salvar edição';
+    document.getElementById('ap-btn-cancelar-edicao').style.display='block';
+    const primeiroCard=document.querySelector('#tab-aparelhos .card');
+    if(primeiroCard)primeiroCard.scrollIntoView({behavior:'smooth',block:'start'});
+    mostrarApFeedback('success','Editando registro. Altere os campos e clique em "Salvar edição".');
+  }
+
+  function novaPassagem(imei){
+    const lista=getAparelhos().filter(a=>a.imei===imei).sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0));
+    if(!lista.length)return;
+    const ult=lista[0];
+    const cadAtual=document.getElementById('ap-cadastrador').value;
+    limparFormAparelho();
+    document.getElementById('ap-cadastrador').value=cadAtual;
+    document.getElementById('ap-nome').value=ult.nome||'';
+    document.getElementById('ap-gb').value=ult.gb||'';
+    document.getElementById('ap-cor').value=ult.cor||'';
+    document.getElementById('ap-imei').value=ult.imei||'';
+    onDestinoChange();
+    fecharHistoricoAparelho();
+    const primeiroCard=document.querySelector('#tab-aparelhos .card');
+    if(primeiroCard)primeiroCard.scrollIntoView({behavior:'smooth',block:'start'});
+    mostrarApFeedback('success','Dados preenchidos. Complete a origem e cadastre a nova passagem.');
+  }
+  function novaPassagemAtual(){if(_apHistImei)novaPassagem(_apHistImei)}
+
+  function verHistoricoAparelho(imei){
+    _apHistImei=imei;
+    const lista=getAparelhos().filter(a=>a.imei===imei).sort((a,b)=>(a.criadoEm||0)-(b.criadoEm||0));
+    document.getElementById('ap-hist-title').textContent='Histórico — IMEI '+imei;
+    const cont=document.getElementById('ap-hist-lista');
+    cont.innerHTML=lista.length?lista.map((item,i)=>`<div class="ap-hist-item"><div style="font-weight:800;font-size:13px;color:var(--ink)">Passagem ${i+1} — ${statusInfo(item).label}</div><div style="font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.7">${montarMetaHtml(item)}</div></div>`).join(''):'<div class="ap-empty">Nenhum registro encontrado.</div>';
+    document.getElementById('ap-hist-modal').classList.add('open');
+    document.getElementById('ap-hist-modal').setAttribute('aria-hidden','false');
+  }
+  function fecharHistoricoAparelho(){document.getElementById('ap-hist-modal').classList.remove('open');document.getElementById('ap-hist-modal').setAttribute('aria-hidden','true')}
+
+  function renderAparelhos(){
+    const todos=getAparelhos();
+    const contagem={aguardando:0,assistencia:0,concluido:0};
+    todos.forEach(a=>{contagem[statusInfo(a).cat]++});
+    document.getElementById('ap-count-todos').textContent=` (${todos.length})`;
+    document.getElementById('ap-count-aguardando').textContent=` (${contagem.aguardando})`;
+    document.getElementById('ap-count-assistencia').textContent=` (${contagem.assistencia})`;
+    document.getElementById('ap-count-concluido').textContent=` (${contagem.concluido})`;
+
+    const filtro=(document.querySelector('input[name="ap-filtro"]:checked')||{}).value||'todos';
+    const busca=document.getElementById('ap-busca').value.trim().toLowerCase();
+    let lista=todos.filter(a=>{
+      if(filtro!=='todos'&&statusInfo(a).cat!==filtro)return false;
+      if(busca){const alvo=[a.nome,a.imei,a.origem,a.cor].join(' ').toLowerCase();if(!alvo.includes(busca))return false}
+      return true;
+    });
+    const ordem={assistencia:0,aguardando:1,concluido:2};
+    lista.sort((a,b)=>{
+      const ca=statusInfo(a).cat,cb=statusInfo(b).cat;
+      if(ordem[ca]!==ordem[cb])return ordem[ca]-ordem[cb];
+      if(ca==='assistencia')return(a.dataSaida||'').localeCompare(b.dataSaida||'');
+      return(b.criadoEm||0)-(a.criadoEm||0);
+    });
+
+    const cont=document.getElementById('ap-lista');
+    if(!lista.length){cont.innerHTML=`<div class="ap-empty">${_apCarregando?'Carregando aparelhos...':'Nenhum aparelho encontrado.'}</div>`;return}
+    const contagemImei={};
+    todos.forEach(a=>{contagemImei[a.imei]=(contagemImei[a.imei]||0)+1});
+
+    cont.innerHTML=lista.map(item=>{
+      const info=statusInfo(item);
+      const dias=item.destino==='assistencia'?diasEntre(item.dataSaida):null;
+      const diasTxt=dias!==null?` <span>(há ${dias} dia${dias===1?'':'s'})</span>`:'';
+      const histBtn=contagemImei[item.imei]>1?`<button type="button" onclick="verHistoricoAparelho('${esc(item.imei)}')">🕒 Histórico (${contagemImei[item.imei]})</button>`:'';
+      const linhaModelo=[item.nome||'Sem nome',item.gb,item.cor].filter(Boolean).join(' · ');
+      return`<div class="ap-card ${info.cls}"><div class="ap-card-top"><div><div class="ap-card-nome">${esc(linhaModelo)}</div><div class="ap-card-imei">IMEI: ${esc(item.imei||'—')}</div></div><span class="ap-badge">${info.label}${diasTxt}</span></div><div class="ap-card-meta">${montarMetaHtml(item)}</div><div class="ap-card-actions"><button type="button" onclick="editarAparelho('${item.id}')">✏️ Editar</button>${histBtn}</div></div>`;
+    }).join('');
+  }
+
+  // =====================================================================
   // INICIALIZAÇÃO
   // =====================================================================
   document.addEventListener('DOMContentLoaded', () => {
@@ -958,6 +1311,12 @@
     atualizarHint();
     renderHistorico();
     setupAdminTrigger();
+
+    document.getElementById('ap-data-entrada').value=hojeISO();
+    onDestinoChange();
+    carregarAparelhos();
+    sbClient.channel('aparelhos-changes').on('postgres_changes',{event:'*',schema:'public',table:'aparelhos'},()=>{carregarAparelhos(false)}).subscribe();
+    document.getElementById('ap-hist-modal').addEventListener('click',e=>{if(e.target===document.getElementById('ap-hist-modal'))fecharHistoricoAparelho()});
 
     document.getElementById('modelo').addEventListener('input', () => { atualizarArmazenamentos(); gerarSimulacao(); });
     ['armazenamento','condicao'].forEach(id => document.getElementById(id).addEventListener('change', gerarSimulacao));
@@ -971,7 +1330,10 @@
     document.querySelectorAll('input[name="maxparc"]').forEach(r => r.addEventListener('change', gerarSimulacao));
 
     document.addEventListener('keydown', e => {
-      if (e.key==='Escape' && document.getElementById('admin-modal').classList.contains('open')) fecharAdmin();
+      if (e.key==='Escape') {
+        if (document.getElementById('admin-modal').classList.contains('open')) fecharAdmin();
+        if (document.getElementById('ap-hist-modal').classList.contains('open')) fecharHistoricoAparelho();
+      }
     });
     document.getElementById('admin-modal').addEventListener('click', e => {
       if (e.target===document.getElementById('admin-modal')) fecharAdmin();
