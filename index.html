@@ -437,6 +437,15 @@
           <p class="section-copy">Registre a entrada de um aparelho. Se o IMEI já existir, você pode ver o histórico ou registrar uma nova passagem.</p>
 
           <div class="fieldset">
+            <p class="fieldset-title">Categoria <span style="color:var(--danger)">*</span></p>
+            <div class="seg" role="group" id="ap-tipo-seg">
+              <label><input type="radio" name="ap-tipo" value="loja" checked> 📦 Estoque da loja</label>
+              <label><input type="radio" name="ap-tipo" value="cliente"> 🧑‍🔧 Aparelho de cliente</label>
+            </div>
+            <div class="muted" style="margin-top:8px">Estoque da loja: aparelho é da loja, para venda. Aparelho de cliente: veio de um cliente com problema (assistência).</div>
+          </div>
+
+          <div class="fieldset">
             <p class="fieldset-title">Aparelho</p>
             <div class="row">
               <div>
@@ -514,6 +523,13 @@
           <h2 class="title">Aparelhos cadastrados</h2>
           <p class="section-copy">Acompanhe onde cada aparelho está.</p>
 
+          <p class="fieldset-title" style="margin-bottom:8px">Estoque</p>
+          <div class="seg" role="group" id="ap-estoque-filtros" style="margin-bottom:12px">
+            <label><input type="radio" name="ap-estoque-filtro" value="todos" checked onchange="renderAparelhos()"> Todos<span id="ap-ecount-todos"></span></label>
+            <label><input type="radio" name="ap-estoque-filtro" value="loja" onchange="renderAparelhos()"> 📦 Estoque Loja<span id="ap-ecount-loja"></span></label>
+            <label><input type="radio" name="ap-estoque-filtro" value="assistencia_estoque" onchange="renderAparelhos()"> 🔧 Assistência Estoque<span id="ap-ecount-assistencia_estoque"></span></label>
+            <label><input type="radio" name="ap-estoque-filtro" value="assistencia_clientes" onchange="renderAparelhos()"> 🧑‍🔧 Assistência B.O Clientes<span id="ap-ecount-assistencia_clientes"></span></label>
+          </div>
           <div class="seg" role="group" id="ap-filtros" style="margin-bottom:12px">
             <label><input type="radio" name="ap-filtro" value="todos" checked onchange="renderAparelhos()"> Todos<span id="ap-count-todos"></span></label>
             <label><input type="radio" name="ap-filtro" value="aguardando" onchange="renderAparelhos()"> 🔘 Aguardando<span id="ap-count-aguardando"></span></label>
@@ -1091,8 +1107,10 @@
   const sbClient=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
   let _apEditandoId=null,_apHistImei=null,_apCache=[],_apCarregando=false;
 
-  function toRow(o){return{id:o.id,nome:o.nome||null,gb:o.gb||null,cor:o.cor||null,imei:o.imei,origem:o.origem||null,cadastrador:o.cadastrador,data_entrada:o.dataEntrada||null,destino:o.destino||null,assistencia_nome:o.assistenciaNome||null,data_saida:o.dataSaida||null,obs:o.obs||null,criado_em:o.criadoEm}}
-  function fromRow(r){return{id:r.id,nome:r.nome||'',gb:r.gb||'',cor:r.cor||'',imei:r.imei||'',origem:r.origem||'',cadastrador:r.cadastrador||'',dataEntrada:r.data_entrada||'',destino:r.destino||'',assistenciaNome:r.assistencia_nome||'',dataSaida:r.data_saida||'',obs:r.obs||'',criadoEm:r.criado_em}}
+  function toRow(o){return{id:o.id,nome:o.nome||null,gb:o.gb||null,cor:o.cor||null,imei:o.imei,origem:o.origem||null,cadastrador:o.cadastrador,data_entrada:o.dataEntrada||null,destino:o.destino||null,assistencia_nome:o.assistenciaNome||null,data_saida:o.dataSaida||null,obs:o.obs||null,criado_em:o.criadoEm,tipo:o.tipo||null}}
+  function fromRow(r){return{id:r.id,nome:r.nome||'',gb:r.gb||'',cor:r.cor||'',imei:r.imei||'',origem:r.origem||'',cadastrador:r.cadastrador||'',dataEntrada:r.data_entrada||'',destino:r.destino||'',assistenciaNome:r.assistencia_nome||'',dataSaida:r.data_saida||'',obs:r.obs||'',criadoEm:r.criado_em,tipo:r.tipo||'loja'}}
+  function getBucket(item){if(item.tipo==='cliente')return'assistencia_clientes';if(item.destino==='assistencia')return'assistencia_estoque';return'loja'}
+  const BUCKET_LABEL={loja:'📦 Estoque Loja',assistencia_estoque:'🔧 Assistência Estoque',assistencia_clientes:'🧑‍🔧 Assistência B.O Clientes'};
   function getAparelhos(){return _apCache}
 
   async function carregarAparelhos(mostrarErro){
@@ -1119,6 +1137,7 @@
   }
   function montarMetaHtml(item){
     const l=[];
+    l.push(`Estoque: ${esc(BUCKET_LABEL[getBucket(item)])}`);
     l.push(`Origem: ${esc(item.origem||'—')}`);
     l.push(`Cadastrado por: ${esc(item.cadastrador||'—')}`);
     l.push(`Entrada: ${fmtDataAp(item.dataEntrada)}`);
@@ -1156,6 +1175,7 @@
     document.getElementById('ap-obs').value='';
     document.getElementById('ap-data-entrada').value=hojeISO();
     if(manterCadastrador)document.getElementById('ap-cadastrador').value=cad;
+    document.querySelector('input[name="ap-tipo"][value="loja"]').checked=true;
     onDestinoChange();
     const hint=document.getElementById('ap-imei-hint');hint.classList.remove('show');hint.innerHTML='';
   }
@@ -1174,6 +1194,7 @@
     const assistenciaNome=document.getElementById('ap-assistencia-nome').value.trim();
     const dataSaida=document.getElementById('ap-data-saida').value;
     const obs=document.getElementById('ap-obs').value.trim();
+    const tipo=(document.querySelector('input[name="ap-tipo"]:checked')||{}).value||'loja';
 
     if(!nome){mostrarApFeedback('error','Informe o nome do aparelho.');return}
     if(!imei){mostrarApFeedback('error','Informe o IMEI do aparelho.');return}
@@ -1184,7 +1205,7 @@
     const isEdit=!!_apEditandoId;
     const anterior=isEdit?_apCache.find(a=>a.id===_apEditandoId):null;
     const id=isEdit?_apEditandoId:(Date.now()+'-'+Math.random().toString(36).slice(2,7));
-    const registro={id,nome,gb,cor,imei,origem,cadastrador,dataEntrada,destino,assistenciaNome,dataSaida,obs,criadoEm:anterior?anterior.criadoEm:Date.now()};
+    const registro={id,nome,gb,cor,imei,origem,cadastrador,dataEntrada,destino,assistenciaNome,dataSaida,obs,tipo,criadoEm:anterior?anterior.criadoEm:Date.now()};
 
     const btn=document.getElementById('ap-btn-salvar');
     const txtOriginal=btn.textContent;
@@ -1225,6 +1246,7 @@
     document.getElementById('ap-assistencia-nome').value=item.assistenciaNome||'';
     document.getElementById('ap-data-saida').value=item.dataSaida||'';
     document.getElementById('ap-obs').value=item.obs||'';
+    document.querySelector(`input[name="ap-tipo"][value="${item.tipo==='cliente'?'cliente':'loja'}"]`).checked=true;
     onDestinoChange();
     document.getElementById('ap-imei-hint').classList.remove('show');
     document.getElementById('ap-btn-salvar').textContent='Salvar edição';
@@ -1245,6 +1267,7 @@
     document.getElementById('ap-gb').value=ult.gb||'';
     document.getElementById('ap-cor').value=ult.cor||'';
     document.getElementById('ap-imei').value=ult.imei||'';
+    document.querySelector(`input[name="ap-tipo"][value="${ult.tipo==='cliente'?'cliente':'loja'}"]`).checked=true;
     onDestinoChange();
     fecharHistoricoAparelho();
     const primeiroCard=document.querySelector('#tab-aparelhos .card');
@@ -1266,16 +1289,27 @@
 
   function renderAparelhos(){
     const todos=getAparelhos();
+
+    const contagemEstoque={loja:0,assistencia_estoque:0,assistencia_clientes:0};
+    todos.forEach(a=>{contagemEstoque[getBucket(a)]++});
+    document.getElementById('ap-ecount-todos').textContent=` (${todos.length})`;
+    document.getElementById('ap-ecount-loja').textContent=` (${contagemEstoque.loja})`;
+    document.getElementById('ap-ecount-assistencia_estoque').textContent=` (${contagemEstoque.assistencia_estoque})`;
+    document.getElementById('ap-ecount-assistencia_clientes').textContent=` (${contagemEstoque.assistencia_clientes})`;
+
+    const estoqueFiltro=(document.querySelector('input[name="ap-estoque-filtro"]:checked')||{}).value||'todos';
+    const baseEstoque=estoqueFiltro==='todos'?todos:todos.filter(a=>getBucket(a)===estoqueFiltro);
+
     const contagem={aguardando:0,assistencia:0,concluido:0};
-    todos.forEach(a=>{contagem[statusInfo(a).cat]++});
-    document.getElementById('ap-count-todos').textContent=` (${todos.length})`;
+    baseEstoque.forEach(a=>{contagem[statusInfo(a).cat]++});
+    document.getElementById('ap-count-todos').textContent=` (${baseEstoque.length})`;
     document.getElementById('ap-count-aguardando').textContent=` (${contagem.aguardando})`;
     document.getElementById('ap-count-assistencia').textContent=` (${contagem.assistencia})`;
     document.getElementById('ap-count-concluido').textContent=` (${contagem.concluido})`;
 
     const filtro=(document.querySelector('input[name="ap-filtro"]:checked')||{}).value||'todos';
     const busca=document.getElementById('ap-busca').value.trim().toLowerCase();
-    let lista=todos.filter(a=>{
+    let lista=baseEstoque.filter(a=>{
       if(filtro!=='todos'&&statusInfo(a).cat!==filtro)return false;
       if(busca){const alvo=[a.nome,a.imei,a.origem,a.cor].join(' ').toLowerCase();if(!alvo.includes(busca))return false}
       return true;
