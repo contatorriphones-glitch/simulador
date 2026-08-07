@@ -575,7 +575,7 @@
       <div class="admin-header">
         <div>
           <h2 id="admin-title" class="admin-title">Administrador de Taxas</h2>
-          <p class="admin-copy">Edite os percentuais usados na simulação. As alterações ficam salvas neste navegador.</p>
+          <p class="admin-copy">Edite os percentuais usados na simulação. As alterações são salvas na nuvem e aplicadas automaticamente para todas as colaboradoras, em qualquer computador.</p>
         </div>
         <button type="button" class="admin-close" onclick="fecharAdmin()">✕ Fechar</button>
       </div>
@@ -640,24 +640,34 @@
   // TAXAS PADRÃO
   // =====================================================================
   const taxasPadrao = {
-    "D":3.55,"1":5.55,"2":8.00,"3":9.00,"4":10.00,"5":10.50,
-    "6":11.00,"7":12.00,"8":13.00,"9":13.50,"10":15.00,
-    "11":16.00,"12":16.50,"13":17.50,"14":18.50,"15":19.00,
-    "16":20.00,"17":21.00,"18":21.50
+    "D":3.00,"1":5.00,"2":7.50,"3":8.50,"4":9.50,"5":10.00,
+    "6":10.50,"7":11.50,"8":12.50,"9":13.00,"10":14.50,
+    "11":15.50,"12":16.00,"13":16.00,"14":17.00,"15":17.50,
+    "16":17.50,"17":18.00,"18":18.00
   };
   const PARCELAS_HL = new Set([3, 6, 12, 18]);
 
   // =====================================================================
-  // LOCALSTORAGE — TAXAS
+  // TAXAS — Supabase (nuvem, sincronizadas entre computadores/colaboradoras)
   // =====================================================================
+  let _taxasCache = null; // null = ainda não carregou da nuvem; usa taxasPadrao como fallback
+
   function getTaxas() {
-    try {
-      const p = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
-      if (p) return Object.assign({}, taxasPadrao, p);
-    } catch(e){}
-    return { ...taxasPadrao };
+    return _taxasCache ? { ...taxasPadrao, ..._taxasCache } : { ...taxasPadrao };
   }
-  function setTaxas(t){ try{ localStorage.setItem(LS_KEY, JSON.stringify(t)); }catch(e){} }
+
+  async function carregarTaxas(mostrarErro) {
+    try { localStorage.removeItem(LS_KEY); } catch(e){} // migra: remove cópia local antiga que poderia divergir
+    const { data, error } = await sbClient.from('config_taxas').select('taxas').eq('id', 1).maybeSingle();
+    if (error) { console.error(error); if (mostrarErro !== false) mostrarAdminFeedback('error','Não foi possível carregar as taxas da nuvem. Usando os valores padrão.','admin-save-feedback'); return; }
+    _taxasCache = data && data.taxas ? data.taxas : null;
+    gerarSimulacao();
+    if (document.getElementById('admin-content').style.display === 'block') preencherAdminFields();
+  }
+
+  async function salvarTaxasRemoto(t) {
+    return sbClient.from('config_taxas').upsert({ id: 1, taxas: t, atualizado_em: new Date().toISOString() });
+  }
 
   // =====================================================================
   // LOCALSTORAGE — HISTÓRICO
@@ -1082,7 +1092,7 @@
       d.appendChild(l); d.appendChild(i); c.appendChild(d);
     });
   }
-  function salvarTaxasAdmin() {
+  async function salvarTaxasAdmin() {
     const t = getTaxas(); let ok = true;
     document.querySelectorAll('#admin-taxas input').forEach(inp => {
       const v = parseFloat(inp.value);
@@ -1090,14 +1100,22 @@
       t[inp.dataset.chave] = v;
     });
     if (!ok) { mostrarAdminFeedback('error','Valores inválidos. Use números entre 0 e 100.','admin-save-feedback'); return; }
-    setTaxas(t); gerarSimulacao();
-    mostrarAdminFeedback('success','✓ Taxas salvas com sucesso!','admin-save-feedback');
+    const btn = document.querySelector('#admin-content .admin-actions .btn:not(.danger)');
+    const txtOriginal = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Salvando...';
+    const { error } = await salvarTaxasRemoto(t);
+    btn.disabled = false; btn.textContent = txtOriginal;
+    if (error) { console.error(error); mostrarAdminFeedback('error','Erro ao salvar na nuvem. Verifique sua internet e tente novamente.','admin-save-feedback'); return; }
+    _taxasCache = t; gerarSimulacao();
+    mostrarAdminFeedback('success','✓ Taxas salvas e aplicadas para todas as colaboradoras!','admin-save-feedback');
   }
-  function restaurarTaxasPadrao() {
-    if (!confirm('Deseja restaurar todas as taxas para o padrão? Esta ação não pode ser desfeita.')) return;
-    try { localStorage.removeItem(LS_KEY); } catch(e){}
+  async function restaurarTaxasPadrao() {
+    if (!confirm('Deseja restaurar todas as taxas para o padrão? Esta ação vale para todas as colaboradoras e não pode ser desfeita.')) return;
+    const { error } = await salvarTaxasRemoto({ ...taxasPadrao });
+    if (error) { console.error(error); mostrarAdminFeedback('error','Erro ao restaurar na nuvem. Verifique sua internet e tente novamente.','admin-save-feedback'); return; }
+    _taxasCache = { ...taxasPadrao };
     preencherAdminFields(); gerarSimulacao();
-    mostrarAdminFeedback('success','✓ Taxas restauradas para o padrão.','admin-save-feedback');
+    mostrarAdminFeedback('success','✓ Taxas restauradas para o padrão em todas as colaboradoras.','admin-save-feedback');
   }
 
   // =====================================================================
@@ -1369,6 +1387,8 @@
     onDestinoChange();
     carregarAparelhos();
     sbClient.channel('aparelhos-changes').on('postgres_changes',{event:'*',schema:'public',table:'aparelhos'},()=>{carregarAparelhos(false)}).subscribe();
+    carregarTaxas(false);
+    sbClient.channel('taxas-changes').on('postgres_changes',{event:'*',schema:'public',table:'config_taxas'},()=>{carregarTaxas(false)}).subscribe();
     document.getElementById('ap-hist-modal').addEventListener('click',e=>{if(e.target===document.getElementById('ap-hist-modal'))fecharHistoricoAparelho()});
 
     document.getElementById('modelo').addEventListener('input', () => { atualizarArmazenamentos(); gerarSimulacao(); });
