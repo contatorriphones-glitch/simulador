@@ -498,6 +498,7 @@
               <option value="garantia">Retirado por cliente de garantia</option>
               <option value="assistencia">Enviado para assistência</option>
               <option value="troca">Troca para cliente</option>
+              <option value="outro_lojista">Foi para outro lojista</option>
             </select>
             <div id="ap-assistencia-wrap" style="display:none">
               <label for="ap-assistencia-nome">Qual assistência</label>
@@ -1133,6 +1134,7 @@
     if(item.destino==='vendido')return{cls:'st-concluido',label:'🟢 Vendido',cat:'concluido'};
     if(item.destino==='garantia')return{cls:'st-concluido',label:'🟢 Retirado (garantia)',cat:'concluido'};
     if(item.destino==='troca')return{cls:'st-concluido',label:'🟢 Troca concluída',cat:'concluido'};
+    if(item.destino==='outro_lojista')return{cls:'st-concluido',label:'🟢 Foi para outro lojista',cat:'concluido'};
     return{cls:'st-aguardando',label:'🔘 Aguardando',cat:'aguardando'};
   }
   function montarMetaHtml(item){
@@ -1203,6 +1205,10 @@
     if(destino&&!dataSaida){mostrarApFeedback('error','Informe a data de saída.');return}
 
     const isEdit=!!_apEditandoId;
+    if(!isEdit){
+      const duplicado=_apCache.find(a=>a.imei===imei&&(statusInfo(a).cat==='aguardando'||statusInfo(a).cat==='assistencia'));
+      if(duplicado){mostrarApFeedback('error','Este aparelho (mesmo IMEI) já está cadastrado e ainda ativo (aguardando ou em assistência). Edite o registro existente, ou finalize a saída dele antes de cadastrar novamente.');return}
+    }
     const anterior=isEdit?_apCache.find(a=>a.id===_apEditandoId):null;
     const id=isEdit?_apEditandoId:(Date.now()+'-'+Math.random().toString(36).slice(2,7));
     const registro={id,nome,gb,cor,imei,origem,cadastrador,dataEntrada,destino,assistenciaNome,dataSaida,obs,tipo,criadoEm:anterior?anterior.criadoEm:Date.now()};
@@ -1254,6 +1260,19 @@
     const primeiroCard=document.querySelector('#tab-aparelhos .card');
     if(primeiroCard)primeiroCard.scrollIntoView({behavior:'smooth',block:'start'});
     mostrarApFeedback('success','Editando registro. Altere os campos e clique em "Salvar edição".');
+  }
+
+  async function deletarAparelho(id){
+    const item=_apCache.find(a=>a.id===id);
+    if(!item)return;
+    const linhaModelo=[item.nome||'Sem nome',item.gb,item.cor].filter(Boolean).join(' · ');
+    if(!confirm(`Excluir definitivamente o cadastro de "${linhaModelo}" (IMEI ${item.imei||'—'})? Esta ação não pode ser desfeita.`))return;
+    const{error}=await sbClient.from('aparelhos').delete().eq('id',id);
+    if(error){console.error(error);mostrarApFeedback('error','Erro ao excluir. Verifique sua internet e tente novamente.');return}
+    _apCache=_apCache.filter(a=>a.id!==id);
+    if(_apEditandoId===id)limparFormAparelho();
+    renderAparelhos();
+    mostrarApFeedback('success','✓ Registro excluído com sucesso.');
   }
 
   function novaPassagem(imei){
@@ -1333,7 +1352,7 @@
       const diasTxt=dias!==null?` <span>(há ${dias} dia${dias===1?'':'s'})</span>`:'';
       const histBtn=contagemImei[item.imei]>1?`<button type="button" onclick="verHistoricoAparelho('${esc(item.imei)}')">🕒 Histórico (${contagemImei[item.imei]})</button>`:'';
       const linhaModelo=[item.nome||'Sem nome',item.gb,item.cor].filter(Boolean).join(' · ');
-      return`<div class="ap-card ${info.cls}"><div class="ap-card-top"><div><div class="ap-card-nome">${esc(linhaModelo)}</div><div class="ap-card-imei">IMEI: ${esc(item.imei||'—')}</div></div><span class="ap-badge">${info.label}${diasTxt}</span></div><div class="ap-card-meta">${montarMetaHtml(item)}</div><div class="ap-card-actions"><button type="button" onclick="editarAparelho('${item.id}')">✏️ Editar</button>${histBtn}</div></div>`;
+      return`<div class="ap-card ${info.cls}"><div class="ap-card-top"><div><div class="ap-card-nome">${esc(linhaModelo)}</div><div class="ap-card-imei">IMEI: ${esc(item.imei||'—')}</div></div><span class="ap-badge">${info.label}${diasTxt}</span></div><div class="ap-card-meta">${montarMetaHtml(item)}</div><div class="ap-card-actions"><button type="button" onclick="editarAparelho('${item.id}')">✏️ Editar</button>${histBtn}<button type="button" onclick="deletarAparelho('${item.id}')" style="color:var(--danger);border-color:#fca5a5">🗑️ Excluir</button></div></div>`;
     }).join('');
   }
 
