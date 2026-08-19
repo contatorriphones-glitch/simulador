@@ -1285,8 +1285,13 @@
     if(!item)return;
     const linhaModelo=[item.nome||'Sem nome',item.gb,item.cor].filter(Boolean).join(' · ');
     if(!confirm(`Excluir definitivamente o cadastro de "${linhaModelo}" (IMEI ${item.imei||'—'})? Esta ação não pode ser desfeita.`))return;
-    const{error}=await sbClient.from('aparelhos').delete().eq('id',id);
+    const{data,error}=await sbClient.from('aparelhos').delete().eq('id',id).select();
     if(error){console.error(error);mostrarApFeedback('error','Erro ao excluir. Verifique sua internet e tente novamente.');return}
+    if(!data||data.length===0){
+      mostrarApFeedback('error','O banco de dados recusou a exclusão (falta permissão de DELETE na tabela). Peça para liberar a exclusão no Supabase — veja a instrução técnica enviada.');
+      await carregarAparelhos(false);
+      return;
+    }
     _apCache=_apCache.filter(a=>a.id!==id);
     if(_apEditandoId===id)limparFormAparelho();
     renderAparelhos();
