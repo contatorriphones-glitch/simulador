@@ -236,12 +236,14 @@
     .ap-card{border:1px solid var(--line);border-left:5px solid #94a3b8;border-radius:14px;padding:14px 16px;background:#f8fafc;margin-bottom:10px}
     .ap-card.st-assistencia{border-left-color:var(--danger);background:#fef2f2}
     .ap-card.st-concluido{border-left-color:#1a7f37;background:#f0fdf4}
+    .ap-card.st-r1{border-left-color:#1a3fc4;background:#eff4ff}
     .ap-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
     .ap-card-nome{font-weight:800;font-size:14px;color:var(--ink)}
     .ap-card-imei{font-size:12px;color:var(--muted);font-family:ui-monospace,Menlo,Consolas,monospace;margin-top:2px}
     .ap-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap;background:rgba(148,163,184,.18);color:#475569}
     .ap-card.st-assistencia .ap-badge{background:rgba(229,62,62,.12);color:#b91c1c}
     .ap-card.st-concluido .ap-badge{background:rgba(26,127,55,.12);color:#1a7f37}
+    .ap-card.st-r1 .ap-badge{background:rgba(26,63,196,.12);color:#1a3fc4}
     .ap-card-meta{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.7}
     .ap-card-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
     .ap-card-actions button{width:auto;padding:7px 12px;font-size:12px;border-radius:9px;background:#fff;border:1px solid var(--line);color:var(--brand);font-weight:700;cursor:pointer;font-family:inherit}
@@ -272,6 +274,7 @@
       <button class="tab-btn active" onclick="trocarTab('simulador',this)">📱 Simulador</button>
       <button class="tab-btn" onclick="trocarTab('atalhos',this)">⚡ Gerador de Atalhos</button>
       <button class="tab-btn" onclick="trocarTab('aparelhos',this)">📦 Controle de Aparelhos</button>
+      <button class="tab-btn" onclick="trocarTab('fechamento',this)">📅 Fechamento do Dia</button>
     </div>
   </div>
   <div style="max-width:1120px;margin:0 auto;padding:0 16px">
@@ -485,8 +488,14 @@
                 <input id="ap-data-entrada" type="date">
               </div>
             </div>
-            <label for="ap-cadastrador">Cadastrado por <span style="color:var(--danger)">*</span></label>
-            <input id="ap-cadastrador" type="text" placeholder="Seu nome (obrigatório)" autocomplete="off">
+            <label for="ap-cadastrador">Colaboradora responsável por esta movimentação <span style="color:var(--danger)">*</span></label>
+            <select id="ap-cadastrador" required>
+              <option value="">Selecione quem está fazendo esta ação...</option>
+              <option value="Joana">Joana</option>
+              <option value="Gaby">Gaby</option>
+              <option value="Michelle">Michelle</option>
+              <option value="Pamella">Pamella</option>
+            </select>
           </div>
 
           <div class="fieldset">
@@ -499,6 +508,7 @@
               <option value="assistencia">Enviado para assistência</option>
               <option value="troca">Troca para cliente</option>
               <option value="outro_lojista">Foi para outro lojista</option>
+              <option value="estoque_r1">Foi para Estoque R1</option>
             </select>
             <div id="ap-assistencia-wrap" style="display:none">
               <label for="ap-assistencia-nome">Qual assistência</label>
@@ -528,6 +538,7 @@
           <div class="seg" role="group" id="ap-estoque-filtros" style="margin-bottom:12px">
             <label><input type="radio" name="ap-estoque-filtro" value="todos" checked onchange="renderAparelhos()"> Todos<span id="ap-ecount-todos"></span></label>
             <label><input type="radio" name="ap-estoque-filtro" value="loja" onchange="renderAparelhos()"> 📦 Estoque Loja<span id="ap-ecount-loja"></span></label>
+            <label><input type="radio" name="ap-estoque-filtro" value="estoque_r1" onchange="renderAparelhos()"> 🏬 Estoque R1<span id="ap-ecount-estoque_r1"></span></label>
             <label><input type="radio" name="ap-estoque-filtro" value="assistencia_estoque" onchange="renderAparelhos()"> 🔧 Assistência Estoque<span id="ap-ecount-assistencia_estoque"></span></label>
             <label><input type="radio" name="ap-estoque-filtro" value="assistencia_clientes" onchange="renderAparelhos()"> 🧑‍🔧 Assistência B.O Clientes<span id="ap-ecount-assistencia_clientes"></span></label>
           </div>
@@ -543,6 +554,22 @@
         </section>
       </main>
     </div><!-- /tab-aparelhos -->
+
+    <!-- TAB FECHAMENTO DO DIA -->
+    <div class="tab-pane" id="tab-fechamento">
+      <main class="grid" style="margin-top:20px;grid-template-columns:1fr">
+        <section class="card">
+          <h2 class="title">📅 Fechamento do Dia</h2>
+          <p class="section-copy">Movimentações de hoje e o estoque disponível na loja, prontos para colar no WhatsApp.</p>
+          <div class="actions" style="margin-top:0">
+            <button type="button" class="btn" onclick="gerarFechamentoDia()">🔄 Atualizar fechamento</button>
+            <button type="button" class="btn secondary" onclick="copiarFechamentoDia()">📋 Copiar para WhatsApp</button>
+          </div>
+          <div id="fechamento-feedback" class="feedback" aria-live="polite"></div>
+          <pre id="fechamento-preview" style="white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.6;background:var(--card-soft);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:16px;color:var(--ink)">Clique em "Atualizar fechamento" para gerar.</pre>
+        </section>
+      </main>
+    </div><!-- /tab-fechamento -->
   </div><!-- /tab container -->
 
   <!-- Histórico do Aparelho Modal -->
@@ -1124,12 +1151,20 @@
   const SUPABASE_URL='https://gcawgwnthuqijgamkvhv.supabase.co';
   const SUPABASE_KEY='sb_publishable_dKxYwbmA8K96WijpCS2HEA_WtqxUZdl';
   const sbClient=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-  let _apEditandoId=null,_apHistImei=null,_apCache=[],_apCarregando=false;
+  let _apEditandoId=null,_apEditandoSnapshot=null,_apHistImei=null,_apCache=[],_apCarregando=false;
 
-  function toRow(o){return{id:o.id,nome:o.nome||null,gb:o.gb||null,cor:o.cor||null,imei:o.imei,origem:o.origem||null,cadastrador:o.cadastrador,data_entrada:o.dataEntrada||null,destino:o.destino||null,assistencia_nome:o.assistenciaNome||null,data_saida:o.dataSaida||null,obs:o.obs||null,criado_em:o.criadoEm,tipo:o.tipo||null}}
-  function fromRow(r){return{id:r.id,nome:r.nome||'',gb:r.gb||'',cor:r.cor||'',imei:r.imei||'',origem:r.origem||'',cadastrador:r.cadastrador||'',dataEntrada:r.data_entrada||'',destino:r.destino||'',assistenciaNome:r.assistencia_nome||'',dataSaida:r.data_saida||'',obs:r.obs||'',criadoEm:r.criado_em,tipo:r.tipo||'loja'}}
-  function getBucket(item){if(item.tipo==='cliente')return'assistencia_clientes';if(item.destino==='assistencia')return'assistencia_estoque';return'loja'}
-  const BUCKET_LABEL={loja:'📦 Estoque Loja',assistencia_estoque:'🔧 Assistência Estoque',assistencia_clientes:'🧑‍🔧 Assistência B.O Clientes'};
+  function toRow(o){return{id:o.id,nome:o.nome||null,gb:o.gb||null,cor:o.cor||null,imei:o.imei,origem:o.origem||null,cadastrador:o.cadastrador,data_entrada:o.dataEntrada||null,destino:o.destino||null,assistencia_nome:o.assistenciaNome||null,data_saida:o.dataSaida||null,obs:o.obs||null,criado_em:o.criadoEm,tipo:o.tipo||null,atualizado_em:o.atualizadoEm||new Date().toISOString(),atualizado_por:o.atualizadoPor||null}}
+  function fromRow(r){return{id:r.id,nome:r.nome||'',gb:r.gb||'',cor:r.cor||'',imei:r.imei||'',origem:r.origem||'',cadastrador:r.cadastrador||'',dataEntrada:r.data_entrada||'',destino:r.destino||'',assistenciaNome:r.assistencia_nome||'',dataSaida:r.data_saida||'',obs:r.obs||'',criadoEm:r.criado_em,tipo:r.tipo||'loja',atualizadoEm:r.atualizado_em||null,atualizadoPor:r.atualizado_por||''}}
+
+  // =====================================================================
+  // COLABORADORA — última selecionada fica pré-marcada, mas a escolha é
+  // sempre obrigatória e explícita no momento de cada ação (campo select).
+  // =====================================================================
+  const LS_USUARIO='rrprimecell_usuario';
+  function obterUsuarioAtual(){ try{ return (localStorage.getItem(LS_USUARIO)||'').trim(); }catch(e){ return ''; } }
+  function salvarUsuarioAtual(nome){ try{ localStorage.setItem(LS_USUARIO, nome); }catch(e){} }
+  function getBucket(item){if(item.tipo==='cliente')return'assistencia_clientes';if(item.destino==='assistencia')return'assistencia_estoque';if(item.destino==='estoque_r1')return'estoque_r1';return'loja'}
+  const BUCKET_LABEL={loja:'📦 Estoque Loja',estoque_r1:'🏬 Estoque R1',assistencia_estoque:'🔧 Assistência Estoque',assistencia_clientes:'🧑‍🔧 Assistência B.O Clientes'};
   function getAparelhos(){return _apCache}
 
   async function carregarAparelhos(mostrarErro){
@@ -1153,6 +1188,7 @@
     if(item.destino==='garantia')return{cls:'st-concluido',label:'🟢 Retirado (garantia)',cat:'concluido'};
     if(item.destino==='troca')return{cls:'st-concluido',label:'🟢 Troca concluída',cat:'concluido'};
     if(item.destino==='outro_lojista')return{cls:'st-concluido',label:'🟢 Foi para outro lojista',cat:'concluido'};
+    if(item.destino==='estoque_r1')return{cls:'st-r1',label:'🏬 No Estoque R1',cat:'aguardando'};
     return{cls:'st-aguardando',label:'🔘 Aguardando',cat:'aguardando'};
   }
   function montarMetaHtml(item){
@@ -1194,12 +1230,12 @@
     document.getElementById('ap-data-saida').value='';
     document.getElementById('ap-obs').value='';
     document.getElementById('ap-data-entrada').value=hojeISO();
-    if(manterCadastrador)document.getElementById('ap-cadastrador').value=cad;
+    document.getElementById('ap-cadastrador').value=manterCadastrador?cad:(obterUsuarioAtual()||'');
     document.querySelector('input[name="ap-tipo"][value="loja"]').checked=true;
     onDestinoChange();
     const hint=document.getElementById('ap-imei-hint');hint.classList.remove('show');hint.innerHTML='';
   }
-  function limparFormAparelho(){_apEditandoId=null;document.getElementById('ap-btn-salvar').textContent='Cadastrar Aparelho';document.getElementById('ap-btn-cancelar-edicao').style.display='none';resetFormAparelho(false);ocultarApFeedback()}
+  function limparFormAparelho(){_apEditandoId=null;_apEditandoSnapshot=null;document.getElementById('ap-btn-salvar').textContent='Cadastrar Aparelho';document.getElementById('ap-btn-cancelar-edicao').style.display='none';resetFormAparelho(false);ocultarApFeedback()}
   function cancelarEdicaoAparelho(){limparFormAparelho()}
 
   async function salvarAparelho(){
@@ -1218,7 +1254,7 @@
 
     if(!nome){mostrarApFeedback('error','Informe o nome do aparelho.');return}
     if(!imei){mostrarApFeedback('error','Informe o IMEI do aparelho.');return}
-    if(!cadastrador){mostrarApFeedback('error','O campo "Cadastrado por" é obrigatório.');return}
+    if(!cadastrador){mostrarApFeedback('error','Selecione quem está fazendo esta ação.');return}
     if(destino==='assistencia'&&!assistenciaNome){mostrarApFeedback('error','Informe para qual assistência o aparelho foi enviado.');return}
     if(destino&&!dataSaida){mostrarApFeedback('error','Informe a data de saída.');return}
 
@@ -1227,18 +1263,43 @@
       const duplicado=_apCache.find(a=>a.imei===imei&&(statusInfo(a).cat==='aguardando'||statusInfo(a).cat==='assistencia'));
       if(duplicado){mostrarApFeedback('error','Este aparelho (mesmo IMEI) já está cadastrado e ainda ativo (aguardando ou em assistência). Edite o registro existente, ou finalize a saída dele antes de cadastrar novamente.');return}
     }
-    const anterior=isEdit?_apCache.find(a=>a.id===_apEditandoId):null;
-    const id=isEdit?_apEditandoId:(Date.now()+'-'+Math.random().toString(36).slice(2,7));
-    const registro={id,nome,gb,cor,imei,origem,cadastrador,dataEntrada,destino,assistenciaNome,dataSaida,obs,tipo,criadoEm:anterior?anterior.criadoEm:Date.now()};
+
+    const usuarioAtual=cadastrador;
+    salvarUsuarioAtual(usuarioAtual);
 
     const btn=document.getElementById('ap-btn-salvar');
     const txtOriginal=btn.textContent;
+
+    if(isEdit){
+      btn.disabled=true;btn.textContent='Verificando...';
+      const{data:atual,error:errCheck}=await sbClient.from('aparelhos').select('atualizado_em,atualizado_por').eq('id',_apEditandoId).maybeSingle();
+      if(!errCheck && atual && _apEditandoSnapshot && atual.atualizado_em && atual.atualizado_em!==_apEditandoSnapshot){
+        btn.disabled=false;btn.textContent=txtOriginal;
+        mostrarApFeedback('error',`Este aparelho foi alterado por ${atual.atualizado_por||'outra pessoa'} enquanto você editava. Os dados foram recarregados — confira e salve novamente.`);
+        await carregarAparelhos(false);
+        const itemAtual=_apCache.find(a=>a.id===_apEditandoId);
+        if(itemAtual)editarAparelho(itemAtual.id);
+        return;
+      }
+    }
+
+    const anterior=isEdit?_apCache.find(a=>a.id===_apEditandoId):null;
+    const id=isEdit?_apEditandoId:(Date.now()+'-'+Math.random().toString(36).slice(2,7));
+    const agora=new Date().toISOString();
+    const registro={id,nome,gb,cor,imei,origem,cadastrador,dataEntrada,destino,assistenciaNome,dataSaida,obs,tipo,criadoEm:anterior?anterior.criadoEm:Date.now(),atualizadoEm:agora,atualizadoPor:usuarioAtual};
+
     btn.disabled=true;btn.textContent='Salvando...';
     const row=toRow(registro);
     const{error}=isEdit?await sbClient.from('aparelhos').update(row).eq('id',id):await sbClient.from('aparelhos').insert(row);
     btn.disabled=false;btn.textContent=txtOriginal;
 
     if(error){console.error(error);mostrarApFeedback('error','Erro ao salvar no banco de dados. Verifique sua internet e tente novamente.');return}
+
+    const destinoAnterior=anterior?anterior.destino:null;
+    if(!isEdit||destinoAnterior!==destino){
+      const evento=isEdit?(destino||'aguardando'):'entrada';
+      sbClient.from('aparelhos_historico').insert({aparelho_id:id,imei,nome,gb,cor,evento,assistencia_nome:destino==='assistencia'?assistenciaNome:null,usuario:usuarioAtual,criado_em:agora}).then(({error:errHist})=>{if(errHist)console.error('historico:',errHist)});
+    }
 
     if(isEdit){
       const idx=_apCache.findIndex(a=>a.id===id);
@@ -1249,6 +1310,7 @@
       mostrarApFeedback('success','✓ Aparelho cadastrado com sucesso!');
     }
     _apEditandoId=null;
+    _apEditandoSnapshot=null;
     document.getElementById('ap-btn-salvar').textContent='Cadastrar Aparelho';
     document.getElementById('ap-btn-cancelar-edicao').style.display='none';
     resetFormAparelho(true);
@@ -1259,6 +1321,7 @@
     const item=getAparelhos().find(a=>a.id===id);
     if(!item)return;
     _apEditandoId=id;
+    _apEditandoSnapshot=item.atualizadoEm||null;
     document.getElementById('ap-nome').value=item.nome||'';
     document.getElementById('ap-gb').value=item.gb||'';
     document.getElementById('ap-cor').value=item.cor||'';
@@ -1292,6 +1355,7 @@
       await carregarAparelhos(false);
       return;
     }
+    sbClient.from('aparelhos_historico').insert({aparelho_id:id,imei:item.imei,nome:item.nome,gb:item.gb,cor:item.cor,evento:'excluido',usuario:obterUsuarioAtual()||'—',criado_em:new Date().toISOString()}).then(({error:errHist})=>{if(errHist)console.error('historico:',errHist)});
     _apCache=_apCache.filter(a=>a.id!==id);
     if(_apEditandoId===id)limparFormAparelho();
     renderAparelhos();
@@ -1332,10 +1396,11 @@
   function renderAparelhos(){
     const todos=getAparelhos();
 
-    const contagemEstoque={loja:0,assistencia_estoque:0,assistencia_clientes:0};
+    const contagemEstoque={loja:0,estoque_r1:0,assistencia_estoque:0,assistencia_clientes:0};
     todos.forEach(a=>{contagemEstoque[getBucket(a)]++});
     document.getElementById('ap-ecount-todos').textContent=` (${todos.length})`;
     document.getElementById('ap-ecount-loja').textContent=` (${contagemEstoque.loja})`;
+    document.getElementById('ap-ecount-estoque_r1').textContent=` (${contagemEstoque.estoque_r1})`;
     document.getElementById('ap-ecount-assistencia_estoque').textContent=` (${contagemEstoque.assistencia_estoque})`;
     document.getElementById('ap-ecount-assistencia_clientes').textContent=` (${contagemEstoque.assistencia_clientes})`;
 
@@ -1380,6 +1445,85 @@
   }
 
   // =====================================================================
+  // FECHAMENTO DO DIA
+  // =====================================================================
+  const ORDEM_MODELOS=Object.keys(capacidadesPorModelo);
+  function indiceModelo(nome){const i=ORDEM_MODELOS.indexOf(nome);return i===-1?ORDEM_MODELOS.length:i}
+  function gbNum(gb){if(!gb)return 0;const m=String(gb).match(/[\d.]+/);if(!m)return 0;let n=parseFloat(m[0]);if(/TB/i.test(gb))n*=1024;return n}
+  function inicioFimHojeISO(){const a=new Date();const inicio=new Date(a.getFullYear(),a.getMonth(),a.getDate(),0,0,0,0);const fim=new Date(inicio.getTime()+86400000);return{inicio:inicio.toISOString(),fim:fim.toISOString()}}
+  const EVENTO_LABEL={vendido:'✅ Vendidos',garantia:'✅ Retirados por garantia',assistencia:'🔧 Foi para assistência',troca:'🔄 Trocas para cliente',outro_lojista:'🔄 Foi para outro lojista',estoque_r1:'🏬 Foi para Estoque R1'};
+  const EVENTO_ORDEM=['vendido','assistencia','troca','garantia','outro_lojista','estoque_r1'];
+  let _fechamentoTexto='';
+
+  async function gerarFechamentoDia(){
+    const prev=document.getElementById('fechamento-preview');
+    prev.textContent='Carregando...';
+    const{inicio,fim}=inicioFimHojeISO();
+    const{data,error}=await sbClient.from('aparelhos_historico').select('*').gte('criado_em',inicio).lt('criado_em',fim).order('criado_em',{ascending:true});
+    if(error)console.error(error);
+    const historicoIndisponivel=!!error;
+
+    const movimentos=historicoIndisponivel?[]:(data||[]).filter(h=>EVENTO_LABEL[h.evento]);
+    const porEvento={};
+    movimentos.forEach(m=>{(porEvento[m.evento]=porEvento[m.evento]||[]).push(m)});
+
+    const hojeFmt=new Date().toLocaleDateString('pt-BR');
+    const horaFmt=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    const usuario=obterUsuarioAtual()||'—';
+
+    const linhas=[`📦 *Fechamento do Dia — RR Prime Cell*`,`📅 ${hojeFmt}`,''];
+
+    if(historicoIndisponivel){
+      linhas.push('⚠️ Não foi possível carregar as movimentações de hoje (tabela de histórico ainda não configurada no Supabase).','');
+    }else if(!movimentos.length){
+      linhas.push('⚪ Nenhuma movimentação registrada hoje.','');
+    }else{
+      EVENTO_ORDEM.filter(ev=>porEvento[ev]&&porEvento[ev].length).forEach(ev=>{
+        const itens=porEvento[ev];
+        linhas.push(`${EVENTO_LABEL[ev]} (${itens.length})`);
+        itens.forEach(it=>{
+          const linhaModelo=[it.nome||'Sem nome',it.gb,it.cor].filter(Boolean).join(' ');
+          const hora=new Date(it.criado_em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+          const extra=(ev==='assistencia'&&it.assistencia_nome)?` → ${it.assistencia_nome}`:'';
+          linhas.push(`• ${linhaModelo} — IMEI ${it.imei||'—'} — ${it.usuario||'—'} às ${hora}${extra}`);
+        });
+        linhas.push('');
+      });
+      linhas.push('━━━━━━━━━━━━━━━',`📊 Total de movimentações hoje: ${movimentos.length}`,'');
+    }
+
+    const disponiveis=getAparelhos().filter(a=>a.tipo!=='cliente'&&!a.destino);
+    disponiveis.sort((a,b)=>{
+      const ia=indiceModelo(a.nome),ib=indiceModelo(b.nome);
+      if(ia!==ib)return ia-ib;
+      const ga=gbNum(a.gb),gbB=gbNum(b.gb);
+      if(ga!==gbB)return ga-gbB;
+      return(a.nome||'').localeCompare(b.nome||'');
+    });
+    linhas.push(`📋 *Estoque disponível agora (${disponiveis.length})*`);
+    disponiveis.forEach(a=>{
+      const linhaModelo=[a.nome||'Sem nome',a.gb,a.cor].filter(Boolean).join(' ');
+      linhas.push(`• ${linhaModelo} — IMEI ${a.imei||'—'}`);
+    });
+    linhas.push('',`🕐 Fechamento gerado às ${horaFmt} por ${usuario}`);
+
+    _fechamentoTexto=linhas.join('\n');
+    prev.textContent=_fechamentoTexto;
+  }
+
+  function copiarFechamentoDia(){
+    if(!_fechamentoTexto){mostrarFechamentoFeedback('error','Gere o fechamento primeiro.');return}
+    navigator.clipboard?.writeText(_fechamentoTexto)
+      .then(()=>mostrarFechamentoFeedback('success','✓ Texto copiado! Já pode colar no WhatsApp.'))
+      .catch(()=>mostrarFechamentoFeedback('error','Não foi possível copiar. Selecione o texto manualmente.'));
+  }
+  function mostrarFechamentoFeedback(tipo,msg){
+    const el=document.getElementById('fechamento-feedback');
+    el.className=`feedback ${tipo}`;el.textContent=msg;el.style.display='block';
+    if(tipo==='success')setTimeout(()=>{el.style.display='none';},3000);
+  }
+
+  // =====================================================================
   // INICIALIZAÇÃO
   // =====================================================================
   document.addEventListener('DOMContentLoaded', () => {
@@ -1389,6 +1533,7 @@
     setupAdminTrigger();
 
     document.getElementById('ap-data-entrada').value=hojeISO();
+    document.getElementById('ap-cadastrador').value=obterUsuarioAtual()||'';
     onDestinoChange();
     carregarAparelhos();
     sbClient.channel('aparelhos-changes').on('postgres_changes',{event:'*',schema:'public',table:'aparelhos'},()=>{carregarAparelhos(false)}).subscribe();
@@ -1426,6 +1571,7 @@
     document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
     document.getElementById('tab-' + nome).classList.add('active');
     btn.classList.add('active');
+    if(nome==='fechamento')gerarFechamentoDia();
   }
 
   // =====================================================================
