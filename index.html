@@ -561,7 +561,15 @@
         <section class="card">
           <h2 class="title">📅 Fechamento do Dia</h2>
           <p class="section-copy">Movimentações de hoje e o estoque disponível na loja, prontos para colar no WhatsApp.</p>
-          <div class="actions" style="margin-top:0">
+          <label for="fechamento-usuario">Quem está fazendo este fechamento <span style="color:var(--danger)">*</span></label>
+          <select id="fechamento-usuario" required onchange="gerarFechamentoDia()">
+            <option value="">Selecione quem está fechando...</option>
+            <option value="Joana">Joana</option>
+            <option value="Gaby">Gaby</option>
+            <option value="Michelle">Michelle</option>
+            <option value="Pamella">Pamella</option>
+          </select>
+          <div class="actions" style="margin-top:14px">
             <button type="button" class="btn" onclick="gerarFechamentoDia()">🔄 Atualizar fechamento</button>
             <button type="button" class="btn secondary" onclick="copiarFechamentoDia()">📋 Copiar para WhatsApp</button>
           </div>
@@ -1457,6 +1465,13 @@
 
   async function gerarFechamentoDia(){
     const prev=document.getElementById('fechamento-preview');
+    const usuarioFechamento=document.getElementById('fechamento-usuario').value;
+    if(!usuarioFechamento){
+      _fechamentoTexto='';
+      prev.textContent='Selecione, acima, quem está fazendo este fechamento para gerar o texto.';
+      mostrarFechamentoFeedback('error','Selecione quem está fazendo este fechamento.');
+      return;
+    }
     prev.textContent='Carregando...';
     const{inicio,fim}=inicioFimHojeISO();
     const{data,error}=await sbClient.from('aparelhos_historico').select('*').gte('criado_em',inicio).lt('criado_em',fim).order('criado_em',{ascending:true});
@@ -1469,7 +1484,7 @@
 
     const hojeFmt=new Date().toLocaleDateString('pt-BR');
     const horaFmt=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-    const usuario=obterUsuarioAtual()||'—';
+    const usuario=usuarioFechamento;
 
     const linhas=[`📦 *Fechamento do Dia — RR Prime Cell*`,`📅 ${hojeFmt}`,''];
 
