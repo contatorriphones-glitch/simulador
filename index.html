@@ -484,6 +484,10 @@
                 <input id="ap-aviso-peca" type="text" placeholder="Ex.: Peça de bateria não genuína" autocomplete="off">
               </div>
             </div>
+            <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
+              <input id="ap-garantia-apple" type="checkbox" style="width:auto">
+              <span style="font-size:13px;color:var(--muted);font-weight:700;margin:0">🍎 Aparelho tem garantia Apple</span>
+            </label>
           </div>
 
           <div class="fieldset">
@@ -1171,8 +1175,8 @@
   const sbClient=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
   let _apEditandoId=null,_apEditandoSnapshot=null,_apHistImei=null,_apCache=[],_apCarregando=false;
 
-  function toRow(o){return{id:o.id,nome:o.nome||null,gb:o.gb||null,cor:o.cor||null,imei:o.imei,origem:o.origem||null,cadastrador:o.cadastrador,data_entrada:o.dataEntrada||null,destino:o.destino||null,assistencia_nome:o.assistenciaNome||null,data_saida:o.dataSaida||null,obs:o.obs||null,criado_em:o.criadoEm,tipo:o.tipo||null,atualizado_em:o.atualizadoEm||new Date().toISOString(),atualizado_por:o.atualizadoPor||null,bateria:o.bateria||null,aviso_peca:o.avisoPeca||null}}
-  function fromRow(r){return{id:r.id,nome:r.nome||'',gb:r.gb||'',cor:r.cor||'',imei:r.imei||'',origem:r.origem||'',cadastrador:r.cadastrador||'',dataEntrada:r.data_entrada||'',destino:r.destino||'',assistenciaNome:r.assistencia_nome||'',dataSaida:r.data_saida||'',obs:r.obs||'',criadoEm:r.criado_em,tipo:r.tipo||'loja',atualizadoEm:r.atualizado_em||null,atualizadoPor:r.atualizado_por||'',bateria:r.bateria||'',avisoPeca:r.aviso_peca||''}}
+  function toRow(o){return{id:o.id,nome:o.nome||null,gb:o.gb||null,cor:o.cor||null,imei:o.imei,origem:o.origem||null,cadastrador:o.cadastrador,data_entrada:o.dataEntrada||null,destino:o.destino||null,assistencia_nome:o.assistenciaNome||null,data_saida:o.dataSaida||null,obs:o.obs||null,criado_em:o.criadoEm,tipo:o.tipo||null,atualizado_em:o.atualizadoEm||new Date().toISOString(),atualizado_por:o.atualizadoPor||null,bateria:o.bateria||null,aviso_peca:o.avisoPeca||null,garantia_apple:!!o.garantiaApple}}
+  function fromRow(r){return{id:r.id,nome:r.nome||'',gb:r.gb||'',cor:r.cor||'',imei:r.imei||'',origem:r.origem||'',cadastrador:r.cadastrador||'',dataEntrada:r.data_entrada||'',destino:r.destino||'',assistenciaNome:r.assistencia_nome||'',dataSaida:r.data_saida||'',obs:r.obs||'',criadoEm:r.criado_em,tipo:r.tipo||'loja',atualizadoEm:r.atualizado_em||null,atualizadoPor:r.atualizado_por||'',bateria:r.bateria||'',avisoPeca:r.aviso_peca||'',garantiaApple:!!r.garantia_apple}}
 
   // =====================================================================
   // COLABORADORA — última selecionada fica pré-marcada, mas a escolha é
@@ -1241,6 +1245,7 @@
     l.push(`Entrada: ${fmtDataAp(item.dataEntrada)}`);
     if(item.bateria)l.push(`🔋 Bateria: ${esc(item.bateria)}%`);
     if(item.avisoPeca)l.push(`ℹ️ Peça: ${esc(item.avisoPeca)}`);
+    if(item.garantiaApple)l.push(`🍎 Garantia Apple`);
     if(item.destino==='assistencia')l.push(`Assistência: ${esc(item.assistenciaNome||'—')}`);
     if(item.destino)l.push(`Saída: ${fmtDataAp(item.dataSaida)}`);
     if(item.obs)l.push(`Obs: ${esc(item.obs)}`);
@@ -1269,6 +1274,7 @@
   function resetFormAparelho(manterCadastrador){
     const cad=document.getElementById('ap-cadastrador').value;
     ['ap-nome','ap-cor','ap-imei','ap-origem','ap-assistencia-nome','ap-cadastrador','ap-bateria','ap-aviso-peca'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('ap-garantia-apple').checked=false;
     document.getElementById('ap-gb').value='';
     document.getElementById('ap-destino').value='';
     document.getElementById('ap-data-saida').value='';
@@ -1296,6 +1302,7 @@
     const obs=document.getElementById('ap-obs').value.trim();
     const bateria=document.getElementById('ap-bateria').value.trim();
     const avisoPeca=document.getElementById('ap-aviso-peca').value.trim();
+    const garantiaApple=document.getElementById('ap-garantia-apple').checked;
     const tipo=(document.querySelector('input[name="ap-tipo"]:checked')||{}).value||'loja';
 
     if(!nome){mostrarApFeedback('error','Informe o nome do aparelho.');return}
@@ -1332,7 +1339,7 @@
     const anterior=isEdit?_apCache.find(a=>a.id===_apEditandoId):null;
     const id=isEdit?_apEditandoId:(Date.now()+'-'+Math.random().toString(36).slice(2,7));
     const agora=new Date().toISOString();
-    const registro={id,nome,gb,cor,imei,origem,cadastrador,dataEntrada,destino,assistenciaNome,dataSaida,obs,tipo,bateria,avisoPeca,criadoEm:anterior?anterior.criadoEm:Date.now(),atualizadoEm:agora,atualizadoPor:usuarioAtual};
+    const registro={id,nome,gb,cor,imei,origem,cadastrador,dataEntrada,destino,assistenciaNome,dataSaida,obs,tipo,bateria,avisoPeca,garantiaApple,criadoEm:anterior?anterior.criadoEm:Date.now(),atualizadoEm:agora,atualizadoPor:usuarioAtual};
 
     btn.disabled=true;btn.textContent='Salvando...';
     const row=toRow(registro);
@@ -1381,6 +1388,7 @@
     document.getElementById('ap-obs').value=item.obs||'';
     document.getElementById('ap-bateria').value=item.bateria||'';
     document.getElementById('ap-aviso-peca').value=item.avisoPeca||'';
+    document.getElementById('ap-garantia-apple').checked=!!item.garantiaApple;
     document.querySelector(`input[name="ap-tipo"][value="${item.tipo==='cliente'?'cliente':'loja'}"]`).checked=true;
     onDestinoChange();
     document.getElementById('ap-imei-hint').classList.remove('show');
@@ -1569,6 +1577,7 @@
       linhas.push(`• ${corTxt}${linhaModelo} — IMEI ${a.imei||'—'}`);
       if(a.bateria)linhas.push(`*🔋 Bateria: ${a.bateria}%*`);
       if(a.avisoPeca)linhas.push(`*ℹ️ Peça: ${a.avisoPeca}*`);
+      if(a.garantiaApple)linhas.push(`*🍎 Garantia Apple*`);
       linhas.push('');
     });
     linhas.push(`🕐 Fechamento gerado às ${horaFmt} por ${usuario}`);
