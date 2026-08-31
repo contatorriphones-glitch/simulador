@@ -474,6 +474,16 @@
               </div>
             </div>
             <div id="ap-imei-hint" class="input-hint"></div>
+            <div class="row">
+              <div>
+                <label for="ap-bateria">Saúde da bateria (%)</label>
+                <input id="ap-bateria" type="number" min="0" max="100" placeholder="Ex.: 87" autocomplete="off">
+              </div>
+              <div>
+                <label for="ap-aviso-peca">Aviso de peça (bateria/tela/câmera)</label>
+                <input id="ap-aviso-peca" type="text" placeholder="Ex.: Peça de bateria não genuína" autocomplete="off">
+              </div>
+            </div>
           </div>
 
           <div class="fieldset">
@@ -1161,8 +1171,8 @@
   const sbClient=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
   let _apEditandoId=null,_apEditandoSnapshot=null,_apHistImei=null,_apCache=[],_apCarregando=false;
 
-  function toRow(o){return{id:o.id,nome:o.nome||null,gb:o.gb||null,cor:o.cor||null,imei:o.imei,origem:o.origem||null,cadastrador:o.cadastrador,data_entrada:o.dataEntrada||null,destino:o.destino||null,assistencia_nome:o.assistenciaNome||null,data_saida:o.dataSaida||null,obs:o.obs||null,criado_em:o.criadoEm,tipo:o.tipo||null,atualizado_em:o.atualizadoEm||new Date().toISOString(),atualizado_por:o.atualizadoPor||null}}
-  function fromRow(r){return{id:r.id,nome:r.nome||'',gb:r.gb||'',cor:r.cor||'',imei:r.imei||'',origem:r.origem||'',cadastrador:r.cadastrador||'',dataEntrada:r.data_entrada||'',destino:r.destino||'',assistenciaNome:r.assistencia_nome||'',dataSaida:r.data_saida||'',obs:r.obs||'',criadoEm:r.criado_em,tipo:r.tipo||'loja',atualizadoEm:r.atualizado_em||null,atualizadoPor:r.atualizado_por||''}}
+  function toRow(o){return{id:o.id,nome:o.nome||null,gb:o.gb||null,cor:o.cor||null,imei:o.imei,origem:o.origem||null,cadastrador:o.cadastrador,data_entrada:o.dataEntrada||null,destino:o.destino||null,assistencia_nome:o.assistenciaNome||null,data_saida:o.dataSaida||null,obs:o.obs||null,criado_em:o.criadoEm,tipo:o.tipo||null,atualizado_em:o.atualizadoEm||new Date().toISOString(),atualizado_por:o.atualizadoPor||null,bateria:o.bateria||null,aviso_peca:o.avisoPeca||null}}
+  function fromRow(r){return{id:r.id,nome:r.nome||'',gb:r.gb||'',cor:r.cor||'',imei:r.imei||'',origem:r.origem||'',cadastrador:r.cadastrador||'',dataEntrada:r.data_entrada||'',destino:r.destino||'',assistenciaNome:r.assistencia_nome||'',dataSaida:r.data_saida||'',obs:r.obs||'',criadoEm:r.criado_em,tipo:r.tipo||'loja',atualizadoEm:r.atualizado_em||null,atualizadoPor:r.atualizado_por||'',bateria:r.bateria||'',avisoPeca:r.aviso_peca||''}}
 
   // =====================================================================
   // COLABORADORA — última selecionada fica pré-marcada, mas a escolha é
@@ -1190,6 +1200,30 @@
   function mostrarApFeedback(tipo,msg){const el=document.getElementById('ap-feedback');el.className=`feedback ${tipo}`;el.textContent=msg;el.style.display='block';if(tipo==='success')setTimeout(ocultarApFeedback,3000)}
   function ocultarApFeedback(){const el=document.getElementById('ap-feedback');el.style.display='none';el.textContent='';el.className='feedback'}
 
+  // =====================================================================
+  // COR — mapeia o texto digitado para uma cor visual (bolinha) e um emoji
+  // =====================================================================
+  const CORES_MAP=[
+    {termos:['preto','black','grafite','graphite','space black','space gray','cinza espacial','meia noite','meia-noite','midnight','titanio preto','titânio preto'],hex:'#1c1c1e',emoji:'⚫'},
+    {termos:['natural','titanio natural','titânio natural'],hex:'#a3a29c',emoji:'🩶'},
+    {termos:['branco','white','estelar','starlight','prata','silver','titanio branco','titânio branco'],hex:'#f2f2f0',emoji:'⚪'},
+    {termos:['azul','blue','sierra','pacific blue','azul titanio','azul titânio','azul profundo'],hex:'#3f5c8a',emoji:'🔵'},
+    {termos:['verde','green','alpine'],hex:'#4d5d43',emoji:'🟢'},
+    {termos:['roxo','purple','lilas','lilás','deep purple'],hex:'#7c6f8f',emoji:'🟣'},
+    {termos:['vermelho','red','product red'],hex:'#b8272c',emoji:'🔴'},
+    {termos:['amarelo','yellow','dourado','gold','champagne','ouro'],hex:'#e8d44d',emoji:'🟡'},
+    {termos:['rosa','pink'],hex:'#e7b7c3',emoji:'🌸'},
+    {termos:['coral'],hex:'#ff8b6b',emoji:'🟠'},
+    {termos:['laranja','orange'],hex:'#e07a2f',emoji:'🟠'},
+    {termos:['marrom','brown','desert'],hex:'#6b4a34',emoji:'🟤'}
+  ];
+  function detectarCor(texto){
+    if(!texto)return null;
+    const t=texto.toLowerCase();
+    for(const c of CORES_MAP){ if(c.termos.some(termo=>t.includes(termo)))return c; }
+    return null;
+  }
+
   function statusInfo(item){
     if(item.destino==='assistencia')return{cls:'st-assistencia',label:'🔴 Na assistência',cat:'assistencia'};
     if(item.destino==='vendido')return{cls:'st-concluido',label:'🟢 Vendido',cat:'concluido'};
@@ -1205,6 +1239,8 @@
     l.push(`Origem: ${esc(item.origem||'—')}`);
     l.push(`Cadastrado por: ${esc(item.cadastrador||'—')}`);
     l.push(`Entrada: ${fmtDataAp(item.dataEntrada)}`);
+    if(item.bateria)l.push(`🔋 Bateria: ${esc(item.bateria)}%`);
+    if(item.avisoPeca)l.push(`ℹ️ Peça: ${esc(item.avisoPeca)}`);
     if(item.destino==='assistencia')l.push(`Assistência: ${esc(item.assistenciaNome||'—')}`);
     if(item.destino)l.push(`Saída: ${fmtDataAp(item.dataSaida)}`);
     if(item.obs)l.push(`Obs: ${esc(item.obs)}`);
@@ -1232,7 +1268,7 @@
 
   function resetFormAparelho(manterCadastrador){
     const cad=document.getElementById('ap-cadastrador').value;
-    ['ap-nome','ap-cor','ap-imei','ap-origem','ap-assistencia-nome','ap-cadastrador'].forEach(id=>document.getElementById(id).value='');
+    ['ap-nome','ap-cor','ap-imei','ap-origem','ap-assistencia-nome','ap-cadastrador','ap-bateria','ap-aviso-peca'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('ap-gb').value='';
     document.getElementById('ap-destino').value='';
     document.getElementById('ap-data-saida').value='';
@@ -1258,6 +1294,8 @@
     const assistenciaNome=document.getElementById('ap-assistencia-nome').value.trim();
     const dataSaida=document.getElementById('ap-data-saida').value;
     const obs=document.getElementById('ap-obs').value.trim();
+    const bateria=document.getElementById('ap-bateria').value.trim();
+    const avisoPeca=document.getElementById('ap-aviso-peca').value.trim();
     const tipo=(document.querySelector('input[name="ap-tipo"]:checked')||{}).value||'loja';
 
     if(!nome){mostrarApFeedback('error','Informe o nome do aparelho.');return}
@@ -1294,7 +1332,7 @@
     const anterior=isEdit?_apCache.find(a=>a.id===_apEditandoId):null;
     const id=isEdit?_apEditandoId:(Date.now()+'-'+Math.random().toString(36).slice(2,7));
     const agora=new Date().toISOString();
-    const registro={id,nome,gb,cor,imei,origem,cadastrador,dataEntrada,destino,assistenciaNome,dataSaida,obs,tipo,criadoEm:anterior?anterior.criadoEm:Date.now(),atualizadoEm:agora,atualizadoPor:usuarioAtual};
+    const registro={id,nome,gb,cor,imei,origem,cadastrador,dataEntrada,destino,assistenciaNome,dataSaida,obs,tipo,bateria,avisoPeca,criadoEm:anterior?anterior.criadoEm:Date.now(),atualizadoEm:agora,atualizadoPor:usuarioAtual};
 
     btn.disabled=true;btn.textContent='Salvando...';
     const row=toRow(registro);
@@ -1341,6 +1379,8 @@
     document.getElementById('ap-assistencia-nome').value=item.assistenciaNome||'';
     document.getElementById('ap-data-saida').value=item.dataSaida||'';
     document.getElementById('ap-obs').value=item.obs||'';
+    document.getElementById('ap-bateria').value=item.bateria||'';
+    document.getElementById('ap-aviso-peca').value=item.avisoPeca||'';
     document.querySelector(`input[name="ap-tipo"][value="${item.tipo==='cliente'?'cliente':'loja'}"]`).checked=true;
     onDestinoChange();
     document.getElementById('ap-imei-hint').classList.remove('show');
@@ -1447,8 +1487,10 @@
       const dias=item.destino==='assistencia'?diasEntre(item.dataSaida):null;
       const diasTxt=dias!==null?` <span>(há ${dias} dia${dias===1?'':'s'})</span>`:'';
       const histBtn=contagemImei[item.imei]>1?`<button type="button" onclick="verHistoricoAparelho('${esc(item.imei)}')">🕒 Histórico (${contagemImei[item.imei]})</button>`:'';
-      const linhaModelo=[item.nome||'Sem nome',item.gb,item.cor].filter(Boolean).join(' · ');
-      return`<div class="ap-card ${info.cls}"><div class="ap-card-top"><div><div class="ap-card-nome">${esc(linhaModelo)}</div><div class="ap-card-imei">IMEI: ${esc(item.imei||'—')}</div></div><span class="ap-badge">${info.label}${diasTxt}</span></div><div class="ap-card-meta">${montarMetaHtml(item)}</div><div class="ap-card-actions"><button type="button" onclick="editarAparelho('${item.id}')">✏️ Editar</button>${histBtn}<button type="button" onclick="deletarAparelho('${item.id}')" style="color:var(--danger);border-color:#fca5a5">🗑️ Excluir</button></div></div>`;
+      const linhaModelo=[item.nome||'Sem nome',item.gb].filter(Boolean).join(' · ');
+      const corInfo=detectarCor(item.cor);
+      const corHtml=item.cor?(corInfo?`<span title="${esc(item.cor)}" style="margin-left:4px">${corInfo.emoji}</span>`:`<span style="font-size:12px;color:var(--muted);margin-left:4px">${esc(item.cor)}</span>`):'';
+      return`<div class="ap-card ${info.cls}"><div class="ap-card-top"><div><div class="ap-card-nome">${esc(linhaModelo)}${corHtml}</div><div class="ap-card-imei">IMEI: ${esc(item.imei||'—')}</div></div><span class="ap-badge">${info.label}${diasTxt}</span></div><div class="ap-card-meta">${montarMetaHtml(item)}</div><div class="ap-card-actions"><button type="button" onclick="editarAparelho('${item.id}')">✏️ Editar</button>${histBtn}<button type="button" onclick="deletarAparelho('${item.id}')" style="color:var(--danger);border-color:#fca5a5">🗑️ Excluir</button></div></div>`;
     }).join('');
   }
 
@@ -1456,7 +1498,9 @@
   // FECHAMENTO DO DIA
   // =====================================================================
   const ORDEM_MODELOS=Object.keys(capacidadesPorModelo);
-  function indiceModelo(nome){const i=ORDEM_MODELOS.indexOf(nome);return i===-1?ORDEM_MODELOS.length:i}
+  function normalizarNomeModelo(nome){return(nome||'').toString().trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ')}
+  const ORDEM_MODELOS_NORM=ORDEM_MODELOS.map(normalizarNomeModelo);
+  function indiceModelo(nome){const i=ORDEM_MODELOS_NORM.indexOf(normalizarNomeModelo(nome));return i===-1?ORDEM_MODELOS.length:i}
   function gbNum(gb){if(!gb)return 0;const m=String(gb).match(/[\d.]+/);if(!m)return 0;let n=parseFloat(m[0]);if(/TB/i.test(gb))n*=1024;return n}
   function inicioFimHojeISO(){const a=new Date();const inicio=new Date(a.getFullYear(),a.getMonth(),a.getDate(),0,0,0,0);const fim=new Date(inicio.getTime()+86400000);return{inicio:inicio.toISOString(),fim:fim.toISOString()}}
   const EVENTO_LABEL={vendido:'✅ Vendidos',garantia:'✅ Retirados por garantia',assistencia:'🔧 Foi para assistência',troca:'🔄 Trocas para cliente',outro_lojista:'🔄 Foi para outro lojista',estoque_r1:'🏬 Foi para Estoque R1'};
@@ -1497,10 +1541,12 @@
         const itens=porEvento[ev];
         linhas.push(`${EVENTO_LABEL[ev]} (${itens.length})`);
         itens.forEach(it=>{
-          const linhaModelo=[it.nome||'Sem nome',it.gb,it.cor].filter(Boolean).join(' ');
+          const corInfoIt=detectarCor(it.cor);
+          const corTxtIt=corInfoIt?corInfoIt.emoji+' ':(it.cor?`${it.cor} `:'');
+          const linhaModelo=[it.nome||'Sem nome',it.gb].filter(Boolean).join(' ');
           const hora=new Date(it.criado_em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
           const extra=(ev==='assistencia'&&it.assistencia_nome)?` → ${it.assistencia_nome}`:'';
-          linhas.push(`• ${linhaModelo} — IMEI ${it.imei||'—'} — ${it.usuario||'—'} às ${hora}${extra}`);
+          linhas.push(`• ${corTxtIt}${linhaModelo} — IMEI ${it.imei||'—'} — ${it.usuario||'—'} às ${hora}${extra}`);
         });
         linhas.push('');
       });
@@ -1517,8 +1563,12 @@
     });
     linhas.push(`📋 *Estoque disponível agora (${disponiveis.length})*`);
     disponiveis.forEach(a=>{
-      const linhaModelo=[a.nome||'Sem nome',a.gb,a.cor].filter(Boolean).join(' ');
-      linhas.push(`• ${linhaModelo} — IMEI ${a.imei||'—'}`);
+      const corInfo=detectarCor(a.cor);
+      const corTxt=corInfo?corInfo.emoji+' ':(a.cor?`${a.cor} `:'');
+      const linhaModelo=[a.nome||'Sem nome',a.gb].filter(Boolean).join(' ');
+      const bateriaTxt=a.bateria?` — 🔋 ${a.bateria}%`:'';
+      const avisoTxt=a.avisoPeca?` — ℹ️ ${a.avisoPeca}`:'';
+      linhas.push(`• ${corTxt}${linhaModelo} — IMEI ${a.imei||'—'}${bateriaTxt}${avisoTxt}`);
     });
     linhas.push('',`🕐 Fechamento gerado às ${horaFmt} por ${usuario}`);
 
