@@ -1566,11 +1566,12 @@
       const corInfo=detectarCor(a.cor);
       const corTxt=corInfo?corInfo.emoji+' ':(a.cor?`${a.cor} `:'');
       const linhaModelo=[a.nome||'Sem nome',a.gb].filter(Boolean).join(' ');
-      const bateriaTxt=a.bateria?` — 🔋 ${a.bateria}%`:'';
-      const avisoTxt=a.avisoPeca?` — ℹ️ ${a.avisoPeca}`:'';
-      linhas.push(`• ${corTxt}${linhaModelo} — IMEI ${a.imei||'—'}${bateriaTxt}${avisoTxt}`);
+      linhas.push(`• ${corTxt}${linhaModelo} — IMEI ${a.imei||'—'}`);
+      if(a.bateria)linhas.push(`*🔋 Bateria: ${a.bateria}%*`);
+      if(a.avisoPeca)linhas.push(`*ℹ️ Peça: ${a.avisoPeca}*`);
+      linhas.push('');
     });
-    linhas.push('',`🕐 Fechamento gerado às ${horaFmt} por ${usuario}`);
+    linhas.push(`🕐 Fechamento gerado às ${horaFmt} por ${usuario}`);
 
     _fechamentoTexto=linhas.join('\n');
     prev.textContent=_fechamentoTexto;
