@@ -272,6 +272,7 @@
       <button class="tab-btn active" onclick="trocarTab('simulador',this)">📱 Simulador</button>
       <button class="tab-btn" onclick="trocarTab('atalhos',this)">⚡ Gerador de Atalhos</button>
       <button class="tab-btn" onclick="trocarTab('aparelhos',this)">📦 Controle de Aparelhos</button>
+      <button class="tab-btn" onclick="trocarTab('fechamento',this)">📅 Fechamento do Dia</button>
     </div>
   </div>
   <div style="max-width:1120px;margin:0 auto;padding:0 16px">
@@ -542,6 +543,30 @@
         </section>
       </main>
     </div><!-- /tab-aparelhos -->
+
+    <!-- TAB FECHAMENTO DO DIA -->
+    <div class="tab-pane" id="tab-fechamento">
+      <main class="grid" style="margin-top:20px;grid-template-columns:1fr">
+        <section class="card">
+          <h2 class="title">📅 Fechamento do Dia</h2>
+          <p class="section-copy">Movimentações de hoje e o estoque disponível na loja, prontos para colar no WhatsApp.</p>
+          <label for="fechamento-usuario">Quem está fazendo este fechamento <span style="color:var(--danger)">*</span></label>
+          <select id="fechamento-usuario" required onchange="gerarFechamentoDia()">
+            <option value="">Selecione quem está fechando...</option>
+            <option value="Joana">Joana</option>
+            <option value="Gaby">Gaby</option>
+            <option value="Michelle">Michelle</option>
+            <option value="Pamella">Pamella</option>
+          </select>
+          <div class="actions" style="margin-top:14px">
+            <button type="button" class="btn" onclick="gerarFechamentoDia()">🔄 Atualizar fechamento</button>
+            <button type="button" class="btn secondary" onclick="copiarFechamentoDia()">📋 Copiar para WhatsApp</button>
+          </div>
+          <div id="fechamento-feedback" class="feedback" aria-live="polite"></div>
+          <pre id="fechamento-preview" style="white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.6;background:var(--card-soft);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:16px;color:var(--ink)">Clique em "Atualizar fechamento" para gerar.</pre>
+        </section>
+      </main>
+    </div><!-- /tab-fechamento -->
   </div><!-- /tab container -->
 
   <!-- Histórico do Aparelho Modal -->
@@ -1128,6 +1153,30 @@
   function mostrarApFeedback(tipo,msg){const el=document.getElementById('ap-feedback');el.className=`feedback ${tipo}`;el.textContent=msg;el.style.display='block';if(tipo==='success')setTimeout(ocultarApFeedback,3000)}
   function ocultarApFeedback(){const el=document.getElementById('ap-feedback');el.style.display='none';el.textContent='';el.className='feedback'}
 
+  // =====================================================================
+  // COR — mapeia o texto digitado para um emoji, usado no fechamento do dia
+  // =====================================================================
+  const CORES_MAP=[
+    {termos:['preto','black','grafite','graphite','space black','space gray','cinza espacial','meia noite','meia-noite','midnight','titanio preto','titânio preto'],hex:'#1c1c1e',emoji:'⚫'},
+    {termos:['natural','titanio natural','titânio natural'],hex:'#a3a29c',emoji:'🩶'},
+    {termos:['branco','white','estelar','starlight','prata','silver','titanio branco','titânio branco'],hex:'#f2f2f0',emoji:'⚪'},
+    {termos:['azul','blue','sierra','pacific blue','azul titanio','azul titânio','azul profundo'],hex:'#3f5c8a',emoji:'🔵'},
+    {termos:['verde','green','alpine'],hex:'#4d5d43',emoji:'🟢'},
+    {termos:['roxo','purple','lilas','lilás','deep purple'],hex:'#7c6f8f',emoji:'🟣'},
+    {termos:['vermelho','red','product red'],hex:'#b8272c',emoji:'🔴'},
+    {termos:['amarelo','yellow','dourado','gold','champagne','ouro'],hex:'#e8d44d',emoji:'🟡'},
+    {termos:['rosa','pink'],hex:'#e7b7c3',emoji:'🌸'},
+    {termos:['coral'],hex:'#ff8b6b',emoji:'🟠'},
+    {termos:['laranja','orange'],hex:'#e07a2f',emoji:'🟠'},
+    {termos:['marrom','brown','desert'],hex:'#6b4a34',emoji:'🟤'}
+  ];
+  function detectarCor(texto){
+    if(!texto)return null;
+    const t=texto.toLowerCase();
+    for(const c of CORES_MAP){ if(c.termos.some(termo=>t.includes(termo)))return c; }
+    return null;
+  }
+
   function statusInfo(item){
     if(item.destino==='assistencia')return{cls:'st-assistencia',label:'🔴 Na assistência',cat:'assistencia'};
     if(item.destino==='vendido')return{cls:'st-concluido',label:'🟢 Vendido',cat:'concluido'};
@@ -1215,6 +1264,12 @@
     btn.disabled=false;btn.textContent=txtOriginal;
 
     if(error){console.error(error);mostrarApFeedback('error','Erro ao salvar no banco de dados. Verifique sua internet e tente novamente.');return}
+
+    const destinoAnterior=anterior?anterior.destino:null;
+    if(!isEdit||destinoAnterior!==destino){
+      const evento=isEdit?(destino||'aguardando'):'entrada';
+      sbClient.from('aparelhos_historico').insert({aparelho_id:id,imei,nome,gb,cor,evento,assistencia_nome:destino==='assistencia'?assistenciaNome:null,usuario:cadastrador,criado_em:new Date().toISOString()}).then(({error:errHist})=>{if(errHist)console.error('historico:',errHist)});
+    }
 
     if(isEdit){
       const idx=_apCache.findIndex(a=>a.id===id);
@@ -1338,6 +1393,99 @@
   }
 
   // =====================================================================
+  // FECHAMENTO DO DIA
+  // =====================================================================
+  const ORDEM_MODELOS=Object.keys(capacidadesPorModelo);
+  function normalizarNomeModelo(nome){return(nome||'').toString().trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ')}
+  const ORDEM_MODELOS_NORM=ORDEM_MODELOS.map(normalizarNomeModelo);
+  function indiceModelo(nome){const i=ORDEM_MODELOS_NORM.indexOf(normalizarNomeModelo(nome));return i===-1?ORDEM_MODELOS.length:i}
+  function gbNum(gb){if(!gb)return 0;const m=String(gb).match(/[\d.]+/);if(!m)return 0;let n=parseFloat(m[0]);if(/TB/i.test(gb))n*=1024;return n}
+  function inicioFimHojeISO(){const a=new Date();const inicio=new Date(a.getFullYear(),a.getMonth(),a.getDate(),0,0,0,0);const fim=new Date(inicio.getTime()+86400000);return{inicio:inicio.toISOString(),fim:fim.toISOString()}}
+  const EVENTO_LABEL={vendido:'✅ Vendidos',garantia:'✅ Retirados por garantia',assistencia:'🔧 Foi para assistência',troca:'🔄 Trocas para cliente'};
+  const EVENTO_ORDEM=['vendido','assistencia','troca','garantia'];
+  let _fechamentoTexto='';
+
+  async function gerarFechamentoDia(){
+    const prev=document.getElementById('fechamento-preview');
+    const usuarioFechamento=document.getElementById('fechamento-usuario').value;
+    if(!usuarioFechamento){
+      _fechamentoTexto='';
+      prev.textContent='Selecione, acima, quem está fazendo este fechamento para gerar o texto.';
+      mostrarFechamentoFeedback('error','Selecione quem está fazendo este fechamento.');
+      return;
+    }
+    prev.textContent='Carregando...';
+    const{inicio,fim}=inicioFimHojeISO();
+    const{data,error}=await sbClient.from('aparelhos_historico').select('*').gte('criado_em',inicio).lt('criado_em',fim).order('criado_em',{ascending:true});
+    if(error)console.error(error);
+    const historicoIndisponivel=!!error;
+
+    const movimentos=historicoIndisponivel?[]:(data||[]).filter(h=>EVENTO_LABEL[h.evento]);
+    const porEvento={};
+    movimentos.forEach(m=>{(porEvento[m.evento]=porEvento[m.evento]||[]).push(m)});
+
+    const hojeFmt=new Date().toLocaleDateString('pt-BR');
+    const horaFmt=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    const usuario=usuarioFechamento;
+
+    const linhas=[`📦 *Fechamento do Dia — RR Prime Cell*`,`📅 ${hojeFmt}`,''];
+
+    if(historicoIndisponivel){
+      linhas.push('⚠️ Não foi possível carregar as movimentações de hoje (tabela de histórico ainda não configurada no Supabase).','');
+    }else if(!movimentos.length){
+      linhas.push('⚪ Nenhuma movimentação registrada hoje.','');
+    }else{
+      EVENTO_ORDEM.filter(ev=>porEvento[ev]&&porEvento[ev].length).forEach(ev=>{
+        const itens=porEvento[ev];
+        linhas.push(`${EVENTO_LABEL[ev]} (${itens.length})`);
+        itens.forEach(it=>{
+          const corInfoIt=detectarCor(it.cor);
+          const corTxtIt=corInfoIt?corInfoIt.emoji+' ':(it.cor?`${it.cor} `:'');
+          const linhaModelo=[it.nome||'Sem nome',it.gb].filter(Boolean).join(' ');
+          const hora=new Date(it.criado_em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+          const extra=(ev==='assistencia'&&it.assistencia_nome)?` → ${it.assistencia_nome}`:'';
+          linhas.push(`• ${corTxtIt}${linhaModelo} — IMEI ${it.imei||'—'} — ${it.usuario||'—'} às ${hora}${extra}`);
+        });
+        linhas.push('');
+      });
+      linhas.push('━━━━━━━━━━━━━━━',`📊 Total de movimentações hoje: ${movimentos.length}`,'');
+    }
+
+    const disponiveis=getAparelhos().filter(a=>a.tipo!=='cliente'&&!a.destino);
+    disponiveis.sort((a,b)=>{
+      const ia=indiceModelo(a.nome),ib=indiceModelo(b.nome);
+      if(ia!==ib)return ia-ib;
+      const ga=gbNum(a.gb),gbB=gbNum(b.gb);
+      if(ga!==gbB)return ga-gbB;
+      return(a.nome||'').localeCompare(b.nome||'');
+    });
+    linhas.push(`📋 *Estoque disponível agora (${disponiveis.length})*`);
+    disponiveis.forEach(a=>{
+      const corInfo=detectarCor(a.cor);
+      const corTxt=corInfo?corInfo.emoji+' ':(a.cor?`${a.cor} `:'');
+      const linhaModelo=[a.nome||'Sem nome',a.gb].filter(Boolean).join(' ');
+      linhas.push(`• ${corTxt}${linhaModelo} — IMEI ${a.imei||'—'}`);
+      linhas.push('');
+    });
+    linhas.push(`🕐 Fechamento gerado às ${horaFmt} por ${usuario}`);
+
+    _fechamentoTexto=linhas.join('\n');
+    prev.textContent=_fechamentoTexto;
+  }
+
+  function copiarFechamentoDia(){
+    if(!_fechamentoTexto){mostrarFechamentoFeedback('error','Gere o fechamento primeiro.');return}
+    navigator.clipboard?.writeText(_fechamentoTexto)
+      .then(()=>mostrarFechamentoFeedback('success','✓ Texto copiado! Já pode colar no WhatsApp.'))
+      .catch(()=>mostrarFechamentoFeedback('error','Não foi possível copiar. Selecione o texto manualmente.'));
+  }
+  function mostrarFechamentoFeedback(tipo,msg){
+    const el=document.getElementById('fechamento-feedback');
+    el.className=`feedback ${tipo}`;el.textContent=msg;el.style.display='block';
+    if(tipo==='success')setTimeout(()=>{el.style.display='none';},3000);
+  }
+
+  // =====================================================================
   // INICIALIZAÇÃO
   // =====================================================================
   document.addEventListener('DOMContentLoaded', () => {
@@ -1382,6 +1530,7 @@
     document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
     document.getElementById('tab-' + nome).classList.add('active');
     btn.classList.add('active');
+    if(nome==='fechamento')gerarFechamentoDia();
   }
 
   // =====================================================================
