@@ -275,6 +275,7 @@
       <button class="tab-btn" onclick="trocarTab('atalhos',this)">⚡ Gerador de Atalhos</button>
       <button class="tab-btn" onclick="trocarTab('aparelhos',this)">📦 Controle de Aparelhos</button>
       <button class="tab-btn" onclick="trocarTab('fechamento',this)">📅 Fechamento do Dia</button>
+      <button class="tab-btn" onclick="trocarTab('comissao',this)">💼 Comissão</button>
     </div>
   </div>
   <div style="max-width:1120px;margin:0 auto;padding:0 16px">
@@ -592,6 +593,129 @@
         </section>
       </main>
     </div><!-- /tab-fechamento -->
+
+    <div class="tab-pane" id="tab-comissao">
+      <main class="grid" style="margin-top:20px;grid-template-columns:1fr">
+
+        <section class="card" id="comissao-gate">
+          <h2 class="title">💼 Fechamento de Comissão</h2>
+          <p class="section-copy">Área restrita à gerência. Digite a senha de acesso.</p>
+          <label for="comissao-senha-input">Senha</label>
+          <input id="comissao-senha-input" type="password" placeholder="Senha de acesso" autocomplete="off" onkeydown="if(event.key==='Enter')comissaoEntrar()">
+          <div class="actions" style="margin-top:14px">
+            <button type="button" class="btn" onclick="comissaoEntrar()">Entrar</button>
+          </div>
+          <div id="comissao-gate-feedback" class="feedback" aria-live="polite"></div>
+        </section>
+
+        <section id="comissao-conteudo" style="display:none">
+          <div class="card" style="margin-bottom:20px">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+              <h2 class="title" style="margin:0">💼 Fechamento de Comissão</h2>
+              <button type="button" class="btn ghost" style="width:auto;padding:8px 14px" onclick="comissaoSair()">Sair</button>
+            </div>
+            <div class="seg" role="group" style="margin-top:16px">
+              <label><input type="radio" name="comissao-subtab" value="comissoes" checked onchange="comissaoTrocarSub('comissoes')"> 💰 Comissões</label>
+              <label><input type="radio" name="comissao-subtab" value="metas" onchange="comissaoTrocarSub('metas')"> 🏆 Metas</label>
+              <label><input type="radio" name="comissao-subtab" value="config" onchange="comissaoTrocarSub('config')"> ⚙️ Config</label>
+            </div>
+          </div>
+
+          <!-- ── Comissões (semanal) ── -->
+          <div id="comissao-sub-comissoes">
+            <div class="card" style="margin-bottom:20px">
+              <h3 class="fieldset-title" style="font-size:13px">Período (semana)</h3>
+              <div class="row">
+                <div>
+                  <label for="comissao-semana-inicio">De</label>
+                  <input id="comissao-semana-inicio" type="date">
+                </div>
+                <div>
+                  <label for="comissao-semana-fim">Até</label>
+                  <input id="comissao-semana-fim" type="date">
+                </div>
+              </div>
+              <p class="muted">A soma é calculada automaticamente pro período escolhido.</p>
+
+              <button type="button" onclick="comissaoToggleHistorico()" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:9px 14px;border-radius:12px;background:var(--card-soft);border:1px solid var(--line);color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;width:100%;font-family:inherit">
+                <span>📜 Ver semanas anteriores (segunda a sábado)</span>
+                <span id="comissao-hist-arrow">▾</span>
+              </button>
+              <div id="comissao-hist-panel" style="display:none;margin-top:8px;border-radius:14px;background:#fff;border:1px solid var(--line);max-height:240px;overflow-y:auto"></div>
+
+              <div class="actions" style="margin-top:14px">
+                <button type="button" class="btn" onclick="comissaoGerar()">🔄 Gerar fechamento</button>
+              </div>
+              <div id="comissao-gerar-feedback" class="feedback" aria-live="polite"></div>
+            </div>
+
+            <div class="card" id="comissao-meta-equipe-card" style="margin-bottom:20px">
+              <h3 class="fieldset-title" style="font-size:13px">🎯 Meta em Equipe (tempo real)</h3>
+              <div id="comissao-meta-equipe-corpo">Carregando...</div>
+            </div>
+
+            <div class="card">
+              <h3 class="fieldset-title" style="font-size:13px">💰 Comissões por colaboradora</h3>
+              <div id="comissao-lista-colabs">Selecione um período e clique em "Gerar fechamento".</div>
+              <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+                <strong>Total geral</strong>
+                <strong id="comissao-total-geral" style="font-size:18px;color:var(--brand)">R$ 0,00</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Metas (mensal) ── -->
+          <div id="comissao-sub-metas" style="display:none">
+            <div class="card" style="margin-bottom:20px">
+              <h3 class="fieldset-title" style="font-size:13px">Mês</h3>
+              <input id="comissao-mes" type="month">
+              <div class="actions" style="margin-top:14px">
+                <button type="button" class="btn" onclick="comissaoGerarMetas()">🔄 Calcular metas do mês</button>
+              </div>
+              <div id="comissao-metas-feedback" class="feedback" aria-live="polite"></div>
+            </div>
+            <div class="card">
+              <h3 class="fieldset-title" style="font-size:13px">🏆 Metas individuais</h3>
+              <div id="comissao-lista-metas">Selecione o mês e clique em "Calcular".</div>
+            </div>
+          </div>
+
+          <!-- ── Config ── -->
+          <div id="comissao-sub-config" style="display:none">
+            <div class="card" style="margin-bottom:20px">
+              <h3 class="fieldset-title" style="font-size:13px">Classificação das colaboradoras</h3>
+              <div id="comissao-cfg-colabs">Carregando...</div>
+            </div>
+            <div class="card" style="margin-bottom:20px">
+              <h3 class="fieldset-title" style="font-size:13px">Metas e valores</h3>
+              <div id="comissao-cfg-metas">Carregando...</div>
+              <div class="actions" style="margin-top:14px">
+                <button type="button" class="btn" onclick="comissaoSalvarMetas()">💾 Salvar metas</button>
+              </div>
+              <div id="comissao-cfg-metas-feedback" class="feedback" aria-live="polite"></div>
+            </div>
+            <div class="card" style="margin-bottom:20px">
+              <h3 class="fieldset-title" style="font-size:13px">Tabela de preços de referência</h3>
+              <p class="section-copy">Cole no formato: Modelo, GB, Preço (uma linha por aparelho). Ex.: iPhone 13, 128GB, 2200</p>
+              <textarea id="comissao-cfg-tabela" rows="6" style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px"></textarea>
+              <div class="actions" style="margin-top:14px">
+                <button type="button" class="btn" onclick="comissaoSalvarTabela()">💾 Salvar tabela</button>
+              </div>
+              <div id="comissao-cfg-tabela-feedback" class="feedback" aria-live="polite"></div>
+            </div>
+            <div class="card">
+              <h3 class="fieldset-title" style="font-size:13px">Trocar senha de acesso</h3>
+              <input id="comissao-cfg-nova-senha" type="password" placeholder="Nova senha" autocomplete="off">
+              <div class="actions" style="margin-top:14px">
+                <button type="button" class="btn secondary" onclick="comissaoTrocarSenha()">🔒 Trocar senha</button>
+              </div>
+              <div id="comissao-cfg-senha-feedback" class="feedback" aria-live="polite"></div>
+            </div>
+          </div>
+
+        </section>
+      </main>
+    </div><!-- /tab-comissao -->
   </div><!-- /tab container -->
 
   <!-- Histórico do Aparelho Modal -->
@@ -1175,6 +1299,12 @@
   const sbClient=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
   let _apEditandoId=null,_apEditandoSnapshot=null,_apHistImei=null,_apCache=[],_apCarregando=false;
 
+  // =====================================================================
+  // COMISSÃO — chama o api-server do dono (único com acesso ao GestãoClick)
+  // =====================================================================
+  const COMISSAO_API = 'https://asset-manager--robertmoraiss10.replit.app/api';
+  const LS_COMISSAO_UNLOCKED = 'comissao_unlocked_v1';
+
   function toRow(o){return{id:o.id,nome:o.nome||null,gb:o.gb||null,cor:o.cor||null,imei:o.imei,origem:o.origem||null,cadastrador:o.cadastrador,data_entrada:o.dataEntrada||null,destino:o.destino||null,assistencia_nome:o.assistenciaNome||null,data_saida:o.dataSaida||null,obs:o.obs||null,criado_em:o.criadoEm,tipo:o.tipo||null,atualizado_em:o.atualizadoEm||new Date().toISOString(),atualizado_por:o.atualizadoPor||null,bateria:o.bateria||null,aviso_peca:o.avisoPeca||null,garantia_apple:!!o.garantiaApple}}
   function fromRow(r){return{id:r.id,nome:r.nome||'',gb:r.gb||'',cor:r.cor||'',imei:r.imei||'',origem:r.origem||'',cadastrador:r.cadastrador||'',dataEntrada:r.data_entrada||'',destino:r.destino||'',assistenciaNome:r.assistencia_nome||'',dataSaida:r.data_saida||'',obs:r.obs||'',criadoEm:r.criado_em,tipo:r.tipo||'loja',atualizadoEm:r.atualizado_em||null,atualizadoPor:r.atualizado_por||'',bateria:r.bateria||'',avisoPeca:r.aviso_peca||'',garantiaApple:!!r.garantia_apple}}
 
@@ -1611,6 +1741,7 @@
     document.getElementById('ap-cadastrador').value=obterUsuarioAtual()||'';
     onDestinoChange();
     carregarAparelhos();
+    comissaoCheckDesbloqueado();
     sbClient.channel('aparelhos-changes').on('postgres_changes',{event:'*',schema:'public',table:'aparelhos'},()=>{carregarAparelhos(false)}).subscribe();
     carregarTaxas(false);
     sbClient.channel('taxas-changes').on('postgres_changes',{event:'*',schema:'public',table:'config_taxas'},()=>{carregarTaxas(false)}).subscribe();
@@ -1915,6 +2046,442 @@
   function ocultarAtFeedback() {
     var el = document.getElementById('at-feedback');
     if (el) el.style.display = 'none';
+  }
+
+  // =====================================================================
+  // COMISSÃO — lógica da aba (chama o api-server do dono via fetch)
+  // =====================================================================
+  function comissaoFormatBRL(v){ return (Number(v)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+  function comissaoFmtData(iso){ const p=String(iso||'').split('-'); return p.length===3?`${p[2]}/${p[1]}`:(iso||''); }
+  function comissaoGetMondayISO(d){
+    const dt = new Date(d); const day = dt.getDay(); const diff = day===0?-6:1-day;
+    dt.setDate(dt.getDate()+diff); dt.setHours(0,0,0,0);
+    return dt.toISOString().slice(0,10);
+  }
+  function comissaoAddDaysISO(iso,n){
+    const dt = new Date(iso+'T00:00:00'); dt.setDate(dt.getDate()+n);
+    return dt.toISOString().slice(0,10);
+  }
+  function comissaoParsePreco(str){
+    str = (str||'').trim();
+    if(!str) return 0;
+    const v = str.includes(',') ? parseFloat(str.replace(/\./g,'').replace(',','.')) : parseFloat(str);
+    return isNaN(v) ? 0 : v;
+  }
+  function comissaoEmptyHtml(msg){ return `<div style="padding:14px;color:var(--muted);font-size:13px;text-align:center">${msg}</div>`; }
+
+  const COMISSAO_TIPO_LABEL = {
+    agendamento: 'Agendamento',
+    adq: 'Follow up (ADQ)',
+    combo_protection: 'Combo Protection',
+    combo_premium: 'Combo Premium',
+    acessorio_avulso: 'Acessório avulso',
+    aparelho_acima_tabela: 'Aparelho acima da tabela',
+    aparelho_joana: 'Bônus por aparelho vendido',
+    meta_equipe: 'Meta de equipe batida',
+  };
+  function comissaoAgruparEventos(eventos){
+    const porTipo = new Map();
+    for(const ev of (eventos||[])){
+      if(!porTipo.has(ev.tipo)) porTipo.set(ev.tipo, {tipo:ev.tipo, qtd:0, total:0});
+      const g = porTipo.get(ev.tipo);
+      g.qtd += 1; g.total += Number(ev.valor)||0;
+    }
+    const lista = [...porTipo.values()].map(g=>({...g, label: COMISSAO_TIPO_LABEL[g.tipo]||g.tipo}));
+    lista.sort((a,b)=>{
+      if(a.tipo==='agendamento') return -1;
+      if(b.tipo==='agendamento') return 1;
+      return a.label.localeCompare(b.label,'pt-BR');
+    });
+    return lista;
+  }
+
+  const COMISSAO_STATUS_CFG = {
+    pendente: {label:'⏳ Pendente', color:'#b45309', bg:'#fff7ed'},
+    pago: {label:'✅ Pago', color:'#1a7f37', bg:'#dafbe1'},
+    parcial: {label:'⚠️ Pago parcial', color:'#b91c1c', bg:'#fef2f2'},
+  };
+  function comissaoHtmlPagamento(l, tipo){
+    const id = l.id;
+    const status = l.status_pagamento || 'pendente';
+    const cfg = COMISSAO_STATUS_CFG[status] || COMISSAO_STATUS_CFG.pendente;
+    return `
+      <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="comissao-pgto-status-${tipo}-${id}" style="width:auto;flex:0 0 auto;padding:6px 10px;font-size:12px" onchange="comissaoStatusMudou('${tipo}','${id}')">
+            <option value="pendente" ${status==='pendente'?'selected':''}>⏳ Pendente</option>
+            <option value="pago" ${status==='pago'?'selected':''}>✅ Pago</option>
+            <option value="parcial" ${status==='parcial'?'selected':''}>⚠️ Pago parcial</option>
+          </select>
+          <span style="font-size:11px;padding:3px 8px;border-radius:999px;color:${cfg.color};background:${cfg.bg};font-weight:700">${cfg.label}</span>
+        </div>
+        <div id="comissao-pgto-parcial-${tipo}-${id}" style="margin-top:8px;display:${status==='parcial'?'flex':'none'};gap:8px;flex-wrap:wrap">
+          <input id="comissao-pgto-valor-${tipo}-${id}" type="text" placeholder="Valor faltante (R$)" value="${l.valor_faltante??''}" style="width:auto;flex:1 1 140px;padding:6px 10px;font-size:12px">
+          <input id="comissao-pgto-obs-${tipo}-${id}" type="text" placeholder="Observação" value="${esc(l.observacao_pagamento||'')}" style="width:auto;flex:2 1 200px;padding:6px 10px;font-size:12px">
+          <button type="button" class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px" onclick="comissaoSalvarPagamento('${tipo}','${id}')">Salvar</button>
+        </div>
+      </div>`;
+  }
+  function comissaoStatusMudou(tipo, id){
+    const status = document.getElementById(`comissao-pgto-status-${tipo}-${id}`).value;
+    const parcialDiv = document.getElementById(`comissao-pgto-parcial-${tipo}-${id}`);
+    if(status==='parcial'){ parcialDiv.style.display='flex'; }
+    else { parcialDiv.style.display='none'; comissaoSalvarPagamento(tipo,id); }
+  }
+  async function comissaoSalvarPagamento(tipo,id){
+    const status = document.getElementById(`comissao-pgto-status-${tipo}-${id}`).value;
+    let valorFaltante = null, observacao = null;
+    if(status==='parcial'){
+      valorFaltante = comissaoParsePreco(document.getElementById(`comissao-pgto-valor-${tipo}-${id}`).value);
+      observacao = document.getElementById(`comissao-pgto-obs-${tipo}-${id}`).value || '';
+    }
+    const endpoint = tipo==='semanal' ? 'comissao-semanal' : 'metas-mensal';
+    try{
+      const r = await fetch(`${COMISSAO_API}/config/${endpoint}/${id}/pagamento`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,valorFaltante,observacao})});
+      const j = await r.json();
+      if(!r.ok || j.error) throw new Error(j.error||'Erro ao salvar pagamento.');
+      if(tipo==='semanal'){ await comissaoCarregarSemana(document.getElementById('comissao-semana-inicio').value); }
+      else { await comissaoCarregarMetas(document.getElementById('comissao-mes').value); }
+    }catch(e){
+      alert('Erro ao salvar pagamento: '+e.message);
+    }
+  }
+
+  // ── Gate de senha ──
+  async function comissaoEntrar(){
+    const senha = document.getElementById('comissao-senha-input').value;
+    const fb = document.getElementById('comissao-gate-feedback');
+    fb.style.display='none';
+    if(!senha){ fb.className='feedback error'; fb.textContent='Digite a senha.'; fb.style.display='block'; return; }
+    try{
+      const r = await fetch(`${COMISSAO_API}/config/comissao-senha/verificar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({senha})});
+      const j = await r.json();
+      if(j && j.ok){
+        try{ localStorage.setItem(LS_COMISSAO_UNLOCKED,'1'); }catch(e){}
+        comissaoAbrirConteudo();
+      } else {
+        fb.className='feedback error'; fb.textContent='Senha incorreta.'; fb.style.display='block';
+      }
+    }catch(e){
+      fb.className='feedback error'; fb.textContent='Não foi possível verificar a senha. Verifique sua internet.'; fb.style.display='block';
+    }
+  }
+  function comissaoSair(){
+    try{ localStorage.removeItem(LS_COMISSAO_UNLOCKED); }catch(e){}
+    document.getElementById('comissao-conteudo').style.display='none';
+    document.getElementById('comissao-gate').style.display='block';
+    document.getElementById('comissao-senha-input').value='';
+  }
+  function comissaoCheckDesbloqueado(){
+    let ok=false;
+    try{ ok = localStorage.getItem(LS_COMISSAO_UNLOCKED)==='1'; }catch(e){}
+    if(ok) comissaoAbrirConteudo();
+  }
+  function comissaoAbrirConteudo(){
+    document.getElementById('comissao-gate').style.display='none';
+    document.getElementById('comissao-conteudo').style.display='block';
+    comissaoInicializarPeriodo();
+    comissaoCarregarLive();
+    comissaoCarregarHistorico();
+    comissaoCarregarConfig();
+    document.getElementById('comissao-mes').value = new Date().toISOString().slice(0,7);
+  }
+  function comissaoTrocarSub(nome){
+    document.getElementById('comissao-sub-comissoes').style.display = nome==='comissoes'?'block':'none';
+    document.getElementById('comissao-sub-metas').style.display = nome==='metas'?'block':'none';
+    document.getElementById('comissao-sub-config').style.display = nome==='config'?'block':'none';
+  }
+
+  // ── Comissões (semanal) ──
+  function comissaoInicializarPeriodo(){
+    const inicioEl = document.getElementById('comissao-semana-inicio');
+    const fimEl = document.getElementById('comissao-semana-fim');
+    if(!inicioEl.value){
+      const inicio = comissaoGetMondayISO(new Date());
+      inicioEl.value = inicio;
+      fimEl.value = comissaoAddDaysISO(inicio,5);
+    }
+  }
+  async function comissaoCarregarLive(){
+    const corpo = document.getElementById('comissao-meta-equipe-corpo');
+    const card = document.getElementById('comissao-meta-equipe-card');
+    const inicio = comissaoGetMondayISO(new Date());
+    const fim = comissaoAddDaysISO(inicio,5);
+    try{
+      const r = await fetch(`${COMISSAO_API}/config/comissao-semanal/live?dataInicio=${inicio}&dataFim=${fim}`);
+      const j = await r.json();
+      if(!r.ok || j.error) throw new Error(j.error||'Erro');
+      const batida = j.batida;
+      card.style.borderColor = batida ? '#a8d9b4' : '#fca5a5';
+      card.style.background = batida ? '#f2fbf4' : '#fff9f9';
+      corpo.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-size:24px;font-weight:800;color:${batida?'#1a7f37':'#b91c1c'}">${j.total} / ${j.metaQtd} aparelhos</div>
+            <div style="font-size:13px;color:var(--muted);margin-top:4px">Semana atual (${comissaoFmtData(inicio)} a ${comissaoFmtData(fim)})</div>
+          </div>
+          <span style="font-size:12px;font-weight:800;padding:6px 12px;border-radius:999px;color:#fff;background:${batida?'#1a7f37':'#b91c1c'}">${batida?'✅ META BATIDA':`FALTAM ${j.faltam}`}</span>
+        </div>`;
+    }catch(e){
+      corpo.innerHTML = comissaoEmptyHtml('Não foi possível carregar. Verifique sua internet.');
+    }
+  }
+  async function comissaoGerar(){
+    const semanaInicio = document.getElementById('comissao-semana-inicio').value;
+    const semanaFim = document.getElementById('comissao-semana-fim').value;
+    const fb = document.getElementById('comissao-gerar-feedback');
+    fb.style.display='none';
+    if(!semanaInicio || !semanaFim){ fb.className='feedback error'; fb.textContent='Selecione as duas datas.'; fb.style.display='block'; return; }
+    fb.className='feedback success'; fb.textContent='Calculando... isso pode levar alguns segundos.'; fb.style.display='block';
+    try{
+      const r = await fetch(`${COMISSAO_API}/config/comissao-semanal/gerar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({semanaInicio,semanaFim})});
+      const j = await r.json();
+      if(!r.ok || j.error) throw new Error(j.error||'Erro ao gerar fechamento.');
+      fb.className='feedback success'; fb.textContent='✓ Fechamento gerado com sucesso.'; fb.style.display='block';
+      await comissaoCarregarSemana(semanaInicio);
+      await comissaoCarregarHistorico();
+    }catch(e){
+      fb.className='feedback error'; fb.textContent='Erro: '+e.message; fb.style.display='block';
+    }
+  }
+  async function comissaoCarregarSemana(semanaInicio){
+    const cont = document.getElementById('comissao-lista-colabs');
+    const totalEl = document.getElementById('comissao-total-geral');
+    try{
+      const r = await fetch(`${COMISSAO_API}/config/comissao-semanal?semanaInicio=${semanaInicio}`);
+      const j = await r.json();
+      const linhas = j.data || [];
+      if(linhas.length===0){ cont.innerHTML = comissaoEmptyHtml('Nenhum dado pra esse período ainda. Clique em "Gerar fechamento".'); totalEl.textContent = comissaoFormatBRL(0); return; }
+      let totalGeral = 0;
+      cont.innerHTML = linhas.map(l=>{
+        totalGeral += Number(l.valor_total)||0;
+        const nome = l.colaboradoras ? l.colaboradoras.nome : '—';
+        const classificacao = l.colaboradoras ? l.colaboradoras.classificacao : '';
+        const grupos = comissaoAgruparEventos(l.detalhamento);
+        return `
+          <div style="border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;background:var(--card-soft)">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+              <strong>${esc(nome)} <span style="font-weight:500;color:var(--muted);font-size:12px">(${classificacao})</span></strong>
+              <strong style="color:var(--brand)">${comissaoFormatBRL(l.valor_total)}</strong>
+            </div>
+            <div style="margin-top:8px;font-size:13px;color:var(--ink)">
+              ${grupos.map(g=>`<div style="display:flex;justify-content:space-between;padding:3px 0"><span>${esc(g.label)} × ${g.qtd}</span><span>${comissaoFormatBRL(g.total)}</span></div>`).join('') || '<div style="color:var(--muted)">Nenhum evento de comissão nesse período.</div>'}
+            </div>
+            ${comissaoHtmlPagamento(l,'semanal')}
+          </div>`;
+      }).join('');
+      totalEl.textContent = comissaoFormatBRL(totalGeral);
+    }catch(e){
+      cont.innerHTML = comissaoEmptyHtml('Erro ao carregar. Verifique sua internet.');
+    }
+  }
+
+  // ── Histórico (semanas fechadas segunda-sábado) ──
+  let _comissaoHistorico = [];
+  async function comissaoCarregarHistorico(){
+    try{
+      const r = await fetch(`${COMISSAO_API}/config/comissao-semanal/historico`);
+      const j = await r.json();
+      _comissaoHistorico = j.data || [];
+      comissaoRenderHistorico();
+    }catch(e){ /* silencioso — não bloqueia o resto da tela */ }
+  }
+  function comissaoRenderHistorico(){
+    const panel = document.getElementById('comissao-hist-panel');
+    if(_comissaoHistorico.length===0){ panel.innerHTML = comissaoEmptyHtml('Nenhum fechamento gerado ainda.'); return; }
+    panel.innerHTML = _comissaoHistorico.map(h=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer" onclick="comissaoCarregarSemanaHistorico('${h.semanaInicio}','${h.semanaFim}')">
+        <span style="font-size:13px;color:var(--ink);font-weight:600">${comissaoFmtData(h.semanaInicio)} até ${comissaoFmtData(h.semanaFim)}</span>
+        <span style="font-weight:800;color:var(--brand)">${comissaoFormatBRL(h.total)}</span>
+      </div>`).join('');
+  }
+  function comissaoToggleHistorico(){
+    const panel = document.getElementById('comissao-hist-panel');
+    const arrow = document.getElementById('comissao-hist-arrow');
+    const abrir = panel.style.display==='none';
+    panel.style.display = abrir?'block':'none';
+    arrow.textContent = abrir?'▲':'▾';
+  }
+  function comissaoCarregarSemanaHistorico(semanaInicio, semanaFim){
+    document.getElementById('comissao-semana-inicio').value = semanaInicio;
+    document.getElementById('comissao-semana-fim').value = semanaFim;
+    document.getElementById('comissao-hist-panel').style.display='none';
+    document.getElementById('comissao-hist-arrow').textContent='▾';
+    comissaoCarregarSemana(semanaInicio);
+  }
+
+  // ── Metas (mensal) ──
+  async function comissaoGerarMetas(){
+    const mes = document.getElementById('comissao-mes').value;
+    const fb = document.getElementById('comissao-metas-feedback');
+    fb.style.display='none';
+    if(!mes){ fb.className='feedback error'; fb.textContent='Selecione o mês.'; fb.style.display='block'; return; }
+    fb.className='feedback success'; fb.textContent='Calculando... isso pode levar alguns segundos.'; fb.style.display='block';
+    try{
+      const r = await fetch(`${COMISSAO_API}/config/metas-mensal/gerar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mes})});
+      const j = await r.json();
+      if(!r.ok || j.error) throw new Error(j.error||'Erro ao calcular metas.');
+      fb.className='feedback success'; fb.textContent='✓ Metas calculadas com sucesso.'; fb.style.display='block';
+      await comissaoCarregarMetas(mes);
+    }catch(e){
+      fb.className='feedback error'; fb.textContent='Erro: '+e.message; fb.style.display='block';
+    }
+  }
+  async function comissaoCarregarMetas(mes){
+    const cont = document.getElementById('comissao-lista-metas');
+    try{
+      const r = await fetch(`${COMISSAO_API}/config/metas-mensal?mes=${mes}`);
+      const j = await r.json();
+      const linhas = j.data || [];
+      if(linhas.length===0){ cont.innerHTML = comissaoEmptyHtml('Nenhum dado pra esse mês ainda. Clique em "Calcular metas do mês".'); return; }
+      cont.innerHTML = linhas.map(l=>{
+        const nome = l.colaboradoras ? l.colaboradoras.nome : '—';
+        const classificacao = l.colaboradoras ? l.colaboradoras.classificacao : '';
+        const presBatida = Number(l.valor_presencial) > 0;
+        const onlineBatida = Number(l.valor_online) > 0;
+        return `
+          <div style="border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;background:var(--card-soft)">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+              <strong>${esc(nome)} <span style="font-weight:500;color:var(--muted);font-size:12px">(${classificacao})</span></strong>
+              <strong style="color:var(--brand)">${comissaoFormatBRL(l.valor_total)}</strong>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+              <div style="flex:1 1 200px;padding:10px;border-radius:10px;background:${presBatida?'#dafbe1':'#fef2f2'}">
+                <div style="font-size:11px;font-weight:800;color:${presBatida?'#1a7f37':'#b91c1c'};text-transform:uppercase">🏬 Presencial — ${l.combos_presencial_qtd} combos</div>
+                <div style="font-size:14px;margin-top:4px;color:var(--ink)">${presBatida?comissaoFormatBRL(l.valor_presencial):'Não bateu a meta'}</div>
+              </div>
+              <div style="flex:1 1 200px;padding:10px;border-radius:10px;background:${onlineBatida?'#dafbe1':'#fef2f2'}">
+                <div style="font-size:11px;font-weight:800;color:${onlineBatida?'#1a7f37':'#b91c1c'};text-transform:uppercase">💻 Online — ${l.agendamentos_online_qtd} agendamentos</div>
+                <div style="font-size:14px;margin-top:4px;color:var(--ink)">${onlineBatida?comissaoFormatBRL(l.valor_online):'Não bateu a meta'}</div>
+              </div>
+            </div>
+            ${comissaoHtmlPagamento(l,'mensal')}
+          </div>`;
+      }).join('');
+    }catch(e){
+      cont.innerHTML = comissaoEmptyHtml('Erro ao carregar. Verifique sua internet.');
+    }
+  }
+
+  // ── Config ──
+  function comissaoCarregarConfig(){
+    comissaoCarregarConfigColabs();
+    comissaoCarregarConfigMetas();
+    comissaoCarregarConfigTabela();
+  }
+  async function comissaoCarregarConfigColabs(){
+    const cont = document.getElementById('comissao-cfg-colabs');
+    try{
+      const r = await fetch(`${COMISSAO_API}/config/colaboradoras`);
+      const j = await r.json();
+      const colabs = j.data || [];
+      cont.innerHTML = colabs.map(c=>`
+        <div class="row" style="align-items:center;margin-top:10px">
+          <div style="flex:2"><strong>${esc(c.nome)}</strong></div>
+          <div style="flex:1">
+            <select onchange="comissaoSalvarClassificacao('${c.id}',this.value)">
+              <option value="A" ${c.classificacao==='A'?'selected':''}>A</option>
+              <option value="B" ${c.classificacao==='B'?'selected':''}>B</option>
+              <option value="C" ${c.classificacao==='C'?'selected':''}>C</option>
+            </select>
+          </div>
+        </div>`).join('');
+    }catch(e){
+      cont.innerHTML = comissaoEmptyHtml('Erro ao carregar colaboradoras.');
+    }
+  }
+  async function comissaoSalvarClassificacao(id, classificacao){
+    try{
+      const r = await fetch(`${COMISSAO_API}/config/colaboradoras/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({classificacao})});
+      const j = await r.json();
+      if(!r.ok || j.error) throw new Error(j.error||'Erro');
+    }catch(e){
+      alert('Erro ao salvar classificação: '+e.message);
+    }
+  }
+
+  const COMISSAO_METAS_CAMPOS = [
+    {campo:'meta_equipe_semanal_qtd', label:'Meta de equipe — quantidade de aparelhos/semana'},
+    {campo:'meta_equipe_semanal_valor', label:'Meta de equipe — valor por pessoa (R$)'},
+    {campo:'meta_presencial_baixa_qtd', label:'Presencial — quantidade (faixa baixa)'},
+    {campo:'meta_presencial_baixa_valor', label:'Presencial — valor (faixa baixa, R$)'},
+    {campo:'meta_presencial_alta_qtd', label:'Presencial — quantidade (faixa alta)'},
+    {campo:'meta_presencial_alta_valor', label:'Presencial — valor (faixa alta, R$)'},
+    {campo:'meta_online_baixa_qtd', label:'Online — quantidade (faixa baixa)'},
+    {campo:'meta_online_baixa_valor', label:'Online — valor (faixa baixa, R$)'},
+    {campo:'meta_online_alta_qtd', label:'Online — quantidade (faixa alta)'},
+    {campo:'meta_online_alta_valor', label:'Online — valor (faixa alta, R$)'},
+  ];
+  async function comissaoCarregarConfigMetas(){
+    const cont = document.getElementById('comissao-cfg-metas');
+    try{
+      const r = await fetch(`${COMISSAO_API}/config/metas`);
+      const j = await r.json();
+      const m = j.data || {};
+      cont.innerHTML = COMISSAO_METAS_CAMPOS.map(c=>`
+        <label for="comissao-meta-${c.campo}">${c.label}</label>
+        <input id="comissao-meta-${c.campo}" type="number" step="0.01" value="${m[c.campo]??''}">`).join('');
+    }catch(e){
+      cont.innerHTML = comissaoEmptyHtml('Erro ao carregar metas.');
+    }
+  }
+  async function comissaoSalvarMetas(){
+    const fb = document.getElementById('comissao-cfg-metas-feedback');
+    fb.style.display='none';
+    const body = {};
+    for(const c of COMISSAO_METAS_CAMPOS){
+      body[c.campo] = parseFloat(document.getElementById(`comissao-meta-${c.campo}`).value)||0;
+    }
+    try{
+      const r = await fetch(`${COMISSAO_API}/config/metas`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const j = await r.json();
+      if(!r.ok || j.error) throw new Error(j.error||'Erro');
+      fb.className='feedback success'; fb.textContent='✓ Metas salvas com sucesso.'; fb.style.display='block';
+    }catch(e){
+      fb.className='feedback error'; fb.textContent='Erro: '+e.message; fb.style.display='block';
+    }
+  }
+  async function comissaoCarregarConfigTabela(){
+    const ta = document.getElementById('comissao-cfg-tabela');
+    try{
+      const r = await fetch(`${COMISSAO_API}/config/tabela-precos-referencia`);
+      const j = await r.json();
+      const linhas = j.data || [];
+      ta.value = linhas.map(l=>`${l.modelo}, ${l.gb}, ${l.preco_referencia}`).join('\n');
+    }catch(e){ /* deixa o campo vazio, dá pra colar de novo */ }
+  }
+  async function comissaoSalvarTabela(){
+    const fb = document.getElementById('comissao-cfg-tabela-feedback');
+    fb.style.display='none';
+    const texto = document.getElementById('comissao-cfg-tabela').value;
+    const linhas = texto.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{
+      const partes = l.split(',').map(p=>p.trim());
+      return { modelo: partes[0]||'', gb: (partes[1]||'').toUpperCase(), preco_referencia: comissaoParsePreco(partes[2]) };
+    }).filter(l=>l.modelo && l.gb);
+    if(linhas.length===0){ fb.className='feedback error'; fb.textContent='Nenhuma linha válida encontrada.'; fb.style.display='block'; return; }
+    try{
+      const r = await fetch(`${COMISSAO_API}/config/tabela-precos-referencia`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({linhas})});
+      const j = await r.json();
+      if(!r.ok || j.error) throw new Error(j.error||'Erro');
+      fb.className='feedback success'; fb.textContent=`✓ ${j.total} linhas salvas.`; fb.style.display='block';
+    }catch(e){
+      fb.className='feedback error'; fb.textContent='Erro: '+e.message; fb.style.display='block';
+    }
+  }
+  async function comissaoTrocarSenha(){
+    const fb = document.getElementById('comissao-cfg-senha-feedback');
+    fb.style.display='none';
+    const senha = document.getElementById('comissao-cfg-nova-senha').value;
+    if(!senha || senha.length<4){ fb.className='feedback error'; fb.textContent='A senha precisa ter pelo menos 4 caracteres.'; fb.style.display='block'; return; }
+    try{
+      const r = await fetch(`${COMISSAO_API}/config/comissao-senha`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({senha})});
+      const j = await r.json();
+      if(!r.ok || j.error) throw new Error(j.error||'Erro');
+      fb.className='feedback success'; fb.textContent='✓ Senha alterada com sucesso.'; fb.style.display='block';
+      document.getElementById('comissao-cfg-nova-senha').value='';
+    }catch(e){
+      fb.className='feedback error'; fb.textContent='Erro: '+e.message; fb.style.display='block';
+    }
   }
 
   </script>
