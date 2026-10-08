@@ -2,7 +2,7 @@
 // A IA nunca calcula valores sozinha: todo preço, avaliação e parcela sai daqui,
 // a partir das tabelas em ./dados (editáveis sem mexer no código).
 
-export function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja, custos }) {
+export function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja }) {
   const reais = (v) => Math.round(v * 100) / 100;
 
   // ---------------------------------------------------------------- modelos
@@ -166,65 +166,43 @@ export function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja, c
   }
 
   // ---------------------------------------------------------------- negociação
-  // Só é chamada quando o cliente pede desconto. Calcula quanto a loja ainda ganha
-  // na venda e libera o desconto em etapas, sem nunca deixar a margem abaixo do mínimo.
+  // Só é chamada quando o cliente insiste no desconto, depois de a IA tentar contornar
+  // (brindes, garantia). Por enquanto o desconto existe apenas em venda COM TROCA e sai
+  // da margem do aparelho recebido:
   //
-  // margem = (preço de venda - custo do aparelho)
-  //        + (revenda do aparelho da troca como seminovo - valor de upgrade pago)
-  //        - perda com a taxa da maquininha
+  //   margem da troca = preço de revenda como seminovo - valor de upgrade pago
   //
   // O valor de upgrade pago já inclui os reparos: a avaliação desconta do cliente
-  // exatamente o que a loja vai gastar na assistência.
-  function custoDoItem(item, condicao) {
-    const tabela = custos?.[condicao === 'seminovo' ? 'seminovos' : 'lacrados']?.[item.modelo];
-    const c = tabela?.[String(item.gb)];
-    if (c != null && typeof c === 'object') return c[item.cor] ?? null;
-    return c ?? null;
-  }
-
-  function lucroDaTroca(av) {
+  // exatamente o que a loja vai gastar na assistência. Cada aparelho da troca precisa
+  // continuar com pelo menos a margem mínima. A taxa da maquininha nunca muda: o
+  // desconto só reduz o saldo, e o parcelamento é recalculado normalmente.
+  function margemDaTroca(av) {
     const revenda = catalogo.seminovos.find((i) => i.modelo === av.modelo && i.gb === av.gb);
     return revenda ? revenda.preco - av.valor_base : null;
   }
 
-  // Fração do saldo que a loja perde na maquininha.
-  // 'multiplica': cliente paga s*(1+t) e a loja recebe s*(1+t)*(1-t) = s*(1-t²).
-  function perdaTaxa(forma) {
-    if (forma == null || forma === 'pix' || forma === 'dinheiro') return 0;
-    if (maquininha.formula === 'divide') return 0;
-    const t = maquininha.taxas[forma === 'debito' ? 'debito' : String(forma)] / 100;
-    return t * t;
-  }
-
-  // forma_pagamento: 'pix' | 'dinheiro' | 'debito' | número de parcelas (1 a 18).
   // desconto_ja_dado: soma do que a IA já ofereceu nesta conversa.
   // A resposta nunca traz o desconto máximo, para a IA não ter como "vazar" o limite.
-  function negociarDesconto({ produto, trocas = [], entrada = 0, forma_pagamento = 'pix', desconto_ja_dado = 0 }) {
+  function negociarDesconto({ produto, trocas = [], entrada = 0, desconto_ja_dado = 0 }) {
+    if (!trocas.length) return { status: 'humano', motivo: 'desconto só é negociado pela IA em venda com troca' };
     const p = montarProposta({ produto, trocas, entrada });
     if (p.status !== 'ok') return { status: p.status, proposta: p };
 
-    const condicao = produto.condicao || 'lacrado';
-    const custo = custoDoItem(p.item, condicao);
-    if (custo == null) return { status: 'humano', motivo: 'custo do aparelho não cadastrado' };
-
-    let lucroTrocas = 0;
-    for (const av of p.avaliacoes) {
-      const l = lucroDaTroca(av);
-      if (l == null) return { status: 'humano', motivo: `sem preço de revenda para ${av.modelo} ${av.gb}GB` };
-      lucroTrocas += l;
-    }
-
     const { margem_minima, etapas, arredondar_para } = loja.negociacao;
-    const k = perdaTaxa(forma_pagamento);
-    const margemSemDesconto = p.item.preco - custo + lucroTrocas - p.saldo * k;
-    // Desconto reduz o saldo, então reduz também a perda na maquininha: D <= (M0 - min) / (1 - k).
-    const maximo = Math.min(p.saldo, Math.max(0, (margemSemDesconto - margem_minima) / (1 - k)));
+    let maximo = 0;
+    for (const av of p.avaliacoes) {
+      const m = margemDaTroca(av);
+      if (m == null) return { status: 'humano', motivo: `sem preço de revenda para ${av.modelo} ${av.gb}GB` };
+      maximo += Math.max(0, m - margem_minima);
+    }
+    maximo = Math.min(maximo, p.saldo);
+
     const passos = etapas
       .map((f) => Math.floor((maximo * f) / arredondar_para) * arredondar_para)
       .filter((v) => v > desconto_ja_dado);
 
     if (!passos.length) {
-      return { status: 'limite', desconto_atual: desconto_ja_dado, mensagem: 'não há mais desconto possível; se o cliente insistir, chamar humano' };
+      return { status: 'limite', desconto_atual: desconto_ja_dado, mensagem: 'não há mais desconto possível; se o cliente insistir muito, chamar humano' };
     }
     const desconto = passos[0];
     const novoSaldo = p.saldo - desconto;
@@ -232,7 +210,7 @@ export function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja, c
       status: 'ok',
       desconto,
       ultima_oferta: passos.length === 1,
-      preco_original: p.item.preco,
+      saldo_original: p.saldo,
       novo_saldo: novoSaldo,
       pagamento: novoSaldo > 0 ? simularPagamento(novoSaldo) : null,
     };

@@ -11,8 +11,7 @@ Assim ela nunca inventa um valor.
 | `dados/upgrade.json` | Quanto pagamos no aparelho do cliente em estado perfeito |
 | `dados/assistencia.json` | Custo de cada reparo por modelo (o que desconta na avaliação) e defeitos que recusamos |
 | `dados/maquininha.json` | Taxas de débito / 1x–18x, fórmula e parcelas mostradas por padrão |
-| `dados/custos.json` | Quanto a loja pagou em cada aparelho (só para a margem; o cliente nunca vê) |
-| `dados/loja.json` | Endereço, horários, questionário de agendamento, margem mínima, garantia |
+| `dados/loja.json` | Endereço, horários, questionário de agendamento, pagamento, brindes, margem mínima, garantia |
 | `dados/garantia.md` | Termo de garantia completo (texto revisado) |
 | `prompt/bia.md` | Personalidade, fluxo e regras da Bia |
 
@@ -31,18 +30,17 @@ valor = tabela de upgrade (modelo + GB)
 - Display com defeito desconta a tela inteira (não soma o vidro).
 - **Não pegamos:** mensagem de peça desconhecida, chip sem funcionar, problema de placa, sem Face ID, iCloud bloqueado, aparelho que não liga ou molhado.
 
-## Como funciona o desconto (só quando o cliente pede)
+## Como funciona o desconto
 
-```
-margem = (preço de venda − custo do aparelho)
-       + (preço do aparelho da troca como seminovo − valor de upgrade pago)
-       − perda com a taxa da maquininha
-```
+A Bia **não dá desconto logo de cara**. Primeiro contorna (brindes: fone Bluetooth + cabo; 6 meses de garantia no seminovo). Se o cliente insistir, pode trocar os brindes por capinha e película. Só depois disso:
 
-- O desconto máximo é o que mantém a margem em **pelo menos R$ 300** (`loja.json → negociacao`).
-- A Bia libera em etapas: primeiro 50% do máximo e depois 100%, arredondando para baixo em múltiplos de R$ 50.
-- A ferramenta **nunca informa o máximo** para a Bia, então ela não tem como deixar escapar o limite.
-- Sem custo cadastrado em `custos.json`, ela não negocia e chama alguém da equipe.
+- **Venda com troca:** o desconto sai da margem do aparelho recebido, que nunca fica abaixo de **R$ 300**:
+  ```
+  margem da troca = preço de revenda como seminovo − valor de upgrade
+  ```
+  Ela libera em etapas (50% e depois 100% do possível), arredondando para baixo em múltiplos de R$ 50. A ferramenta nunca informa o máximo para a Bia.
+- **Venda sem troca, ou aparelho sem preço de revenda:** a Bia não dá desconto; se o cliente insistir muito, chama um atendente.
+- **A taxa da maquininha nunca muda.** O desconto reduz o saldo e as parcelas são recalculadas com a taxa normal (ex.: R$ 1.000 em 18x = 18x de R$ 66,28).
 
 ## Rodar os testes
 

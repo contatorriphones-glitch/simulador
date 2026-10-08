@@ -104,51 +104,57 @@ test('horários: agenda até 20h30 na semana e até 17h no sábado; domingo fech
 });
 
 // ---------------------------------------------------------------- negociação
-// Custos fictícios só para o teste: 17 Pro Max 256 Branco custou R$ 6.500.
-const custosTeste = { lacrados: { 'iPhone 17 Pro Max': { 256: { Branco: 6500, Azul: 6400, Laranja: 6300 } } }, seminovos: {} };
-const mn = carregarMotor({ custos: custosTeste });
 const vendaComTroca = {
   produto: { modelo: '17 pro max', gb: 256, cor: 'branco' },
-  trocas: [{ modelo: '15 pro max', gb: 256, bateria: 79, defeitos: ['vidro_tela'] }],
+  trocas: [{ modelo: '17 pro', gb: 256, bateria: 92 }],
 };
 
-test('desconto no Pix: libera em etapas e nunca passa da margem mínima de R$ 300', () => {
-  // margem = (7199 - 6500) + (revenda 3949 - upgrade 3550) = 699 + 399 = 1098 -> máximo 798
-  const d1 = mn.negociarDesconto({ ...vendaComTroca, forma_pagamento: 'pix' });
+test('simulação simples: R$ 1.000 em 18x = 18x de R$ 66,28', () => {
+  const p = m.simularPagamento(1000, { parcelas: [18] });
+  assert.equal(p.opcoes[0].valor_parcela, 66.28);
+});
+
+test('desconto com troca: margem da troca nunca fica abaixo de R$ 300', () => {
+  // 17 Pro 256: revenda 6399 - upgrade 5850 = 549 -> até 249 de desconto
+  const d1 = m.negociarDesconto(vendaComTroca);
   assert.equal(d1.status, 'ok');
-  assert.equal(d1.desconto, 350); // 50% de 798, arredondado para baixo de 50 em 50
+  assert.equal(d1.desconto, 100); // 50% de 249, de 50 em 50
   assert.equal(d1.ultima_oferta, false);
-  assert.equal(d1.novo_saldo, 4099 - 350);
+  assert.equal(d1.novo_saldo, 7199 - 5850 - 100);
   assert.equal('maximo' in d1, false); // nunca expõe o limite
 
-  const d2 = mn.negociarDesconto({ ...vendaComTroca, forma_pagamento: 'pix', desconto_ja_dado: 350 });
-  assert.equal(d2.desconto, 750);
+  const d2 = m.negociarDesconto({ ...vendaComTroca, desconto_ja_dado: 100 });
+  assert.equal(d2.desconto, 200);
   assert.equal(d2.ultima_oferta, true);
 
-  const d3 = mn.negociarDesconto({ ...vendaComTroca, forma_pagamento: 'pix', desconto_ja_dado: 750 });
-  assert.equal(d3.status, 'limite');
+  assert.equal(m.negociarDesconto({ ...vendaComTroca, desconto_ja_dado: 200 }).status, 'limite');
 });
 
-test('no 18x a perda da maquininha reduz o desconto possível', () => {
-  const pix = mn.negociarDesconto({ ...vendaComTroca, forma_pagamento: 'pix', desconto_ja_dado: 350 });
-  const cartao = mn.negociarDesconto({ ...vendaComTroca, forma_pagamento: 18, desconto_ja_dado: 350 });
-  assert.ok(cartao.desconto < pix.desconto);
-  // confere a margem resultante no cartão: continua >= 300
-  const t = 0.193, saldo = 4099 - cartao.desconto;
-  const margem = 7199 - cartao.desconto - 6500 + 399 - saldo * t * t;
-  assert.ok(margem >= 300, `margem ${margem}`);
+test('desconto não mexe na taxa: parcelas recalculadas sobre o novo saldo', () => {
+  const d = m.negociarDesconto(vendaComTroca);
+  const semDesconto = m.simularPagamento(d.novo_saldo);
+  assert.deepEqual(d.pagamento, semDesconto);
 });
 
-test('venda com pouca margem dá desconto pequeno', () => {
-  const r = mn.negociarDesconto({ produto: { modelo: '17 pro max', gb: 256, cor: 'laranja' }, forma_pagamento: 'pix' });
-  // 6849 - 6300 = 549 -> máximo 249 -> etapas 100 e 200
-  assert.equal(r.desconto, 100);
-  const sem = mn.negociarDesconto({ produto: { modelo: '17 pro max', gb: 256, cor: 'azul' }, forma_pagamento: 'pix' });
-  // 7049 - 6400 = 649 -> máximo 349 -> etapas 150 e 300
-  assert.equal(sem.desconto, 150);
+test('defeitos descontados não reduzem a margem da troca', () => {
+  const comDefeito = m.negociarDesconto({ ...vendaComTroca, trocas: [{ modelo: '17 pro', gb: 256, bateria: 92, defeitos: ['lentes'] }] });
+  // lentes do 17 Pro não têm preço na tabela -> avaliação pendente
+  assert.equal(comDefeito.status, 'avaliacao_pendente');
+  const r = m.negociarDesconto({
+    produto: { modelo: '17 pro max', gb: 256, cor: 'branco' },
+    trocas: [{ modelo: '15 pro max', gb: 256, bateria: 79, defeitos: ['vidro_tela'] }],
+  });
+  // 3949 - 3550 = 399 -> até 99 -> etapas 0 e 50
+  assert.equal(r.desconto, 50);
+  assert.equal(r.ultima_oferta, true);
 });
 
-test('sem custo cadastrado a IA não negocia: chama humano', () => {
-  const r = m.negociarDesconto({ ...vendaComTroca });
+test('sem troca a IA não dá desconto: chama humano', () => {
+  const r = m.negociarDesconto({ produto: { modelo: '17 pro max', gb: 256, cor: 'branco' } });
+  assert.equal(r.status, 'humano');
+});
+
+test('aparelho da troca sem preço de revenda: chama humano', () => {
+  const r = m.negociarDesconto({ produto: { modelo: '17', gb: 256 }, trocas: [{ modelo: '11', gb: 128, bateria: 85 }] });
   assert.equal(r.status, 'humano');
 });
