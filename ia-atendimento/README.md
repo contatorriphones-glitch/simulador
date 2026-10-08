@@ -47,3 +47,18 @@ A Bia **não dá desconto logo de cara**. Primeiro contorna (brindes: fone Bluet
 ```
 cd ia-atendimento && npm test
 ```
+
+## Página de teste da Bia
+
+`chat-teste.html` é um arquivo único: abra no navegador, cole a chave do Gemini em ⚙️ e converse como se fosse um cliente.
+
+- 🔎 mostra cada consulta às tabelas e o resultado (útil para conferir os valores).
+- 👍/👎 em cada resposta; no 👎, escreva como a Bia deveria ter respondido.
+- ⬇️ baixa a conversa com as avaliações, para revisarmos juntos.
+- Em ⚙️ dá para simular outra data/hora (ex.: sábado às 16h50) e marcar feriado.
+
+Mudou alguma tabela ou o prompt? Gere a página de novo:
+
+```
+cd ia-atendimento && npm run build
+```

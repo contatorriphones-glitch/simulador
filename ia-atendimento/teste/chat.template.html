@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teste da Bia</title>
+<style>
+  :root {
+    --bg: #000; --painel: #121212; --borda: #262626; --texto: #f5f5f5; --sub: #a8a8a8;
+    --bia: #262626; --cliente: linear-gradient(135deg, #a033ff, #5b51f5); --aviso: #3a2a00; --avisoTxt: #ffd666;
+    --erro: #4a1515; --ok: #10351f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--texto);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--borda); }
+  .avatar { width: 38px; height: 38px; border-radius: 50%; background: #1b2a4a; display: grid; place-items: center; font-weight: 700; color: #6aa8ff; }
+  .titulo { flex: 1; min-width: 0; }
+  .titulo b { display: block; }
+  .titulo small { color: var(--sub); }
+  header button { background: none; border: 1px solid var(--borda); color: var(--texto); border-radius: 8px; padding: 6px 9px; cursor: pointer; font-size: 14px; }
+  header button.ativo { background: #333; }
+  #config { padding: 12px 16px; border-bottom: 1px solid var(--borda); background: var(--painel); display: grid; gap: 10px; }
+  #config[hidden] { display: none; }
+  #config label { display: grid; gap: 4px; font-size: 13px; color: var(--sub); }
+  #config input[type=text], #config input[type=password], #config input[type=datetime-local] {
+    background: #000; color: var(--texto); border: 1px solid var(--borda); border-radius: 8px; padding: 8px; font-size: 14px; width: 100%; }
+  #config .linha { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+  #config .linha > label { flex: 1; min-width: 180px; }
+  #config .check { display: flex; gap: 6px; align-items: center; color: var(--texto); }
+  #config button { background: #0095f6; color: #fff; border: 0; border-radius: 8px; padding: 9px 14px; cursor: pointer; font-weight: 600; }
+  #config button.sec { background: #333; }
+  #config .nota { font-size: 12px; color: var(--sub); }
+  #banner { display: none; padding: 10px 16px; background: var(--aviso); color: var(--avisoTxt); font-size: 14px; gap: 8px; align-items: center; }
+  #banner.on { display: flex; }
+  #banner button { margin-left: auto; background: var(--avisoTxt); color: #000; border: 0; border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  main { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+  .msg { max-width: 78%; padding: 9px 13px; border-radius: 20px; white-space: pre-wrap; word-wrap: break-word; }
+  .cliente { align-self: flex-end; background: var(--cliente); }
+  .bia { align-self: flex-start; background: var(--bia); }
+  .grupo-fim { margin-bottom: 10px; }
+  .sistema { align-self: center; font-size: 12px; color: var(--sub); text-align: center; margin: 8px 0; max-width: 90%; }
+  .sistema.erro { background: var(--erro); color: #ffb4b4; padding: 6px 10px; border-radius: 8px; }
+  .sistema.agenda { background: var(--ok); color: #9ff0bf; padding: 8px 12px; border-radius: 8px; text-align: left; white-space: pre-wrap; }
+  .fb { align-self: flex-start; display: flex; gap: 6px; margin: 0 0 12px 4px; }
+  .fb button { background: none; border: 1px solid var(--borda); border-radius: 12px; color: var(--sub); cursor: pointer; padding: 2px 8px; font-size: 13px; }
+  .fb button.marcado { border-color: #0095f6; color: #fff; }
+  .debug { display: none; align-self: stretch; font: 11px/1.35 ui-monospace, Menlo, monospace; color: #8fb3ff; background: #0b1020;
+    border: 1px dashed #24304f; border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; margin: 2px 0; max-height: 220px; overflow: auto; }
+  body.mostrar-debug .debug { display: block; }
+  #digitando { padding: 0 16px 8px; color: var(--sub); font-size: 13px; visibility: hidden; }
+  #digitando.on { visibility: visible; }
+  footer { display: flex; gap: 8px; padding: 10px 16px 16px; border-top: 1px solid var(--borda); }
+  footer textarea { flex: 1; resize: none; background: #262626; color: var(--texto); border: 0; border-radius: 22px; padding: 10px 16px; font: inherit; height: 44px; }
+  footer button { background: none; border: 0; color: #0095f6; font-weight: 700; font-size: 15px; cursor: pointer; padding: 0 6px; }
+  @media (max-width: 480px) { .msg { max-width: 88%; } header button { padding: 5px 7px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="avatar">RR</div>
+  <div class="titulo"><b>RR Prime Cell</b><small>Ambiente de teste da Bia</small></div>
+  <button id="btnConfig" title="Configurações">⚙️</button>
+  <button id="btnDebug" title="Mostrar consultas às tabelas">🔎</button>
+  <button id="btnExportar" title="Baixar a conversa com as avaliações">⬇️</button>
+  <button id="btnLimpar" title="Nova conversa">🔄</button>
+</header>
+
+<section id="config">
+  <label>Chave da API do Gemini (fica salva só neste navegador)
+    <input id="chave" type="password" autocomplete="off" placeholder="Cole aqui a chave criada no Google AI Studio">
+  </label>
+  <div class="linha">
+    <label>Modelo
+      <input id="modelo" type="text" list="listaModelos" placeholder="gemini-2.5-flash">
+      <datalist id="listaModelos"></datalist>
+    </label>
+    <button class="sec" id="btnModelos" type="button">Buscar modelos disponíveis</button>
+  </div>
+  <div class="linha">
+    <label>Simular data e hora (vazio = agora)
+      <input id="simData" type="datetime-local">
+    </label>
+    <label class="check"><input id="feriado" type="checkbox"> Hoje é feriado</label>
+    <label class="check"><input id="rapido" type="checkbox"> Modo rápido (sem espera de digitação)</label>
+  </div>
+  <div class="linha"><button id="btnSalvar" type="button">Salvar e começar</button></div>
+  <div class="nota">No plano grátis, o Google pode usar as conversas para melhorar os produtos dele. Nos testes, não use dados reais de clientes.</div>
+</section>
+
+<div id="banner"><span>👩‍💼 Conversa transferida para a equipe. A Bia parou de responder.</span><button id="btnDevolver">Devolver para a Bia</button></div>
+<main id="chat"></main>
+<div id="digitando">Bia está digitando…</div>
+<footer>
+  <textarea id="msg" placeholder="Mensagem…" rows="1"></textarea>
+  <button id="btnEnviar">Enviar</button>
+</footer>
+
+<script>
+const DADOS = /*__DADOS__*/;
+const PROMPT = /*__PROMPT__*/;
+const GARANTIA = /*__GARANTIA__*/;
+
+/*__MOTOR__*/
+
+const motor = criarMotor(DADOS);
+const $ = (id) => document.getElementById(id);
+const LS = {
+  get(k, d = '') { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const estado = { historico: [], log: [], feedbacks: [], agendamentos: [], pendentes: [], humano: false, ocupado: false, timer: null };
+
+// ------------------------------------------------------------------ ferramentas
+const DEFEITOS = {
+  ...Object.fromEntries(Object.entries(DADOS.assistencia.reparos).map(([k, v]) => [k, v.descricao])),
+  ...DADOS.assistencia.recusa,
+};
+const aparelho = {
+  type: 'object',
+  properties: {
+    modelo: { type: 'string', description: 'Modelo, ex.: "15 Pro Max"' },
+    gb: { type: 'integer', description: 'Capacidade em GB (1TB = 1024)' },
+    bateria: { type: 'integer', description: 'Saúde da bateria em %' },
+    defeitos: {
+      type: 'array', items: { type: 'string', enum: Object.keys(DEFEITOS) },
+      description: 'Defeitos informados pelo cliente. Lista vazia se o aparelho está perfeito. Opções: ' +
+        Object.entries(DEFEITOS).map(([k, v]) => `${k} = ${v}`).join('; '),
+    },
+  },
+  required: ['modelo', 'gb'],
+};
+const produto = {
+  type: 'object',
+  properties: {
+    modelo: { type: 'string' }, gb: { type: 'integer' }, cor: { type: 'string' },
+    condicao: { type: 'string', enum: ['lacrado', 'seminovo'] },
+  },
+  required: ['modelo', 'gb'],
+};
+const parcelas = { type: 'array', items: { type: 'integer' }, description: 'Parcelas a simular. Omitir = 6, 10, 12 e 18x.' };
+
+const FERRAMENTAS = [
+  {
+    name: 'consultar_catalogo',
+    description: 'Preço à vista (Pix/dinheiro), cores e capacidades de um iPhone à venda. Se acao = "humano", não temos o valor.',
+    parameters: { type: 'object', properties: { modelo: { type: 'string' }, gb: { type: 'integer' }, cor: { type: 'string' }, condicao: { type: 'string', enum: ['lacrado', 'seminovo'] } }, required: ['modelo'] },
+    run: (a) => motor.consultarCatalogo(a),
+  },
+  {
+    name: 'sugerir_modelos',
+    description: 'Lista os aparelhos que cabem no orçamento do cliente (do mais caro ao mais barato), já descontando a avaliação da troca, se houver.',
+    parameters: { type: 'object', properties: { orcamento: { type: 'number' }, avaliacao: { type: 'number', description: 'Valor da avaliação do aparelho da troca' }, condicao: { type: 'string', enum: ['lacrado', 'seminovo'] } }, required: ['orcamento'] },
+    run: (a) => motor.sugerirModelos(a).slice(0, 8),
+  },
+  {
+    name: 'avaliar_aparelho',
+    description: 'Pré-avaliação do iPhone que o cliente quer dar na troca. Use só depois do checklist respondido.',
+    parameters: aparelho,
+    run: (a) => motor.avaliarAparelho(a),
+  },
+  {
+    name: 'montar_proposta',
+    description: 'Calcula preço do produto - avaliação das trocas - entrada = saldo, e o parcelamento do saldo.',
+    parameters: { type: 'object', properties: { produto, trocas: { type: 'array', items: aparelho }, entrada: { type: 'number' }, parcelas }, required: ['produto'] },
+    run: (a) => motor.montarProposta(a),
+  },
+  {
+    name: 'simular_pagamento',
+    description: 'Simula um valor no débito e no crédito parcelado, com a taxa da maquininha.',
+    parameters: { type: 'object', properties: { valor: { type: 'number' }, parcelas }, required: ['valor'] },
+    run: (a) => motor.simularPagamento(a.valor, a.parcelas?.length ? { parcelas: a.parcelas } : undefined),
+  },
+  {
+    name: 'negociar_desconto',
+    description: 'Somente em venda com troca, depois de contornar com brindes e garantia, e se o cliente insistir. Retorna o próximo desconto que pode ser oferecido.',
+    parameters: { type: 'object', properties: { produto, trocas: { type: 'array', items: aparelho }, entrada: { type: 'number' }, desconto_ja_dado: { type: 'number', description: 'Soma dos descontos já oferecidos nesta conversa' } }, required: ['produto', 'trocas'] },
+    run: (a) => motor.negociarDesconto(a),
+  },
+  {
+    name: 'verificar_horario',
+    description: 'Confere se um dia e horário estão dentro do horário de agendamento da loja.',
+    parameters: { type: 'object', properties: { data: { type: 'string', description: 'AAAA-MM-DD' }, horario: { type: 'string', description: 'HH:MM' }, feriado: { type: 'boolean' } }, required: ['data', 'horario'] },
+    run: ({ data, horario, feriado }) => {
+      const [y, m, d] = data.split('-').map(Number);
+      return motor.verificarHorario(new Date(y, m - 1, d), horario, { feriado: !!feriado });
+    },
+  },
+  {
+    name: 'registrar_agendamento',
+    description: 'Registra o agendamento depois que o cliente preencheu o questionário.',
+    parameters: { type: 'object', properties: { nome: { type: 'string' }, modelo_aparelho: { type: 'string' }, gb: { type: 'string' }, forma_pagamento: { type: 'string' }, dia_horario: { type: 'string' }, instagram: { type: 'string' }, whatsapp: { type: 'string' }, resumo: { type: 'string', description: 'Resumo da proposta combinada (valores, troca, desconto, brindes)' } }, required: ['nome', 'dia_horario', 'whatsapp'] },
+    run: (a) => {
+      estado.agendamentos.push({ ...a, registrado_em: new Date().toISOString() });
+      sistema('📅 Agendamento registrado\n' + Object.entries(a).map(([k, v]) => `${k}: ${v}`).join('\n'), 'agenda');
+      return { ok: true };
+    },
+  },
+  {
+    name: 'transferir_humano',
+    description: 'Passa a conversa para a equipe e pausa a Bia.',
+    parameters: { type: 'object', properties: { motivo: { type: 'string' } }, required: ['motivo'] },
+    run: ({ motivo }) => {
+      estado.humano = true;
+      $('banner').classList.add('on');
+      sistema('Transferido para a equipe. Motivo: ' + motivo);
+      return { ok: true, instrucao: 'Avise o cliente, em uma mensagem curta, que alguém da equipe vai continuar o atendimento. Não diga mais nada.' };
+    },
+  },
+];
+
+// ------------------------------------------------------------------ contexto
+const DIAS = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+function agora() { const v = $('simData').value; return v ? new Date(v) : new Date(); }
+function instrucoesSistema() {
+  const d = agora();
+  const p = (n) => String(n).padStart(2, '0');
+  const iso = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return `${PROMPT}
+
+## Contexto desta conversa
+- Agora: ${DIAS[d.getDay()]}, ${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}, ${p(d.getHours())}:${p(d.getMinutes())} (horário de Brasília). Data de hoje para as ferramentas: ${iso}.${$('feriado').checked ? '\n- Hoje é feriado.' : ''}
+- Valores das ferramentas estão em reais: escreva no formato R$ 1.234,56.
+- Separe os balões com uma linha contendo apenas ---.
+
+## Termo de garantia completo (consulta)
+${GARANTIA}`;
+}
+
+// ------------------------------------------------------------------ Gemini
+const API = 'https://generativelanguage.googleapis.com/v1beta';
+function nomeModelo() { return ($('modelo').value.trim() || 'gemini-2.5-flash').replace(/^models\//, ''); }
+
+async function chamarGemini() {
+  const r = await fetch(`${API}/models/${encodeURIComponent(nomeModelo())}:generateContent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': $('chave').value.trim() },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: instrucoesSistema() }] },
+      contents: estado.historico,
+      tools: [{ functionDeclarations: FERRAMENTAS.map(({ run, ...f }) => f) }],
+      generationConfig: { temperature: 0.7 },
+    }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error?.message || `HTTP ${r.status}`);
+  const c = j.candidates?.[0]?.content;
+  if (!c?.parts) throw new Error('Resposta vazia (' + (j.candidates?.[0]?.finishReason || j.promptFeedback?.blockReason || 'sem motivo') + ')');
+  return { role: 'model', parts: c.parts };
+}
+
+async function buscarModelos() {
+  try {
+    const r = await fetch(`${API}/models?pageSize=200`, { headers: { 'x-goog-api-key': $('chave').value.trim() } });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error?.message || r.status);
+    const nomes = (j.models || [])
+      .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map((m) => m.name.replace(/^models\//, ''));
+    $('listaModelos').innerHTML = nomes.map((n) => `<option value="${n}">`).join('');
+    sistema(`${nomes.length} modelos disponíveis. Clique no campo "Modelo" para escolher (prefira um "flash").`);
+  } catch (e) { sistema('Não consegui listar os modelos: ' + e.message, 'erro'); }
+}
+
+// ------------------------------------------------------------------ conversa
+async function processar() {
+  if (estado.ocupado || estado.humano) return;
+  const textos = estado.pendentes.splice(0);
+  if (!textos.length) return;
+  estado.ocupado = true;
+  digitando(true);
+  estado.historico.push({ role: 'user', parts: textos.map((text) => ({ text })) });
+  try {
+    for (let i = 0; i < 8; i++) {
+      const resposta = await chamarGemini();
+      estado.historico.push(resposta);
+      const texto = resposta.parts.filter((p) => p.text && !p.thought).map((p) => p.text).join('\n').trim();
+      if (texto) await falaBia(texto);
+      const chamadas = resposta.parts.filter((p) => p.functionCall);
+      if (!chamadas.length) break;
+      estado.historico.push({
+        role: 'user',
+        parts: chamadas.map(({ functionCall: fc }) => {
+          const f = FERRAMENTAS.find((x) => x.name === fc.name);
+          let resultado;
+          try { resultado = f ? f.run(fc.args || {}) : { erro: 'ferramenta desconhecida' }; }
+          catch (e) { resultado = { erro: String(e.message || e) }; }
+          depurar(fc.name, fc.args, resultado);
+          return { functionResponse: { name: fc.name, response: { resultado } } };
+        }),
+      });
+      digitando(true);
+    }
+  } catch (e) {
+    sistema('Erro ao falar com o Gemini: ' + e.message, 'erro');
+  } finally {
+    estado.ocupado = false;
+    digitando(false);
+    if (estado.pendentes.length && !estado.humano) agendarProcessamento();
+  }
+}
+
+function limparMarkdown(t) { return t.replace(/\*\*(.+?)\*\*/g, '$1').replace(/^#+\s*/gm, ''); }
+
+async function falaBia(texto) {
+  const bolhas = limparMarkdown(texto).split(/^\s*-{3,}\s*$/m).map((b) => b.trim()).filter(Boolean);
+  for (const [i, b] of bolhas.entries()) {
+    if (!$('rapido').checked) { digitando(true); await sleep(Math.min(700 + b.length * 25, 3500)); }
+    const el = bolha('bia', b);
+    if (i === bolhas.length - 1) el.classList.add('grupo-fim');
+  }
+  estado.log.push({ de: 'bia', texto: bolhas.join('\n---\n'), em: new Date().toISOString() });
+  botoesAvaliacao(estado.log.length - 1);
+}
+
+function enviar() {
+  const t = $('msg').value.trim();
+  if (!t) return;
+  if (!$('chave').value.trim()) { $('config').hidden = false; sistema('Cole a chave da API nas configurações primeiro.', 'erro'); return; }
+  $('msg').value = '';
+  bolha('cliente', t);
+  estado.log.push({ de: 'cliente', texto: t, em: new Date().toISOString() });
+  if (estado.humano) { sistema('A Bia está pausada (conversa com a equipe). Use "Devolver para a Bia" para continuar o teste.'); return; }
+  estado.pendentes.push(t);
+  agendarProcessamento();
+}
+
+// Espera o cliente parar de digitar (como no Direct, onde mandam várias mensagens seguidas).
+function agendarProcessamento() {
+  clearTimeout(estado.timer);
+  estado.timer = setTimeout(processar, $('rapido').checked ? 300 : 2500);
+}
+
+// ------------------------------------------------------------------ interface
+function rolar() { const c = $('chat'); c.scrollTop = c.scrollHeight; }
+function bolha(quem, texto) {
+  const el = document.createElement('div');
+  el.className = `msg ${quem}`;
+  el.textContent = texto;
+  $('chat').append(el);
+  rolar();
+  return el;
+}
+function sistema(texto, tipo = '') {
+  const el = document.createElement('div');
+  el.className = `sistema ${tipo}`;
+  el.textContent = texto;
+  $('chat').append(el);
+  rolar();
+}
+function depurar(nome, args, resultado) {
+  const el = document.createElement('div');
+  el.className = 'debug';
+  el.textContent = `🔎 ${nome}(${JSON.stringify(args)})\n→ ${JSON.stringify(resultado, null, 1)}`;
+  $('chat').append(el);
+  rolar();
+}
+function digitando(on) { $('digitando').classList.toggle('on', on); }
+
+function botoesAvaliacao(indice) {
+  const box = document.createElement('div');
+  box.className = 'fb';
+  const marcar = (nota, btn) => {
+    let correcao = '';
+    if (nota === 'ruim') correcao = prompt('Como a Bia deveria ter respondido? (opcional)') || '';
+    estado.feedbacks = estado.feedbacks.filter((f) => f.indice !== indice);
+    estado.feedbacks.push({ indice, nota, correcao, resposta: estado.log[indice].texto });
+    box.querySelectorAll('button').forEach((b) => b.classList.remove('marcado'));
+    btn.classList.add('marcado');
+  };
+  for (const [nota, rotulo] of [['boa', '👍'], ['ruim', '👎']]) {
+    const b = document.createElement('button');
+    b.textContent = rotulo;
+    b.onclick = () => marcar(nota, b);
+    box.append(b);
+  }
+  $('chat').append(box);
+  rolar();
+}
+
+function exportar() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  const dados = {
+    exportado_em: d.toISOString(),
+    modelo: nomeModelo(),
+    data_simulada: $('simData').value || null,
+    conversa: estado.log,
+    avaliacoes: estado.feedbacks,
+    agendamentos: estado.agendamentos,
+    historico_tecnico: estado.historico,
+  };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' }));
+  a.download = `teste-bia-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function novaConversa() {
+  if (estado.log.length && !confirm('Começar uma nova conversa? A atual será apagada (baixe antes, se quiser guardar).')) return;
+  Object.assign(estado, { historico: [], log: [], feedbacks: [], agendamentos: [], pendentes: [], humano: false });
+  $('chat').innerHTML = '';
+  $('banner').classList.remove('on');
+  sistema('Nova conversa. Escreva como se fosse um cliente no Direct.');
+}
+
+// ------------------------------------------------------------------ início
+$('chave').value = LS.get('bia_chave');
+$('modelo').value = LS.get('bia_modelo', 'gemini-2.5-flash');
+$('rapido').checked = LS.get('bia_rapido') === '1';
+$('config').hidden = !!$('chave').value;
+$('btnSalvar').onclick = () => {
+  LS.set('bia_chave', $('chave').value.trim());
+  LS.set('bia_modelo', $('modelo').value.trim());
+  LS.set('bia_rapido', $('rapido').checked ? '1' : '0');
+  $('config').hidden = true;
+  $('msg').focus();
+};
+$('btnModelos').onclick = buscarModelos;
+$('btnConfig').onclick = () => { $('config').hidden = !$('config').hidden; };
+$('btnDebug').onclick = (e) => { document.body.classList.toggle('mostrar-debug'); e.currentTarget.classList.toggle('ativo'); };
+$('btnExportar').onclick = exportar;
+$('btnLimpar').onclick = novaConversa;
+$('btnDevolver').onclick = () => { estado.humano = false; $('banner').classList.remove('on'); sistema('A Bia voltou a responder.'); };
+$('btnEnviar').onclick = enviar;
+$('msg').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); } });
+sistema('Escreva como se fosse um cliente no Direct. Use 🔎 para ver as consultas às tabelas e 👍/👎 para avaliar as respostas.');
+</script>
+</body>
+</html>

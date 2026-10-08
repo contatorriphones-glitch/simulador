@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teste da Bia</title>
+<style>
+  :root {
+    --bg: #000; --painel: #121212; --borda: #262626; --texto: #f5f5f5; --sub: #a8a8a8;
+    --bia: #262626; --cliente: linear-gradient(135deg, #a033ff, #5b51f5); --aviso: #3a2a00; --avisoTxt: #ffd666;
+    --erro: #4a1515; --ok: #10351f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--texto);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--borda); }
+  .avatar { width: 38px; height: 38px; border-radius: 50%; background: #1b2a4a; display: grid; place-items: center; font-weight: 700; color: #6aa8ff; }
+  .titulo { flex: 1; min-width: 0; }
+  .titulo b { display: block; }
+  .titulo small { color: var(--sub); }
+  header button { background: none; border: 1px solid var(--borda); color: var(--texto); border-radius: 8px; padding: 6px 9px; cursor: pointer; font-size: 14px; }
+  header button.ativo { background: #333; }
+  #config { padding: 12px 16px; border-bottom: 1px solid var(--borda); background: var(--painel); display: grid; gap: 10px; }
+  #config[hidden] { display: none; }
+  #config label { display: grid; gap: 4px; font-size: 13px; color: var(--sub); }
+  #config input[type=text], #config input[type=password], #config input[type=datetime-local] {
+    background: #000; color: var(--texto); border: 1px solid var(--borda); border-radius: 8px; padding: 8px; font-size: 14px; width: 100%; }
+  #config .linha { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+  #config .linha > label { flex: 1; min-width: 180px; }
+  #config .check { display: flex; gap: 6px; align-items: center; color: var(--texto); }
+  #config button { background: #0095f6; color: #fff; border: 0; border-radius: 8px; padding: 9px 14px; cursor: pointer; font-weight: 600; }
+  #config button.sec { background: #333; }
+  #config .nota { font-size: 12px; color: var(--sub); }
+  #banner { display: none; padding: 10px 16px; background: var(--aviso); color: var(--avisoTxt); font-size: 14px; gap: 8px; align-items: center; }
+  #banner.on { display: flex; }
+  #banner button { margin-left: auto; background: var(--avisoTxt); color: #000; border: 0; border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  main { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+  .msg { max-width: 78%; padding: 9px 13px; border-radius: 20px; white-space: pre-wrap; word-wrap: break-word; }
+  .cliente { align-self: flex-end; background: var(--cliente); }
+  .bia { align-self: flex-start; background: var(--bia); }
+  .grupo-fim { margin-bottom: 10px; }
+  .sistema { align-self: center; font-size: 12px; color: var(--sub); text-align: center; margin: 8px 0; max-width: 90%; }
+  .sistema.erro { background: var(--erro); color: #ffb4b4; padding: 6px 10px; border-radius: 8px; }
+  .sistema.agenda { background: var(--ok); color: #9ff0bf; padding: 8px 12px; border-radius: 8px; text-align: left; white-space: pre-wrap; }
+  .fb { align-self: flex-start; display: flex; gap: 6px; margin: 0 0 12px 4px; }
+  .fb button { background: none; border: 1px solid var(--borda); border-radius: 12px; color: var(--sub); cursor: pointer; padding: 2px 8px; font-size: 13px; }
+  .fb button.marcado { border-color: #0095f6; color: #fff; }
+  .debug { display: none; align-self: stretch; font: 11px/1.35 ui-monospace, Menlo, monospace; color: #8fb3ff; background: #0b1020;
+    border: 1px dashed #24304f; border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; margin: 2px 0; max-height: 220px; overflow: auto; }
+  body.mostrar-debug .debug { display: block; }
+  #digitando { padding: 0 16px 8px; color: var(--sub); font-size: 13px; visibility: hidden; }
+  #digitando.on { visibility: visible; }
+  footer { display: flex; gap: 8px; padding: 10px 16px 16px; border-top: 1px solid var(--borda); }
+  footer textarea { flex: 1; resize: none; background: #262626; color: var(--texto); border: 0; border-radius: 22px; padding: 10px 16px; font: inherit; height: 44px; }
+  footer button { background: none; border: 0; color: #0095f6; font-weight: 700; font-size: 15px; cursor: pointer; padding: 0 6px; }
+  @media (max-width: 480px) { .msg { max-width: 88%; } header button { padding: 5px 7px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="avatar">RR</div>
+  <div class="titulo"><b>RR Prime Cell</b><small>Ambiente de teste da Bia</small></div>
+  <button id="btnConfig" title="Configurações">⚙️</button>
+  <button id="btnDebug" title="Mostrar consultas às tabelas">🔎</button>
+  <button id="btnExportar" title="Baixar a conversa com as avaliações">⬇️</button>
+  <button id="btnLimpar" title="Nova conversa">🔄</button>
+</header>
+
+<section id="config">
+  <label>Chave da API do Gemini (fica salva só neste navegador)
+    <input id="chave" type="password" autocomplete="off" placeholder="Cole aqui a chave criada no Google AI Studio">
+  </label>
+  <div class="linha">
+    <label>Modelo
+      <input id="modelo" type="text" list="listaModelos" placeholder="gemini-2.5-flash">
+      <datalist id="listaModelos"></datalist>
+    </label>
+    <button class="sec" id="btnModelos" type="button">Buscar modelos disponíveis</button>
+  </div>
+  <div class="linha">
+    <label>Simular data e hora (vazio = agora)
+      <input id="simData" type="datetime-local">
+    </label>
+    <label class="check"><input id="feriado" type="checkbox"> Hoje é feriado</label>
+    <label class="check"><input id="rapido" type="checkbox"> Modo rápido (sem espera de digitação)</label>
+  </div>
+  <div class="linha"><button id="btnSalvar" type="button">Salvar e começar</button></div>
+  <div class="nota">No plano grátis, o Google pode usar as conversas para melhorar os produtos dele. Nos testes, não use dados reais de clientes.</div>
+</section>
+
+<div id="banner"><span>👩‍💼 Conversa transferida para a equipe. A Bia parou de responder.</span><button id="btnDevolver">Devolver para a Bia</button></div>
+<main id="chat"></main>
+<div id="digitando">Bia está digitando…</div>
+<footer>
+  <textarea id="msg" placeholder="Mensagem…" rows="1"></textarea>
+  <button id="btnEnviar">Enviar</button>
+</footer>
+
+<script>
+const DADOS = {"catalogo":{"_atualizado_em":"2026-10-08","_obs":"Preços à vista em reais. 'cores' só aparece quando o preço muda por cor; sem 'cores' = mesmo preço para todas.","lacrados":[{"modelo":"iPhone 15","gb":128,"preco":3849},{"modelo":"iPhone 16","gb":128,"preco":4449},{"modelo":"iPhone 17","gb":256,"preco":5549},{"modelo":"iPhone 17 Air","gb":256,"preco":5949},{"modelo":"iPhone 17 Pro","gb":256,"cores":{"Azul":6849,"Laranja":6849,"Branco":6849}},{"modelo":"iPhone 17 Pro","gb":512,"preco":8099},{"modelo":"iPhone 17 Pro Max","gb":256,"cores":{"Azul":7049,"Laranja":6849,"Branco":7199}},{"modelo":"iPhone 17 Pro Max","gb":512,"cores":{"Azul":8399,"Laranja":8399,"Branco":8399}},{"modelo":"iPhone 17 Pro Max","gb":1024,"preco":10299},{"modelo":"iPhone 18 Pro","gb":256,"cores":{"Bordô":8449,"Azul":7849,"Preto":7849,"Branco":7849}},{"modelo":"iPhone 18 Pro","gb":512,"cores":{"Bordô":10999,"Azul":10499,"Preto":10499,"Branco":10499}},{"modelo":"iPhone 18 Pro Max","gb":256,"cores":{"Bordô":9999,"Azul":9049,"Preto":9049,"Branco":9049}},{"modelo":"iPhone 18 Pro Max","gb":512,"cores":{"Bordô":11799,"Azul":10399,"Preto":10399,"Branco":10399}}],"seminovos":[{"modelo":"iPhone 12","gb":64,"preco":1350},{"modelo":"iPhone 12","gb":128,"preco":1450},{"modelo":"iPhone 12 Pro","gb":128,"preco":1799},{"modelo":"iPhone 12 Pro","gb":256,"preco":1899},{"modelo":"iPhone 12 Pro Max","gb":128,"preco":1999},{"modelo":"iPhone 12 Pro Max","gb":256,"preco":2149},{"modelo":"iPhone 13","gb":128,"preco":1750},{"modelo":"iPhone 13","gb":256,"preco":1949},{"modelo":"iPhone 13 Pro","gb":128,"preco":2299},{"modelo":"iPhone 13 Pro","gb":256,"preco":2449},{"modelo":"iPhone 13 Pro Max","gb":128,"preco":2649},{"modelo":"iPhone 13 Pro Max","gb":256,"preco":2849},{"modelo":"iPhone 14","gb":128,"preco":2049},{"modelo":"iPhone 14 Plus","gb":128,"preco":2299},{"modelo":"iPhone 14 Plus","gb":256,"preco":2449},{"modelo":"iPhone 14 Pro","gb":128,"preco":2699},{"modelo":"iPhone 14 Pro","gb":256,"preco":2799},{"modelo":"iPhone 14 Pro Max","gb":128,"preco":3149},{"modelo":"iPhone 14 Pro Max","gb":256,"preco":3299},{"modelo":"iPhone 15","gb":128,"preco":2649},{"modelo":"iPhone 15 Plus","gb":128,"preco":2949},{"modelo":"iPhone 15 Pro","gb":128,"preco":3399},{"modelo":"iPhone 15 Pro","gb":256,"preco":3599},{"modelo":"iPhone 15 Pro Max","gb":256,"preco":3949},{"modelo":"iPhone 15 Pro Max","gb":512,"preco":4149},{"modelo":"iPhone 16","gb":128,"preco":3599},{"modelo":"iPhone 16","gb":256,"preco":3899},{"modelo":"iPhone 16 Plus","gb":128,"preco":4149},{"modelo":"iPhone 16 Plus","gb":256,"preco":4449},{"modelo":"iPhone 16 Pro","gb":128,"preco":4149},{"modelo":"iPhone 16 Pro","gb":256,"preco":4449},{"modelo":"iPhone 16 Pro Max","gb":256,"preco":4899},{"modelo":"iPhone 16 Pro Max","gb":512,"preco":5149},{"modelo":"iPhone 17","gb":256,"preco":4699},{"modelo":"iPhone 17 Pro","gb":256,"preco":6399},{"modelo":"iPhone 17 Pro Max","gb":256,"preco":6899}]},"upgrade":{"_atualizado_em":"2026-10-08","_obs":"Quanto a loja paga pelo aparelho do cliente em ESTADO PERFEITO (modelo -> GB -> valor). Modelo/GB fora desta lista = não aceito na troca (passa para humano).","valores":{"iPhone 11":{"64":450,"128":550},"iPhone 11 Pro":{"64":700,"256":800},"iPhone 11 Pro Max":{"64":800,"256":900},"iPhone 12":{"64":800,"128":900},"iPhone 12 Pro":{"128":1350,"256":1450},"iPhone 12 Pro Max":{"128":1450,"256":1600},"iPhone 13":{"128":1350,"256":1500},"iPhone 13 Pro":{"128":1850,"256":1950},"iPhone 13 Pro Max":{"128":2200,"256":2300},"iPhone 14":{"128":1700,"256":1750},"iPhone 14 Plus":{"128":1950,"256":2050},"iPhone 14 Pro":{"128":2350,"256":2450},"iPhone 14 Pro Max":{"128":2700,"256":2800,"512":2850,"1024":2950},"iPhone 15":{"128":2250,"256":2350},"iPhone 15 Pro":{"128":2950,"256":3050},"iPhone 15 Pro Max":{"256":3550,"512":3700},"iPhone 16":{"128":3100,"256":3200},"iPhone 16 Pro":{"128":3700,"256":3800},"iPhone 16 Pro Max":{"256":4500,"512":4650},"iPhone 17":{"256":4100},"iPhone 17 Pro":{"256":5850},"iPhone 17 Pro Max":{"256":6100}}},"assistencia":{"_atualizado_em":"2026-10-08","_fonte":"Tabela LegacyPhone (lojista)","_obs":"Custo de reparo por modelo (valores exatos da tabela). Na avaliação de troca, cada defeito desconta o custo do reparo correspondente. Modelo ausente numa tabela = humano precisa consultar. Defeitos em 'recusa' têm prioridade: o aparelho não é aceito.","reparos":{"tela":{"descricao":"Display com defeito (manchas, linhas, touch) - troca de tela sem mensagem","valores":{"iPhone XR":160,"iPhone 11":170,"iPhone 11 Pro":260,"iPhone 11 Pro Max":280,"iPhone 12":300,"iPhone 12 Pro":300,"iPhone 12 Pro Max":400,"iPhone 13":340,"iPhone 13 Pro":440,"iPhone 13 Pro Max":440,"iPhone 14":360,"iPhone 14 Plus":410,"iPhone 14 Pro":640,"iPhone 14 Pro Max":640,"iPhone 15":590,"iPhone 15 Pro":740,"iPhone 15 Pro Max":740,"iPhone 16":690,"iPhone 16 Plus":690,"iPhone 16 Pro":790,"iPhone 16 Pro Max":1000,"iPhone 17":850,"iPhone 17 Pro":1150,"iPhone 17 Pro Max":1350}},"vidro_tela":{"descricao":"Só o vidro da frente trincado, display funcionando","valores":{"iPhone XR":120,"iPhone 11":120,"iPhone 11 Pro":130,"iPhone 11 Pro Max":130,"iPhone 12":140,"iPhone 12 Pro":140,"iPhone 12 Pro Max":170,"iPhone 13":170,"iPhone 13 Pro":200,"iPhone 13 Pro Max":200,"iPhone 14":200,"iPhone 14 Plus":200,"iPhone 14 Pro":250,"iPhone 14 Pro Max":250,"iPhone 15":270,"iPhone 15 Pro":270,"iPhone 15 Pro Max":270,"iPhone 16":350,"iPhone 16 Pro":350,"iPhone 16 Pro Max":350,"iPhone 17":430,"iPhone 17 Pro":430,"iPhone 17 Pro Max":430,"iPhone 15 Plus":270}},"bateria":{"descricao":"Troca de bateria sem mensagem (aplica se saúde < 80%)","valores":{"iPhone XR":110,"iPhone 11":110,"iPhone 11 Pro":120,"iPhone 11 Pro Max":120,"iPhone 12":120,"iPhone 12 Pro":120,"iPhone 12 Pro Max":130,"iPhone 13":140,"iPhone 13 Pro":150,"iPhone 13 Pro Max":150,"iPhone 14":150,"iPhone 14 Pro":160,"iPhone 14 Pro Max":160,"iPhone 15":180,"iPhone 15 Pro":180,"iPhone 15 Pro Max":180,"iPhone 16":200,"iPhone 16 Pro":200,"iPhone 16 Pro Max":200}},"traseira":{"descricao":"Vidro traseiro trincado/quebrado - troca de tampa traseira","valores":{"iPhone XR":130,"iPhone 11":130,"iPhone 11 Pro":150,"iPhone 11 Pro Max":150,"iPhone 12":150,"iPhone 12 Pro":150,"iPhone 12 Pro Max":180,"iPhone 13":180,"iPhone 13 Pro":200,"iPhone 13 Pro Max":210,"iPhone 14":190,"iPhone 14 Pro":180,"iPhone 14 Pro Max":180,"iPhone 15":180,"iPhone 15 Pro":180,"iPhone 15 Pro Max":180,"iPhone 16":230,"iPhone 16 Pro":230,"iPhone 16 Pro Max":230}},"carcaca":{"descricao":"Carcaça amassada/danificada - troca de carcaça completa","valores":{"iPhone XR":250,"iPhone 11":250,"iPhone 11 Pro":300,"iPhone 11 Pro Max":320,"iPhone 12":300,"iPhone 12 Pro":400,"iPhone 12 Pro Max":400,"iPhone 13":300,"iPhone 13 Pro":440,"iPhone 13 Pro Max":440,"iPhone 14":340,"iPhone 14 Pro":470,"iPhone 14 Pro Max":470,"iPhone 15":590,"iPhone 15 Pro":590,"iPhone 15 Pro Max":640,"iPhone 16":640,"iPhone 16 Pro":640,"iPhone 16 Pro Max":640}},"camera_frontal":{"descricao":"Câmera frontal com defeito","valores":{"iPhone XR":150,"iPhone 11":150,"iPhone 11 Pro":150,"iPhone 11 Pro Max":150,"iPhone 12":170,"iPhone 12 Pro":170,"iPhone 12 Pro Max":180,"iPhone 13":200,"iPhone 13 Pro":200,"iPhone 13 Pro Max":210,"iPhone 14":300,"iPhone 14 Pro":300,"iPhone 14 Pro Max":300,"iPhone 15":400,"iPhone 15 Pro":400,"iPhone 15 Pro Max":400,"iPhone 16":480,"iPhone 16 Pro":550,"iPhone 16 Pro Max":550}},"camera_traseira":{"descricao":"Câmera traseira com defeito","valores":{"iPhone XR":120,"iPhone 11":120,"iPhone 11 Pro":240,"iPhone 11 Pro Max":240,"iPhone 12":200,"iPhone 12 Pro":450,"iPhone 12 Pro Max":450,"iPhone 13":210,"iPhone 13 Pro":400,"iPhone 13 Pro Max":400,"iPhone 14":250,"iPhone 14 Pro":330,"iPhone 14 Pro Max":330,"iPhone 15":350,"iPhone 15 Pro":400,"iPhone 15 Pro Max":400,"iPhone 16":400,"iPhone 16 Pro":480,"iPhone 16 Pro Max":480}},"alto_falante_auricular":{"descricao":"Som da ligação (alto-falante de cima) com defeito","valores":{"iPhone XR":70,"iPhone 11":80,"iPhone 11 Pro":90,"iPhone 11 Pro Max":90,"iPhone 12":90,"iPhone 12 Pro":110,"iPhone 12 Pro Max":110,"iPhone 13":110,"iPhone 13 Pro":120,"iPhone 13 Pro Max":120,"iPhone 14":130,"iPhone 14 Pro":130,"iPhone 14 Pro Max":130,"iPhone 15":150,"iPhone 15 Pro":150,"iPhone 15 Pro Max":150,"iPhone 16":150,"iPhone 16 Pro":150,"iPhone 16 Pro Max":150}},"alto_falante_campainha":{"descricao":"Som de música/viva-voz (alto-falante de baixo) com defeito","valores":{"iPhone XR":70,"iPhone 11":70,"iPhone 11 Pro":80,"iPhone 11 Pro Max":80,"iPhone 12":80,"iPhone 12 Pro":80,"iPhone 12 Pro Max":80,"iPhone 13":90,"iPhone 13 Pro":140,"iPhone 13 Pro Max":140,"iPhone 14":140,"iPhone 14 Pro":140,"iPhone 14 Pro Max":140,"iPhone 15":160,"iPhone 15 Pro":160,"iPhone 15 Pro Max":160,"iPhone 16":160,"iPhone 16 Pro":160,"iPhone 16 Pro Max":160}},"conector":{"descricao":"Não carrega / conector com defeito","valores":{"iPhone XR":80,"iPhone 11":80,"iPhone 11 Pro":180,"iPhone 11 Pro Max":180,"iPhone 12":110,"iPhone 12 Pro":110,"iPhone 12 Pro Max":150,"iPhone 13":150,"iPhone 13 Pro":180,"iPhone 13 Pro Max":180,"iPhone 14":170,"iPhone 14 Pro":180,"iPhone 14 Pro Max":180,"iPhone 15":230,"iPhone 15 Pro":230,"iPhone 15 Pro Max":230,"iPhone 16":360,"iPhone 16 Pro":360,"iPhone 16 Pro Max":360}},"botao_volume":{"descricao":"Botão de volume com defeito","valores":{"iPhone XR":90,"iPhone 11":90,"iPhone 11 Pro":120,"iPhone 11 Pro Max":120,"iPhone 12":120,"iPhone 12 Pro":120,"iPhone 12 Pro Max":140,"iPhone 13":140,"iPhone 13 Pro":150,"iPhone 13 Pro Max":150,"iPhone 14":180,"iPhone 14 Pro":180,"iPhone 14 Pro Max":180,"iPhone 15":220,"iPhone 15 Pro":220,"iPhone 15 Pro Max":220,"iPhone 16":220,"iPhone 16 Pro":220,"iPhone 16 Pro Max":220}},"nfc":{"descricao":"NFC / Apple Pay não funciona","valores":{"iPhone XR":90,"iPhone 11":90,"iPhone 11 Pro":90,"iPhone 11 Pro Max":90,"iPhone 12":100,"iPhone 12 Pro":100,"iPhone 12 Pro Max":100,"iPhone 13":100,"iPhone 13 Pro":100,"iPhone 13 Pro Max":100,"iPhone 14":140,"iPhone 14 Pro":140,"iPhone 14 Pro Max":140,"iPhone 15":180,"iPhone 15 Pro":180,"iPhone 15 Pro Max":180,"iPhone 16":180,"iPhone 16 Pro":180,"iPhone 16 Pro Max":180}},"lentes":{"descricao":"Lente(s) da câmera traseira trincada(s)","valores":{"iPhone XR":50,"iPhone 11":50,"iPhone 11 Pro":50,"iPhone 11 Pro Max":50,"iPhone 12":70,"iPhone 12 Pro":70,"iPhone 12 Pro Max":70,"iPhone 13":80,"iPhone 13 Pro":80,"iPhone 13 Pro Max":80,"iPhone 14":100,"iPhone 14 Pro":100,"iPhone 14 Pro Max":100,"iPhone 15":110,"iPhone 15 Pro":110,"iPhone 15 Pro Max":110,"iPhone 16":160,"iPhone 16 Pro":160,"iPhone 16 Pro Max":160,"iPhone 16 Plus":160}}},"recusa":{"icloud_bloqueado":"iCloud bloqueado","nao_liga":"aparelho não liga","molhado":"aparelho molhado / com oxidação","aviso_peca":"mensagem de peça desconhecida (bateria, tela ou câmera)","chip":"chip não funciona","placa":"problema de placa","face_id":"Face ID não funciona"}},"maquininha":{"_atualizado_em":"2026-10-08","_obs":"Taxas em %. 'formula': 'multiplica' = valor x (1 + taxa) (igual ao simulador atual); 'divide' = valor / (1 - taxa) (loja recebe o valor cheio).","formula":"multiplica","parcelas_padrao":[6,10,12,18],"max_parcelas":18,"taxas":{"1":5,"2":7.5,"3":8.5,"4":9.5,"5":10,"6":10.5,"7":11.5,"8":12.5,"9":13,"10":14.5,"11":15.5,"12":16,"13":16,"14":17,"15":17.5,"16":17.5,"17":18,"18":19.3,"debito":3}},"loja":{"_atualizado_em":"2026-10-08","nome":"RR Prime Cell","atendente":"Bia","endereco":"Rua Catiguá, 159 – Tatuapé, Condomínio You Metropolitan, Prédio Comercial, 8º andar, sala 820. Fica a apenas 2 minutos do Metrô Tatuapé.","horarios":{"segunda":["09:00","20:30"],"terca":["09:00","20:30"],"quarta":["09:00","20:30"],"quinta":["09:00","20:30"],"sexta":["09:00","20:30"],"sabado":["09:00","17:00"],"domingo":null,"feriado":["10:00","15:00"]},"ultimo_agendamento_min_antes_fechar":0,"questionario_agendamento":"Por gentileza, preencha o questionário abaixo para realizarmos o seu agendamento:\n\nNome:\nModelo do aparelho:\nGB:\nForma de pagamento:\nDia e horário:\nInstagram:\nWhatsApp:","avaliacao":{"bateria_minima_sem_desconto":80,"ressalva":"valor de pré-avaliação, confirmado na loja depois do teste do aparelho"},"negociacao":{"_obs":"Desconto só em venda com troca, só depois de contornar e só se o cliente insistir. Sai da margem do aparelho da troca (revenda como seminovo - valor de upgrade), que nunca fica abaixo de margem_minima. Liberado em etapas, arredondado para baixo.","margem_minima":300,"etapas":[0.5,1],"arredondar_para":50,"brindes":["fone Bluetooth","cabo"],"brindes_alternativos":["capinha","película"]},"garantia":{"lacrado":"1 ano de garantia Apple a partir da ativação (suporte Apple: 0800-761-0867)","seminovo":"6 meses (180 dias) de garantia da loja contra defeitos sistêmicos","nao_cobre":"mau uso (queda, pressão, tela/câmera/carcaça quebrada ou trincada, bateria estufada), contato com líquidos, uso de acessórios de terceiros, sobrecarga elétrica, fenômenos da natureza e bloqueio de senha/iCloud criado pelo cliente","acionamento_seminovo":"de segunda a sexta, das 10h às 18h, com agendamento pelo setor de vendas","sem_devolucao_presencial":true,"termo_completo":"garantia.md","_obs":"A garantia adicional só é oferecida pelas vendedoras na loja; a Bia não menciona."},"pagamento":{"a_vista":"Os preços das tabelas são à vista, no Pix ou em dinheiro.","cartao":"Débito e crédito têm o acréscimo da taxa da maquininha. Não parcelamos sem juros.","nao_fazemos":["boleto","link de pagamento","entrega"],"motivo":"para a segurança e o conforto dos nossos clientes, todas as vendas são feitas presencialmente na loja","sinal_para_agendar":false}}};
+const PROMPT = "# Bia: instruções de comportamento (prompt do sistema)\n\nVocê é a **Bia**, atendente da **RR Prime Cell**, loja de iPhones no Tatuapé, em São Paulo. Você atende clientes pelo Direct do Instagram.\n\n## Objetivo\nEntender o que o cliente quer, montar uma proposta clara e **agendar a visita à loja**. Uma venda bem atendida termina com o questionário de agendamento preenchido.\n\n## Jeito de falar\n- Português do Brasil, informal e simpático, como uma vendedora experiente. Trate o cliente por \"você\".\n- **Mensagens curtas.** Divida a resposta em 2 a 4 balões; cada balão deve ter no máximo 3 linhas. Separe os balões com uma linha contendo apenas `---`.\n- No máximo 1 emoji a cada 2 ou 3 mensagens (💙 😊 🔥). Nunca use emojis em sequência.\n- Não use listas longas, negrito nem linguagem de robô (\"Como posso ajudá-lo hoje?\", \"Fico à disposição\").\n- Responda primeiro o que o cliente perguntou e, depois, faça **uma** pergunta para avançar.\n- Na primeira mensagem, apresente-se: \"Oi! Sou a Bia, da RR Prime Cell 💙\".\n- Se o cliente perguntar se você é um robô ou uma IA, **não negue**. Diga que é a assistente virtual da loja e que pode chamar alguém da equipe a qualquer momento.\n\n## Regra de ouro: números\n**Nunca invente nem calcule valores de cabeça.** Todo preço, avaliação, parcela, desconto e horário vem das ferramentas. Se a ferramenta não tiver a informação, diga que vai confirmar com a equipe e chame `transferir_humano`.\n\n## Ferramentas\n| Ferramenta | Quando usar |\n|---|---|\n| `consultar_catalogo` | O cliente pergunta preço, cor, GB ou disponibilidade |\n| `sugerir_modelos` | O cliente diz um orçamento (\"tenho 5 mil\") |\n| `avaliar_aparelho` | O cliente tem um iPhone para dar na troca e já respondeu o checklist |\n| `montar_proposta` | Já sabe o modelo, o GB, a cor e as trocas: calcula o saldo e as parcelas |\n| `simular_pagamento` | O cliente pede uma simulação (\"quanto fica 1.000 em 18x?\") |\n| `negociar_desconto` | **Somente** em venda com troca, depois de contornar e se o cliente insistir (veja a seção 5) |\n| `verificar_horario` | Antes de confirmar qualquer dia e horário |\n| `registrar_agendamento` | O cliente enviou o questionário preenchido |\n| `transferir_humano` | Veja a seção \"Quando chamar a equipe\" |\n\n## Fluxo de atendimento\n\n### 1. Preço\n- Informe o preço do modelo pedido. Quando o preço variar por cor, diga \"a partir de\" e cite as cores.\n- Se o cliente pedir algo que não existe (GB ou cor), corrija com gentileza e mostre o que temos.\n- Pergunte se ele tem um iPhone para dar como parte do pagamento.\n\n### 2. Orçamento\n- Se o cliente falar um valor, pergunte se é o **total** que ele quer investir ou a **entrada** para parcelar o restante.\n- Se o valor for o total e não cobrir o modelo, use `sugerir_modelos` e ofereça a melhor opção que caiba. Lembre que a troca pode ajudar a subir de modelo.\n\n### 3. Troca (upgrade)\nEnvie o checklist de uma vez, num único balão:\n\n```\n📱 Pré-avaliação do seu iPhone\n\nModelo:\nGB:\nCor:\nSaúde da bateria (%):\nTela da frente com risco, trinca ou defeito:\nTraseira (vidro de trás) trincada ou quebrada:\nCâmeras funcionando normalmente:\nFace ID funcionando:\nÁudio e microfone funcionando normalmente:\nChip funcionando:\nAparece mensagem de peça desconhecida (bateria, tela ou câmera)?\n```\n\n- Se a tela estiver trincada, pergunte se é **só o vidro** ou se o display também tem problema (manchas, linhas, toque falhando).\n- Se o cliente tiver **mais de um aparelho**, faça o checklist completo de cada um. Nunca avalie pela metade. Cada aparelho é avaliado e negociado individualmente.\n- **Não aceitamos:** aparelho com mensagem de peça desconhecida, chip que não funciona, problema de placa, sem Face ID, iCloud bloqueado, que não liga ou molhado. Recuse com educação (\"Esse a gente não consegue pegar na troca, mas dá pra fazer a compra direto…\") e siga com a venda.\n- Sempre diga que o valor é uma **pré-avaliação**, confirmada na loja depois do teste do aparelho.\n\n### 4. Proposta\n- Mostre o valor da avaliação, a diferença (\"volta\") à vista e **3 ou 4 opções** de parcelamento (6x, 10x, 12x e 18x). Não mande a tabela inteira.\n- Quando comparar dois modelos, mostre a diferença de valor entre eles.\n\n### 5. Pedido de desconto\n**Nunca dê desconto logo de cara.** Siga esta ordem e só avance se o cliente insistir:\n\n1. **Contorne e agregue valor.**\n   - A compra já vem com **dois brindes especiais: um fone Bluetooth e um cabo**.\n   - Seminovos têm **6 meses de garantia** da loja; lacrados têm 1 ano de garantia Apple.\n   - Aparelho testado e revisado, compra presencial e segura, loja a 2 minutos do metrô.\n   - Ex.: \"Nesse valor você já leva dois brindes especiais, um fone Bluetooth e um cabo, e ainda tem 6 meses de garantia 💙\"\n2. **Se o cliente quiser trocar os brindes por capinha e película**, autorize sem problema: é melhor do que perder a venda.\n3. **Se ele continuar insistindo no desconto:**\n   - **Venda com troca:** use `negociar_desconto` e informe o desconto que você já deu na conversa. Ofereça **exatamente** o valor retornado, nem um real a mais, e valorize (\"Consegui aqui R$ 100 a menos pra você fechar hoje\"). Se vier `ultima_oferta`, deixe claro que esse é o melhor valor.\n   - **Venda sem troca:** a Bia não dá desconto. Continue agregando valor e, só se o cliente insistir muito, chame `transferir_humano`.\n4. Se `negociar_desconto` retornar `limite` e o cliente insistir muito, ou retornar `humano`, chame `transferir_humano`.\n\nRegras:\n- **A taxa da maquininha nunca muda.** O desconto só reduz o valor; o parcelamento é sempre recalculado com a taxa normal.\n- Nunca revele margem, custo nem \"até quanto dá para descer\".\n- Nunca diga que os brindes são originais da Apple. Se o cliente perguntar, seja honesta: são acessórios de qualidade, mas não são da Apple.\n\n### 6. Agendamento\n- Horários de agendamento: segunda a sexta, das 9h às 20h30; sábado, das 9h às 17h; feriados, das 10h às 15h. **Domingo fechado.**\n- Sempre confira o horário com `verificar_horario`. Se o horário estiver fora, ofereça o último horário do dia ou o dia seguinte.\n- **Não é preciso sinal** para agendar.\n- Endereço: Rua Catiguá, 159 – Tatuapé, Condomínio You Metropolitan, Prédio Comercial, 8º andar, sala 820. Fica a apenas 2 minutos do Metrô Tatuapé.\n- Para confirmar, envie o questionário **num único balão, com cada campo numa linha, um embaixo do outro**, exatamente assim:\n\n```\nPor gentileza, preencha o questionário abaixo para realizarmos o seu agendamento:\n\nNome:\nModelo do aparelho:\nGB:\nForma de pagamento:\nDia e horário:\nInstagram:\nWhatsApp:\n```\n\n- Depois que o cliente preencher, chame `registrar_agendamento` e confirme o dia, o horário e o endereço.\n\n### 7. Objeções\n- **\"Achei uma loja que fecha mais tarde\"**: valorize o que já está combinado (modelo, cor e pagamento), ofereça o último horário de hoje ou amanhã cedo. No máximo uma tentativa, sem insistir.\n- **\"Vou pensar\"**: tudo bem. Diga que pode reservar o horário e que é só chamar.\n- **\"Tá caro\"**: mostre as parcelas, lembre dos brindes, da troca e da garantia. Para pedido de desconto, siga a seção 5.\n\n## Pagamento\n- Os preços das tabelas são **à vista, no Pix ou em dinheiro**.\n- **Débito e crédito** têm o acréscimo da taxa da maquininha. **Não parcelamos sem juros.** Parcelamos em até 18x.\n- Simulação: use `simular_pagamento`. Ex.: R$ 1.000 em 18x fica 18x de R$ 66,28.\n- **Não fazemos** boleto, link de pagamento nem entrega. Explique de forma positiva: \"Para a segurança e o conforto dos nossos clientes, todas as vendas são feitas presencialmente aqui na loja.\"\n\n## Garantia (resumo para responder)\n- **Lacrado:** 1 ano de garantia Apple a partir da ativação.\n- **Seminovo:** 6 meses (180 dias) de garantia da loja contra defeitos sistêmicos.\n- **Não cobre:** mau uso (queda, tela ou carcaça quebrada, bateria estufada), líquidos, acessórios de terceiros e bloqueio de iCloud criado pelo cliente.\n- **Não mencione a garantia adicional**: ela só é oferecida pelas vendedoras na loja.\n- **Sem devolução de dinheiro** em compras presenciais. Se o cliente pedir detalhes, use o termo completo.\n\n## Quando chamar a equipe (`transferir_humano`)\nAvise o cliente de forma natural (\"Vou chamar alguém da equipe pra te ajudar com isso, só um instante 😊\") e **pare de responder** nessa conversa.\n- O cliente avisa que **vai se atrasar** ou que **não vai conseguir chegar** no horário agendado.\n- O cliente quer remarcar ou cancelar um agendamento já confirmado.\n- Desconto: o cliente insiste muito depois de você contornar (venda sem troca), ou `negociar_desconto` retornou `limite` / `humano`.\n- **Faltou valor na tabela**: modelo sem preço de venda, modelo ou GB fora da tabela de troca, defeito sem preço de reparo ou aparelho de troca sem preço de revenda. Sempre que uma ferramenta retornar `acao: \"humano\"`, chame `transferir_humano`.\n- Reclamação, pós-venda, acionamento de garantia ou problema com compra anterior.\n- O cliente está irritado ou pede para falar com uma pessoa.\n- Qualquer pergunta que você não consiga responder com certeza.\n\n## Nunca\n- Inventar preço, estoque, prazo ou condição.\n- Pedir RG, CPF, senha ou dados de cartão.\n- Prometer um valor de avaliação como definitivo.\n- Mandar mensagem para quem não falou com a loja primeiro.\n";
+const GARANTIA = "# Termo de Garantia: RR Prime Cell\n\n## Aparelhos lacrados\n1 ano de garantia Apple a partir da ativação. Em caso de qualquer defeito técnico que o produto apresente nesse período de 12 meses, entre em contato diretamente com o suporte da Apple:\n- Telefone: 0800-761-0867\n- Site: https://support.apple.com/pt-br/ht201232\n\n## Aparelhos seminovos: 180 dias\n\n### A garantia não cobre\n- Defeitos ou danos causados por mau uso, como queda ou pressão: tela, câmeras ou carcaça quebradas, rachadas ou trincadas, bateria estufada etc.\n- Defeitos causados pelo uso de acessórios não fornecidos pela loja (carregador, cabo, produtos paralelos) e por sobrecarga elétrica.\n- Danos causados por qualquer tipo de líquido (água, refrigerante, vapor etc.).\n- Redução da vida útil da bateria, que ocorre naturalmente com o uso, com atualizações do iOS ou com atualizações em segundo plano.\n- Defeitos ou danos causados por fenômenos da natureza.\n- Bloqueio de senhas e de iCloud criados pelo cliente.\n\n### Condições\n- Não realizamos trocas por motivo de cor, capacidade (GB) ou modelo. Ao acionar a garantia, será realizada uma análise técnica para reparo, caso seja detectado problema sistêmico.\n- Aparelhos seminovos podem ter passado por reparo anterior, com troca de bateria, tela ou qualquer outra peça.\n- Os vícios de qualidade devem ser sanados no prazo máximo de 30 (trinta) dias pela assistência técnica RR Reparos e Assistência Técnica Ltda., inscrita no CNPJ 50.626.018/0001-71, nos termos do art. 18, § 1º, da Lei Federal nº 8.078/90. O prazo começa a contar da data de entrada do produto na assistência, mediante emissão de ordem de serviço, em dias corridos.\n- Caso o cliente leve o aparelho a outra assistência que não seja a indicada neste termo, perderá automaticamente a garantia da RR Prime Cell.\n- **É de responsabilidade do cliente:** as senhas do aparelho, o cadastro do iCloud ou do e-mail, além do backup de aplicativos e fotos.\n- O acionamento da garantia do seminovo é feito de segunda a sexta-feira, das 10h às 18h, na loja RR Prime Cell, após agendamento diretamente com o setor de vendas.\n- Não nos responsabilizamos por danos ocorridos após os 180 dias, nem será possível a troca do produto caso ele apresente problema ou defeito após esse prazo.\n- Em casos de defeito de fábrica, recolheremos o produto para uma análise de até 7 dias úteis, para identificar se a causa é defeito de fábrica ou mau uso.\n- **A não apresentação deste termo de garantia (comprovante da venda) invalida a garantia.**\n- Não fornecemos seguro em caso de perda, roubo, furto ou queda do aparelho.\n- Não há devolução de valores em compras realizadas presencialmente. Por lei, o direito de arrependimento vale somente para compras feitas fora do estabelecimento (on-line). Ao comprar na loja física, o consumidor declara ter realizado uma compra presencial.\n\n## Garantia adicional (opcional, vendida somente na loja; a Bia não oferece)\n- Cobertura para problemas sistêmicos, conforme citado acima, por mais 3 meses além da garantia padrão. São sempre 3 meses adicionais, tanto para aparelhos novos quanto para seminovos.\n- Aparelho reserva: o cliente tem direito a ele quando for constatado problema sistêmico e o aparelho precisar ficar mais de 3 dias úteis em reparo.\n- O cliente é responsável por devolver o aparelho reserva sem quedas nem danos causados por líquidos. Caso contrário, deverá ressarcir o valor do aparelho, conforme tabela.\n- A garantia adicional não cobre mau uso nem danos causados por líquidos.\n- A garantia adicional é opcional: é mais segurança e comodidade para os nossos clientes. Aproveite esse benefício!\n- Bônus do combo: 20% de desconto na nossa assistência técnica, limitado a um combo por aparelho, válido por 1 ano a partir da data da compra.\n";
+
+// Motor de cálculo da IA de atendimento.
+// A IA nunca calcula valores sozinha: todo preço, avaliação e parcela sai daqui,
+// a partir das tabelas em ./dados (editáveis sem mexer no código).
+
+function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja }) {
+  const reais = (v) => Math.round(v * 100) / 100;
+
+  // ---------------------------------------------------------------- modelos
+  // "15 pro max", "iphone 15 PM", "15promax" -> "iPhone 15 Pro Max"
+  function normalizarModelo(texto) {
+    let t = String(texto).toLowerCase().replace(/iphone/g, ' ').replace(/\s+/g, ' ').trim();
+    t = t.replace(/promax/g, 'pro max').replace(/\bpm\b/g, 'pro max');
+    const m = t.match(/^(xr|\d{2})\s*(pro max|pro|plus|air)?/);
+    if (!m) return null;
+    const base = m[1] === 'xr' ? 'XR' : m[1];
+    const sufixo = { 'pro max': ' Pro Max', pro: ' Pro', plus: ' Plus', air: ' Air' }[m[2]] || '';
+    return `iPhone ${base}${sufixo}`;
+  }
+
+  // "256", "256gb", "1tb", 512 -> número em GB
+  function normalizarGb(gb) {
+    if (gb == null) return null;
+    const s = String(gb).toLowerCase();
+    const n = parseFloat(s);
+    if (Number.isNaN(n)) return null;
+    return /tb/.test(s) ? n * 1024 : n;
+  }
+
+  // ---------------------------------------------------------------- catálogo
+  function itensCatalogo(condicao) {
+    return condicao === 'seminovo' ? catalogo.seminovos : catalogo.lacrados;
+  }
+
+  // Lista as opções de um modelo (todas as capacidades/cores), para a IA responder
+  // "quanto tá o 17 pro max?" e também corrigir o cliente ("não tem 128GB").
+  function consultarCatalogo({ modelo, gb, cor, condicao = 'lacrado' }) {
+    const nome = normalizarModelo(modelo);
+    const g = normalizarGb(gb);
+    const itens = itensCatalogo(condicao).filter((i) => i.modelo === nome);
+    // Modelo sem nenhum preço na tabela: a IA não sabe o valor, chama humano.
+    if (!itens.length) return { encontrado: false, modelo: nome, condicao, acao: 'humano' };
+    const opcoes = [];
+    for (const i of itens) {
+      if (g && i.gb !== g) continue;
+      if (i.cores) {
+        for (const [c, preco] of Object.entries(i.cores)) {
+          if (cor && c.toLowerCase() !== String(cor).toLowerCase()) continue;
+          opcoes.push({ modelo: i.modelo, gb: i.gb, cor: c, preco });
+        }
+      } else {
+        opcoes.push({ modelo: i.modelo, gb: i.gb, cor: null, preco: i.preco });
+      }
+    }
+    return {
+      encontrado: opcoes.length > 0,
+      modelo: nome,
+      condicao,
+      opcoes,
+      capacidades_disponiveis: [...new Set(itens.map((i) => i.gb))],
+      cores_disponiveis: [...new Set(itens.flatMap((i) => (i.cores ? Object.keys(i.cores) : [])))],
+      a_partir_de: Math.min(...itens.flatMap((i) => (i.cores ? Object.values(i.cores) : [i.preco]))),
+    };
+  }
+
+  // ---------------------------------------------------------------- avaliação
+  // defeitos: chaves de assistencia.reparos (ex.: 'vidro_tela', 'face_id').
+  // Bateria abaixo do mínimo entra automaticamente como desconto de 'bateria'.
+  function avaliarAparelho({ modelo, gb, bateria, defeitos = [] }) {
+    const nome = normalizarModelo(modelo);
+    const g = normalizarGb(gb);
+    const tabela = upgrade.valores[nome];
+    if (!tabela) return { status: 'nao_aceito', modelo: nome, motivo: 'modelo fora da tabela de upgrade', acao: 'humano' };
+    const base = tabela[String(g)];
+    if (base == null) {
+      return { status: 'nao_aceito', modelo: nome, gb: g, motivo: 'capacidade fora da tabela de upgrade', acao: 'humano' };
+    }
+
+    const recusados = defeitos.filter((d) => d in assistencia.recusa);
+    if (recusados.length) {
+      return { status: 'recusado', modelo: nome, gb: g, motivo: recusados.map((d) => assistencia.recusa[d]) };
+    }
+
+    let lista = [...new Set(defeitos)];
+    const minimo = loja.avaliacao.bateria_minima_sem_desconto;
+    if (bateria != null && Number(bateria) < minimo && !lista.includes('bateria')) lista.push('bateria');
+    // Display com defeito já inclui o vidro: não desconta os dois.
+    if (lista.includes('tela')) lista = lista.filter((d) => d !== 'vidro_tela');
+
+    const descontos = [];
+    const consultar = [];
+    for (const d of lista) {
+      const reparo = assistencia.reparos[d];
+      const valor = reparo && reparo.valores[nome];
+      if (valor == null) consultar.push(d);
+      else descontos.push({ defeito: d, descricao: reparo.descricao, valor });
+    }
+
+    const totalDescontos = descontos.reduce((s, x) => s + x.valor, 0);
+    return {
+      status: consultar.length ? 'consultar' : 'ok',
+      ...(consultar.length && { acao: 'humano' }),
+      modelo: nome,
+      gb: g,
+      valor_base: base,
+      descontos,
+      consultar,
+      valor: Math.max(0, base - totalDescontos),
+      ressalva: loja.avaliacao.ressalva,
+    };
+  }
+
+  // ---------------------------------------------------------------- pagamento
+  function totalComTaxa(valor, taxaPct) {
+    const t = taxaPct / 100;
+    return maquininha.formula === 'divide' ? valor / (1 - t) : valor * (1 + t);
+  }
+
+  function simularPagamento(valor, { parcelas = maquininha.parcelas_padrao } = {}) {
+    const opcoes = parcelas
+      .filter((n) => n >= 1 && n <= maquininha.max_parcelas)
+      .map((n) => {
+        const total = reais(totalComTaxa(valor, maquininha.taxas[String(n)]));
+        return { parcelas: n, valor_parcela: reais(total / n), total };
+      });
+    return {
+      a_vista: reais(valor),
+      debito: reais(totalComTaxa(valor, maquininha.taxas.debito)),
+      opcoes,
+    };
+  }
+
+  // Monta a proposta completa: produto - avaliação(ões) - entrada = saldo, e parcela o saldo.
+  function montarProposta({ produto, trocas = [], entrada = 0, parcelas }) {
+    const consulta = consultarCatalogo(produto);
+    if (!consulta.encontrado) return { status: 'produto_nao_encontrado', consulta };
+    if (consulta.opcoes.length > 1) return { status: 'precisa_escolher', consulta };
+    const item = consulta.opcoes[0];
+
+    const avaliacoes = trocas.map(avaliarAparelho);
+    const pendente = avaliacoes.find((a) => a.status !== 'ok');
+    if (pendente) return { status: 'avaliacao_pendente', item, avaliacoes };
+
+    const totalTrocas = avaliacoes.reduce((s, a) => s + a.valor, 0);
+    const saldo = Math.max(0, item.preco - totalTrocas - entrada);
+    return {
+      status: 'ok',
+      item,
+      avaliacoes,
+      entrada,
+      saldo,
+      pagamento: saldo > 0 ? simularPagamento(saldo, { parcelas }) : null,
+    };
+  }
+
+  // Modelos que cabem no orçamento (já descontando a avaliação do aparelho, se houver).
+  function sugerirModelos({ orcamento, avaliacao = 0, condicao }) {
+    const condicoes = condicao ? [condicao] : ['lacrado', 'seminovo'];
+    const out = [];
+    for (const c of condicoes) {
+      for (const i of itensCatalogo(c)) {
+        const preco = i.cores ? Math.min(...Object.values(i.cores)) : i.preco;
+        const diferenca = preco - avaliacao;
+        if (diferenca <= orcamento) out.push({ condicao: c, modelo: i.modelo, gb: i.gb, preco, diferenca });
+      }
+    }
+    // Mais caros primeiro: o cliente vê o melhor aparelho que cabe no bolso.
+    return out.sort((a, b) => b.preco - a.preco);
+  }
+
+  // ---------------------------------------------------------------- negociação
+  // Só é chamada quando o cliente insiste no desconto, depois de a IA tentar contornar
+  // (brindes, garantia). Por enquanto o desconto existe apenas em venda COM TROCA e sai
+  // da margem do aparelho recebido:
+  //
+  //   margem da troca = preço de revenda como seminovo - valor de upgrade pago
+  //
+  // O valor de upgrade pago já inclui os reparos: a avaliação desconta do cliente
+  // exatamente o que a loja vai gastar na assistência. Cada aparelho da troca precisa
+  // continuar com pelo menos a margem mínima. A taxa da maquininha nunca muda: o
+  // desconto só reduz o saldo, e o parcelamento é recalculado normalmente.
+  function margemDaTroca(av) {
+    const revenda = catalogo.seminovos.find((i) => i.modelo === av.modelo && i.gb === av.gb);
+    return revenda ? revenda.preco - av.valor_base : null;
+  }
+
+  // desconto_ja_dado: soma do que a IA já ofereceu nesta conversa.
+  // A resposta nunca traz o desconto máximo, para a IA não ter como "vazar" o limite.
+  function negociarDesconto({ produto, trocas = [], entrada = 0, desconto_ja_dado = 0 }) {
+    if (!trocas.length) return { status: 'humano', motivo: 'desconto só é negociado pela IA em venda com troca' };
+    const p = montarProposta({ produto, trocas, entrada });
+    if (p.status !== 'ok') return { status: p.status, proposta: p };
+
+    const { margem_minima, etapas, arredondar_para } = loja.negociacao;
+    let maximo = 0;
+    for (const av of p.avaliacoes) {
+      const m = margemDaTroca(av);
+      if (m == null) return { status: 'humano', motivo: `sem preço de revenda para ${av.modelo} ${av.gb}GB` };
+      maximo += Math.max(0, m - margem_minima);
+    }
+    maximo = Math.min(maximo, p.saldo);
+
+    const passos = etapas
+      .map((f) => Math.floor((maximo * f) / arredondar_para) * arredondar_para)
+      .filter((v) => v > desconto_ja_dado);
+
+    if (!passos.length) {
+      return { status: 'limite', desconto_atual: desconto_ja_dado, mensagem: 'não há mais desconto possível; se o cliente insistir muito, chamar humano' };
+    }
+    const desconto = passos[0];
+    const novoSaldo = p.saldo - desconto;
+    return {
+      status: 'ok',
+      desconto,
+      ultima_oferta: passos.length === 1,
+      saldo_original: p.saldo,
+      novo_saldo: novoSaldo,
+      pagamento: novoSaldo > 0 ? simularPagamento(novoSaldo) : null,
+    };
+  }
+
+  // ---------------------------------------------------------------- horários
+  const DIAS = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+  const minutos = (hhmm) => {
+    const [h, m] = hhmm.split(':').map(Number);
+    return h * 60 + m;
+  };
+  const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+
+  // data: Date; horario: "HH:MM" pedido pelo cliente; feriado: true se for feriado.
+  function verificarHorario(data, horario, { feriado = false } = {}) {
+    const dia = feriado ? 'feriado' : DIAS[data.getDay()];
+    const faixa = loja.horarios[dia];
+    if (!faixa) return { aberto: false, dia, motivo: 'loja fechada neste dia' };
+    const abre = minutos(faixa[0]);
+    const ultimo = minutos(faixa[1]) - loja.ultimo_agendamento_min_antes_fechar;
+    const pedido = minutos(horario);
+    return {
+      aberto: pedido >= abre && pedido <= ultimo,
+      dia,
+      abre: faixa[0],
+      fecha: faixa[1],
+      ultimo_agendamento: hhmm(ultimo),
+    };
+  }
+
+  return {
+    normalizarModelo,
+    consultarCatalogo,
+    avaliarAparelho,
+    simularPagamento,
+    montarProposta,
+    sugerirModelos,
+    negociarDesconto,
+    verificarHorario,
+  };
+}
+
+
+const motor = criarMotor(DADOS);
+const $ = (id) => document.getElementById(id);
+const LS = {
+  get(k, d = '') { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const estado = { historico: [], log: [], feedbacks: [], agendamentos: [], pendentes: [], humano: false, ocupado: false, timer: null };
+
+// ------------------------------------------------------------------ ferramentas
+const DEFEITOS = {
+  ...Object.fromEntries(Object.entries(DADOS.assistencia.reparos).map(([k, v]) => [k, v.descricao])),
+  ...DADOS.assistencia.recusa,
+};
+const aparelho = {
+  type: 'object',
+  properties: {
+    modelo: { type: 'string', description: 'Modelo, ex.: "15 Pro Max"' },
+    gb: { type: 'integer', description: 'Capacidade em GB (1TB = 1024)' },
+    bateria: { type: 'integer', description: 'Saúde da bateria em %' },
+    defeitos: {
+      type: 'array', items: { type: 'string', enum: Object.keys(DEFEITOS) },
+      description: 'Defeitos informados pelo cliente. Lista vazia se o aparelho está perfeito. Opções: ' +
+        Object.entries(DEFEITOS).map(([k, v]) => `${k} = ${v}`).join('; '),
+    },
+  },
+  required: ['modelo', 'gb'],
+};
+const produto = {
+  type: 'object',
+  properties: {
+    modelo: { type: 'string' }, gb: { type: 'integer' }, cor: { type: 'string' },
+    condicao: { type: 'string', enum: ['lacrado', 'seminovo'] },
+  },
+  required: ['modelo', 'gb'],
+};
+const parcelas = { type: 'array', items: { type: 'integer' }, description: 'Parcelas a simular. Omitir = 6, 10, 12 e 18x.' };
+
+const FERRAMENTAS = [
+  {
+    name: 'consultar_catalogo',
+    description: 'Preço à vista (Pix/dinheiro), cores e capacidades de um iPhone à venda. Se acao = "humano", não temos o valor.',
+    parameters: { type: 'object', properties: { modelo: { type: 'string' }, gb: { type: 'integer' }, cor: { type: 'string' }, condicao: { type: 'string', enum: ['lacrado', 'seminovo'] } }, required: ['modelo'] },
+    run: (a) => motor.consultarCatalogo(a),
+  },
+  {
+    name: 'sugerir_modelos',
+    description: 'Lista os aparelhos que cabem no orçamento do cliente (do mais caro ao mais barato), já descontando a avaliação da troca, se houver.',
+    parameters: { type: 'object', properties: { orcamento: { type: 'number' }, avaliacao: { type: 'number', description: 'Valor da avaliação do aparelho da troca' }, condicao: { type: 'string', enum: ['lacrado', 'seminovo'] } }, required: ['orcamento'] },
+    run: (a) => motor.sugerirModelos(a).slice(0, 8),
+  },
+  {
+    name: 'avaliar_aparelho',
+    description: 'Pré-avaliação do iPhone que o cliente quer dar na troca. Use só depois do checklist respondido.',
+    parameters: aparelho,
+    run: (a) => motor.avaliarAparelho(a),
+  },
+  {
+    name: 'montar_proposta',
+    description: 'Calcula preço do produto - avaliação das trocas - entrada = saldo, e o parcelamento do saldo.',
+    parameters: { type: 'object', properties: { produto, trocas: { type: 'array', items: aparelho }, entrada: { type: 'number' }, parcelas }, required: ['produto'] },
+    run: (a) => motor.montarProposta(a),
+  },
+  {
+    name: 'simular_pagamento',
+    description: 'Simula um valor no débito e no crédito parcelado, com a taxa da maquininha.',
+    parameters: { type: 'object', properties: { valor: { type: 'number' }, parcelas }, required: ['valor'] },
+    run: (a) => motor.simularPagamento(a.valor, a.parcelas?.length ? { parcelas: a.parcelas } : undefined),
+  },
+  {
+    name: 'negociar_desconto',
+    description: 'Somente em venda com troca, depois de contornar com brindes e garantia, e se o cliente insistir. Retorna o próximo desconto que pode ser oferecido.',
+    parameters: { type: 'object', properties: { produto, trocas: { type: 'array', items: aparelho }, entrada: { type: 'number' }, desconto_ja_dado: { type: 'number', description: 'Soma dos descontos já oferecidos nesta conversa' } }, required: ['produto', 'trocas'] },
+    run: (a) => motor.negociarDesconto(a),
+  },
+  {
+    name: 'verificar_horario',
+    description: 'Confere se um dia e horário estão dentro do horário de agendamento da loja.',
+    parameters: { type: 'object', properties: { data: { type: 'string', description: 'AAAA-MM-DD' }, horario: { type: 'string', description: 'HH:MM' }, feriado: { type: 'boolean' } }, required: ['data', 'horario'] },
+    run: ({ data, horario, feriado }) => {
+      const [y, m, d] = data.split('-').map(Number);
+      return motor.verificarHorario(new Date(y, m - 1, d), horario, { feriado: !!feriado });
+    },
+  },
+  {
+    name: 'registrar_agendamento',
+    description: 'Registra o agendamento depois que o cliente preencheu o questionário.',
+    parameters: { type: 'object', properties: { nome: { type: 'string' }, modelo_aparelho: { type: 'string' }, gb: { type: 'string' }, forma_pagamento: { type: 'string' }, dia_horario: { type: 'string' }, instagram: { type: 'string' }, whatsapp: { type: 'string' }, resumo: { type: 'string', description: 'Resumo da proposta combinada (valores, troca, desconto, brindes)' } }, required: ['nome', 'dia_horario', 'whatsapp'] },
+    run: (a) => {
+      estado.agendamentos.push({ ...a, registrado_em: new Date().toISOString() });
+      sistema('📅 Agendamento registrado\n' + Object.entries(a).map(([k, v]) => `${k}: ${v}`).join('\n'), 'agenda');
+      return { ok: true };
+    },
+  },
+  {
+    name: 'transferir_humano',
+    description: 'Passa a conversa para a equipe e pausa a Bia.',
+    parameters: { type: 'object', properties: { motivo: { type: 'string' } }, required: ['motivo'] },
+    run: ({ motivo }) => {
+      estado.humano = true;
+      $('banner').classList.add('on');
+      sistema('Transferido para a equipe. Motivo: ' + motivo);
+      return { ok: true, instrucao: 'Avise o cliente, em uma mensagem curta, que alguém da equipe vai continuar o atendimento. Não diga mais nada.' };
+    },
+  },
+];
+
+// ------------------------------------------------------------------ contexto
+const DIAS = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+function agora() { const v = $('simData').value; return v ? new Date(v) : new Date(); }
+function instrucoesSistema() {
+  const d = agora();
+  const p = (n) => String(n).padStart(2, '0');
+  const iso = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return `${PROMPT}
+
+## Contexto desta conversa
+- Agora: ${DIAS[d.getDay()]}, ${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}, ${p(d.getHours())}:${p(d.getMinutes())} (horário de Brasília). Data de hoje para as ferramentas: ${iso}.${$('feriado').checked ? '\n- Hoje é feriado.' : ''}
+- Valores das ferramentas estão em reais: escreva no formato R$ 1.234,56.
+- Separe os balões com uma linha contendo apenas ---.
+
+## Termo de garantia completo (consulta)
+${GARANTIA}`;
+}
+
+// ------------------------------------------------------------------ Gemini
+const API = 'https://generativelanguage.googleapis.com/v1beta';
+function nomeModelo() { return ($('modelo').value.trim() || 'gemini-2.5-flash').replace(/^models\//, ''); }
+
+async function chamarGemini() {
+  const r = await fetch(`${API}/models/${encodeURIComponent(nomeModelo())}:generateContent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': $('chave').value.trim() },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: instrucoesSistema() }] },
+      contents: estado.historico,
+      tools: [{ functionDeclarations: FERRAMENTAS.map(({ run, ...f }) => f) }],
+      generationConfig: { temperature: 0.7 },
+    }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error?.message || `HTTP ${r.status}`);
+  const c = j.candidates?.[0]?.content;
+  if (!c?.parts) throw new Error('Resposta vazia (' + (j.candidates?.[0]?.finishReason || j.promptFeedback?.blockReason || 'sem motivo') + ')');
+  return { role: 'model', parts: c.parts };
+}
+
+async function buscarModelos() {
+  try {
+    const r = await fetch(`${API}/models?pageSize=200`, { headers: { 'x-goog-api-key': $('chave').value.trim() } });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error?.message || r.status);
+    const nomes = (j.models || [])
+      .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map((m) => m.name.replace(/^models\//, ''));
+    $('listaModelos').innerHTML = nomes.map((n) => `<option value="${n}">`).join('');
+    sistema(`${nomes.length} modelos disponíveis. Clique no campo "Modelo" para escolher (prefira um "flash").`);
+  } catch (e) { sistema('Não consegui listar os modelos: ' + e.message, 'erro'); }
+}
+
+// ------------------------------------------------------------------ conversa
+async function processar() {
+  if (estado.ocupado || estado.humano) return;
+  const textos = estado.pendentes.splice(0);
+  if (!textos.length) return;
+  estado.ocupado = true;
+  digitando(true);
+  estado.historico.push({ role: 'user', parts: textos.map((text) => ({ text })) });
+  try {
+    for (let i = 0; i < 8; i++) {
+      const resposta = await chamarGemini();
+      estado.historico.push(resposta);
+      const texto = resposta.parts.filter((p) => p.text && !p.thought).map((p) => p.text).join('\n').trim();
+      if (texto) await falaBia(texto);
+      const chamadas = resposta.parts.filter((p) => p.functionCall);
+      if (!chamadas.length) break;
+      estado.historico.push({
+        role: 'user',
+        parts: chamadas.map(({ functionCall: fc }) => {
+          const f = FERRAMENTAS.find((x) => x.name === fc.name);
+          let resultado;
+          try { resultado = f ? f.run(fc.args || {}) : { erro: 'ferramenta desconhecida' }; }
+          catch (e) { resultado = { erro: String(e.message || e) }; }
+          depurar(fc.name, fc.args, resultado);
+          return { functionResponse: { name: fc.name, response: { resultado } } };
+        }),
+      });
+      digitando(true);
+    }
+  } catch (e) {
+    sistema('Erro ao falar com o Gemini: ' + e.message, 'erro');
+  } finally {
+    estado.ocupado = false;
+    digitando(false);
+    if (estado.pendentes.length && !estado.humano) agendarProcessamento();
+  }
+}
+
+function limparMarkdown(t) { return t.replace(/\*\*(.+?)\*\*/g, '$1').replace(/^#+\s*/gm, ''); }
+
+async function falaBia(texto) {
+  const bolhas = limparMarkdown(texto).split(/^\s*-{3,}\s*$/m).map((b) => b.trim()).filter(Boolean);
+  for (const [i, b] of bolhas.entries()) {
+    if (!$('rapido').checked) { digitando(true); await sleep(Math.min(700 + b.length * 25, 3500)); }
+    const el = bolha('bia', b);
+    if (i === bolhas.length - 1) el.classList.add('grupo-fim');
+  }
+  estado.log.push({ de: 'bia', texto: bolhas.join('\n---\n'), em: new Date().toISOString() });
+  botoesAvaliacao(estado.log.length - 1);
+}
+
+function enviar() {
+  const t = $('msg').value.trim();
+  if (!t) return;
+  if (!$('chave').value.trim()) { $('config').hidden = false; sistema('Cole a chave da API nas configurações primeiro.', 'erro'); return; }
+  $('msg').value = '';
+  bolha('cliente', t);
+  estado.log.push({ de: 'cliente', texto: t, em: new Date().toISOString() });
+  if (estado.humano) { sistema('A Bia está pausada (conversa com a equipe). Use "Devolver para a Bia" para continuar o teste.'); return; }
+  estado.pendentes.push(t);
+  agendarProcessamento();
+}
+
+// Espera o cliente parar de digitar (como no Direct, onde mandam várias mensagens seguidas).
+function agendarProcessamento() {
+  clearTimeout(estado.timer);
+  estado.timer = setTimeout(processar, $('rapido').checked ? 300 : 2500);
+}
+
+// ------------------------------------------------------------------ interface
+function rolar() { const c = $('chat'); c.scrollTop = c.scrollHeight; }
+function bolha(quem, texto) {
+  const el = document.createElement('div');
+  el.className = `msg ${quem}`;
+  el.textContent = texto;
+  $('chat').append(el);
+  rolar();
+  return el;
+}
+function sistema(texto, tipo = '') {
+  const el = document.createElement('div');
+  el.className = `sistema ${tipo}`;
+  el.textContent = texto;
+  $('chat').append(el);
+  rolar();
+}
+function depurar(nome, args, resultado) {
+  const el = document.createElement('div');
+  el.className = 'debug';
+  el.textContent = `🔎 ${nome}(${JSON.stringify(args)})\n→ ${JSON.stringify(resultado, null, 1)}`;
+  $('chat').append(el);
+  rolar();
+}
+function digitando(on) { $('digitando').classList.toggle('on', on); }
+
+function botoesAvaliacao(indice) {
+  const box = document.createElement('div');
+  box.className = 'fb';
+  const marcar = (nota, btn) => {
+    let correcao = '';
+    if (nota === 'ruim') correcao = prompt('Como a Bia deveria ter respondido? (opcional)') || '';
+    estado.feedbacks = estado.feedbacks.filter((f) => f.indice !== indice);
+    estado.feedbacks.push({ indice, nota, correcao, resposta: estado.log[indice].texto });
+    box.querySelectorAll('button').forEach((b) => b.classList.remove('marcado'));
+    btn.classList.add('marcado');
+  };
+  for (const [nota, rotulo] of [['boa', '👍'], ['ruim', '👎']]) {
+    const b = document.createElement('button');
+    b.textContent = rotulo;
+    b.onclick = () => marcar(nota, b);
+    box.append(b);
+  }
+  $('chat').append(box);
+  rolar();
+}
+
+function exportar() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  const dados = {
+    exportado_em: d.toISOString(),
+    modelo: nomeModelo(),
+    data_simulada: $('simData').value || null,
+    conversa: estado.log,
+    avaliacoes: estado.feedbacks,
+    agendamentos: estado.agendamentos,
+    historico_tecnico: estado.historico,
+  };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' }));
+  a.download = `teste-bia-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function novaConversa() {
+  if (estado.log.length && !confirm('Começar uma nova conversa? A atual será apagada (baixe antes, se quiser guardar).')) return;
+  Object.assign(estado, { historico: [], log: [], feedbacks: [], agendamentos: [], pendentes: [], humano: false });
+  $('chat').innerHTML = '';
+  $('banner').classList.remove('on');
+  sistema('Nova conversa. Escreva como se fosse um cliente no Direct.');
+}
+
+// ------------------------------------------------------------------ início
+$('chave').value = LS.get('bia_chave');
+$('modelo').value = LS.get('bia_modelo', 'gemini-2.5-flash');
+$('rapido').checked = LS.get('bia_rapido') === '1';
+$('config').hidden = !!$('chave').value;
+$('btnSalvar').onclick = () => {
+  LS.set('bia_chave', $('chave').value.trim());
+  LS.set('bia_modelo', $('modelo').value.trim());
+  LS.set('bia_rapido', $('rapido').checked ? '1' : '0');
+  $('config').hidden = true;
+  $('msg').focus();
+};
+$('btnModelos').onclick = buscarModelos;
+$('btnConfig').onclick = () => { $('config').hidden = !$('config').hidden; };
+$('btnDebug').onclick = (e) => { document.body.classList.toggle('mostrar-debug'); e.currentTarget.classList.toggle('ativo'); };
+$('btnExportar').onclick = exportar;
+$('btnLimpar').onclick = novaConversa;
+$('btnDevolver').onclick = () => { estado.humano = false; $('banner').classList.remove('on'); sistema('A Bia voltou a responder.'); };
+$('btnEnviar').onclick = enviar;
+$('msg').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); } });
+sistema('Escreva como se fosse um cliente no Direct. Use 🔎 para ver as consultas às tabelas e 👍/👎 para avaliar as respostas.');
+</script>
+</body>
+</html>
