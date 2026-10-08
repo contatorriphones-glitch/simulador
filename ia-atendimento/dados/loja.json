@@ -62,9 +62,9 @@
     "seminovo": "6 meses (180 dias) de garantia da loja contra defeitos sistêmicos",
     "nao_cobre": "mau uso (queda, pressão, tela/câmera/carcaça quebrada ou trincada, bateria estufada), contato com líquidos, uso de acessórios de terceiros, sobrecarga elétrica, fenômenos da natureza e bloqueio de senha/iCloud criado pelo cliente",
     "acionamento_seminovo": "de segunda a sexta, das 10h às 18h, com agendamento pelo setor de vendas",
-    "garantia_adicional": "opcional: +3 meses de cobertura, aparelho reserva se o reparo passar de 3 dias úteis e 20% de desconto na assistência técnica por 1 ano",
     "sem_devolucao_presencial": true,
-    "termo_completo": "garantia.md"
+    "termo_completo": "garantia.md",
+    "_obs": "A garantia adicional só é oferecida pelas vendedoras na loja; a Bia não menciona."
   },
   "pagamento": {
     "a_vista": "Os preços das tabelas são à vista, no Pix ou em dinheiro.",

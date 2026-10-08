@@ -37,7 +37,8 @@ export function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja })
     const nome = normalizarModelo(modelo);
     const g = normalizarGb(gb);
     const itens = itensCatalogo(condicao).filter((i) => i.modelo === nome);
-    if (!itens.length) return { encontrado: false, modelo: nome, condicao };
+    // Modelo sem nenhum preço na tabela: a IA não sabe o valor, chama humano.
+    if (!itens.length) return { encontrado: false, modelo: nome, condicao, acao: 'humano' };
     const opcoes = [];
     for (const i of itens) {
       if (g && i.gb !== g) continue;
@@ -68,10 +69,10 @@ export function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja })
     const nome = normalizarModelo(modelo);
     const g = normalizarGb(gb);
     const tabela = upgrade.valores[nome];
-    if (!tabela) return { status: 'nao_aceito', modelo: nome, motivo: 'modelo fora da tabela de upgrade' };
+    if (!tabela) return { status: 'nao_aceito', modelo: nome, motivo: 'modelo fora da tabela de upgrade', acao: 'humano' };
     const base = tabela[String(g)];
     if (base == null) {
-      return { status: 'nao_aceito', modelo: nome, gb: g, motivo: 'capacidade fora da tabela de upgrade' };
+      return { status: 'nao_aceito', modelo: nome, gb: g, motivo: 'capacidade fora da tabela de upgrade', acao: 'humano' };
     }
 
     const recusados = defeitos.filter((d) => d in assistencia.recusa);
@@ -97,6 +98,7 @@ export function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja })
     const totalDescontos = descontos.reduce((s, x) => s + x.valor, 0);
     return {
       status: consultar.length ? 'consultar' : 'ok',
+      ...(consultar.length && { acao: 'humano' }),
       modelo: nome,
       gb: g,
       valor_base: base,

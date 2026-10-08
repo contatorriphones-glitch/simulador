@@ -158,3 +158,29 @@ test('aparelho da troca sem preço de revenda: chama humano', () => {
   const r = m.negociarDesconto({ produto: { modelo: '17', gb: 256 }, trocas: [{ modelo: '11', gb: 128, bateria: 85 }] });
   assert.equal(r.status, 'humano');
 });
+
+test('dois aparelhos na troca: margem mínima calculada para cada um', () => {
+  const r = m.negociarDesconto({
+    produto: { modelo: '18 pro max', gb: 512, cor: 'azul' },
+    trocas: [
+      { modelo: '17 pro', gb: 256, bateria: 95 },     // 6399 - 5850 = 549 -> sobra 249
+      { modelo: '15 pro max', gb: 256, bateria: 88 }, // 3949 - 3550 = 399 -> sobra 99
+    ],
+  });
+  // total possível 348 -> etapas 150 e 300
+  assert.equal(r.desconto, 150);
+  const r2 = m.negociarDesconto({
+    produto: { modelo: '18 pro max', gb: 512, cor: 'azul' },
+    trocas: [{ modelo: '14', gb: 128, bateria: 90 }, { modelo: '15 pro max', gb: 256, bateria: 88 }],
+  });
+  // 14 128: 2049 - 1700 = 349 -> sobra 49; a margem de um não compensa a do outro além do mínimo
+  assert.equal(r2.desconto, 50);
+});
+
+test('sem valor na tabela: ferramentas sinalizam humano', () => {
+  assert.equal(m.consultarCatalogo({ modelo: '16 pro', condicao: 'lacrado' }).acao, 'humano');
+  assert.equal(m.avaliarAparelho({ modelo: '16 plus', gb: 128 }).acao, 'humano');
+  assert.equal(m.avaliarAparelho({ modelo: '17 pro', gb: 256, bateria: 75 }).acao, 'humano');
+  // modelo existe, só não tem a cor/GB pedida: a IA corrige o cliente, não chama humano
+  assert.equal(m.consultarCatalogo({ modelo: '17 pro', gb: 128 }).acao, undefined);
+});

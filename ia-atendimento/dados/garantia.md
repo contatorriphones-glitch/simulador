@@ -28,7 +28,7 @@
 - Não fornecemos seguro em caso de perda, roubo, furto ou queda do aparelho.
 - Não há devolução de valores em compras realizadas presencialmente. Por lei, o direito de arrependimento vale somente para compras feitas fora do estabelecimento (on-line). Ao comprar na loja física, o consumidor declara ter realizado uma compra presencial.
 
-## Garantia adicional (opcional)
+## Garantia adicional (opcional, vendida somente na loja; a Bia não oferece)
 - Cobertura para problemas sistêmicos, conforme citado acima, por mais 3 meses além da garantia padrão. São sempre 3 meses adicionais, tanto para aparelhos novos quanto para seminovos.
 - Aparelho reserva: o cliente tem direito a ele quando for constatado problema sistêmico e o aparelho precisar ficar mais de 3 dias úteis em reparo.
 - O cliente é responsável por devolver o aparelho reserva sem quedas nem danos causados por líquidos. Caso contrário, deverá ressarcir o valor do aparelho, conforme tabela.

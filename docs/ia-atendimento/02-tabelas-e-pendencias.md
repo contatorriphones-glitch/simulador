@@ -19,6 +19,9 @@
 | Agendamento | Seg–sex até 20h30, sábado até 17h, feriado 10h–15h, domingo fechado |
 | Atraso / não vai conseguir chegar | Chama humano |
 | Questionário | Num balão só, um campo por linha: Nome, Modelo do aparelho, GB, Forma de pagamento, Dia e horário, Instagram, WhatsApp |
+| Garantia adicional | Só é vendida pelas vendedoras na loja; a Bia não menciona |
+| Dois aparelhos na troca | Margem mínima de R$ 300 calculada para cada aparelho individualmente |
+| Falta de valor na tabela | Qualquer modelo/GB/defeito sem valor → atendente humano |
 
 ## Comparação com os concorrentes (mesmos cenários dos prints)
 | Cenário | Concorrente | RR Prime Cell |
@@ -27,7 +30,6 @@
 | 15 Pro Max 256 perfeito | R$ 3.250 (Urban) | **R$ 3.550** |
 | Saldo de R$ 2.650 em 18x | R$ 184,03 (Millenium) | **R$ 175,64** |
 
+
 ## Pendências
-1. **Garantia adicional**: com a garantia de 180 dias, o adicional passa a ser 180 dias + 3 meses? É paga? Quanto custa?
-2. **Mais de um aparelho na troca**: hoje cada aparelho precisa manter R$ 300 de margem. Confirmar se é por aparelho ou por venda.
-3. **Aparelhos de troca sem preço de revenda** na tabela de seminovos (ex.: iPhone 11, 14 Pro Max 512GB): sem desconto automático; chama humano.
+Nenhuma. Próximo passo: página de teste do chat.
