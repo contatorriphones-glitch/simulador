@@ -1,7 +1,7 @@
 {
  "_atualizado_em": "2026-10-08",
  "_fonte": "Tabela LegacyPhone (lojista)",
- "_obs": "Custo de reparo por modelo. Na avaliação de troca, cada defeito desconta o custo do reparo correspondente. Modelo ausente numa tabela = 'consultar' (IA passa para humano).",
+ "_obs": "Custo de reparo por modelo (valores exatos da tabela). Na avaliação de troca, cada defeito desconta o custo do reparo correspondente. Modelo ausente numa tabela = humano precisa consultar. Defeitos em 'recusa' têm prioridade: o aparelho não é aceito.",
  "reparos": {
   "tela": {
    "descricao": "Display com defeito (manchas, linhas, touch) - troca de tela sem mensagem",
@@ -229,30 +229,6 @@
     "iPhone 16 Pro Max": 160
    }
   },
-  "face_id": {
-   "descricao": "Face ID não funciona",
-   "valores": {
-    "iPhone XR": 140,
-    "iPhone 11": 140,
-    "iPhone 11 Pro": 150,
-    "iPhone 11 Pro Max": 150,
-    "iPhone 12": 170,
-    "iPhone 12 Pro": 170,
-    "iPhone 12 Pro Max": 170,
-    "iPhone 13": 320,
-    "iPhone 13 Pro": 320,
-    "iPhone 13 Pro Max": 320,
-    "iPhone 14": 320,
-    "iPhone 14 Pro": 320,
-    "iPhone 14 Pro Max": 320,
-    "iPhone 15": 400,
-    "iPhone 15 Pro": 400,
-    "iPhone 15 Pro Max": 400,
-    "iPhone 16": 400,
-    "iPhone 16 Pro": 400,
-    "iPhone 16 Pro Max": 400
-   }
-  },
   "conector": {
    "descricao": "Não carrega / conector com defeito",
    "valores": {
@@ -349,36 +325,15 @@
     "iPhone 16 Pro Max": 160,
     "iPhone 16 Plus": 160
    }
-  },
-  "placa": {
-   "descricao": "Defeito de placa",
-   "valores": {
-    "iPhone XR": 260,
-    "iPhone 11": 290,
-    "iPhone 11 Pro": 300,
-    "iPhone 11 Pro Max": 300,
-    "iPhone 12": 400,
-    "iPhone 12 Pro": 400,
-    "iPhone 12 Pro Max": 400,
-    "iPhone 13": 450,
-    "iPhone 13 Pro": 450,
-    "iPhone 13 Pro Max": 450,
-    "iPhone 14": 500,
-    "iPhone 14 Pro": 560,
-    "iPhone 14 Pro Max": 580,
-    "iPhone 15": 600,
-    "iPhone 15 Pro": 650,
-    "iPhone 15 Pro Max": 650,
-    "iPhone 16": 700,
-    "iPhone 16 Pro": 700,
-    "iPhone 16 Pro Max": 700,
-    "iPhone 16 Plus": 700
-   }
   }
  },
- "recusa": [
-  "icloud_bloqueado",
-  "nao_liga",
-  "molhado"
- ]
+ "recusa": {
+  "icloud_bloqueado": "iCloud bloqueado",
+  "nao_liga": "aparelho não liga",
+  "molhado": "aparelho molhado / com oxidação",
+  "aviso_peca": "mensagem de peça desconhecida (bateria, tela ou câmera)",
+  "chip": "chip não funciona",
+  "placa": "problema de placa",
+  "face_id": "Face ID não funciona"
+ }
 }

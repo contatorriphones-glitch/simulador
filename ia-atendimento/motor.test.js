@@ -54,8 +54,12 @@ test('defeito sem preço na tabela da assistência -> consultar humano', () => {
   assert.deepEqual(a.consultar, ['bateria']);
 });
 
-test('iCloud bloqueado é recusado', () => {
-  assert.equal(m.avaliarAparelho({ modelo: '14', gb: 128, defeitos: ['icloud_bloqueado'] }).status, 'recusado');
+test('aparelhos que não pegamos são recusados', () => {
+  for (const d of ['icloud_bloqueado', 'aviso_peca', 'chip', 'placa', 'face_id']) {
+    assert.equal(m.avaliarAparelho({ modelo: '14', gb: 128, defeitos: [d] }).status, 'recusado', d);
+  }
+  assert.deepEqual(m.avaliarAparelho({ modelo: '14', gb: 128, defeitos: ['aviso_peca'] }).motivo,
+    ['mensagem de peça desconhecida (bateria, tela ou câmera)']);
 });
 
 test('parcelamento do saldo usa a tabela da maquininha', () => {
@@ -86,12 +90,65 @@ test('orçamento de 5.000 sem troca sugere o melhor que cabe', () => {
   assert.equal(s[0].modelo, 'iPhone 16');
 });
 
-test('horários: 20h numa quinta pode, 20h30 não; domingo fechado', () => {
+test('horários: agenda até 20h30 na semana e até 17h no sábado; domingo fechado', () => {
   const quinta = new Date(2026, 9, 8);
-  assert.equal(m.verificarHorario(quinta, '20:00').aberto, true);
-  const r = m.verificarHorario(quinta, '20:30');
+  assert.equal(m.verificarHorario(quinta, '20:30').aberto, true);
+  const r = m.verificarHorario(quinta, '20:45');
   assert.equal(r.aberto, false);
-  assert.equal(r.ultimo_agendamento, '20:00');
+  assert.equal(r.ultimo_agendamento, '20:30');
+  const sabado = new Date(2026, 9, 10);
+  assert.equal(m.verificarHorario(sabado, '17:00').aberto, true);
+  assert.equal(m.verificarHorario(sabado, '17:30').aberto, false);
   assert.equal(m.verificarHorario(new Date(2026, 9, 11), '12:00').aberto, false);
   assert.equal(m.verificarHorario(quinta, '16:00', { feriado: true }).aberto, false);
+});
+
+// ---------------------------------------------------------------- negociação
+// Custos fictícios só para o teste: 17 Pro Max 256 Branco custou R$ 6.500.
+const custosTeste = { lacrados: { 'iPhone 17 Pro Max': { 256: { Branco: 6500, Azul: 6400, Laranja: 6300 } } }, seminovos: {} };
+const mn = carregarMotor({ custos: custosTeste });
+const vendaComTroca = {
+  produto: { modelo: '17 pro max', gb: 256, cor: 'branco' },
+  trocas: [{ modelo: '15 pro max', gb: 256, bateria: 79, defeitos: ['vidro_tela'] }],
+};
+
+test('desconto no Pix: libera em etapas e nunca passa da margem mínima de R$ 300', () => {
+  // margem = (7199 - 6500) + (revenda 3949 - upgrade 3550) = 699 + 399 = 1098 -> máximo 798
+  const d1 = mn.negociarDesconto({ ...vendaComTroca, forma_pagamento: 'pix' });
+  assert.equal(d1.status, 'ok');
+  assert.equal(d1.desconto, 350); // 50% de 798, arredondado para baixo de 50 em 50
+  assert.equal(d1.ultima_oferta, false);
+  assert.equal(d1.novo_saldo, 4099 - 350);
+  assert.equal('maximo' in d1, false); // nunca expõe o limite
+
+  const d2 = mn.negociarDesconto({ ...vendaComTroca, forma_pagamento: 'pix', desconto_ja_dado: 350 });
+  assert.equal(d2.desconto, 750);
+  assert.equal(d2.ultima_oferta, true);
+
+  const d3 = mn.negociarDesconto({ ...vendaComTroca, forma_pagamento: 'pix', desconto_ja_dado: 750 });
+  assert.equal(d3.status, 'limite');
+});
+
+test('no 18x a perda da maquininha reduz o desconto possível', () => {
+  const pix = mn.negociarDesconto({ ...vendaComTroca, forma_pagamento: 'pix', desconto_ja_dado: 350 });
+  const cartao = mn.negociarDesconto({ ...vendaComTroca, forma_pagamento: 18, desconto_ja_dado: 350 });
+  assert.ok(cartao.desconto < pix.desconto);
+  // confere a margem resultante no cartão: continua >= 300
+  const t = 0.193, saldo = 4099 - cartao.desconto;
+  const margem = 7199 - cartao.desconto - 6500 + 399 - saldo * t * t;
+  assert.ok(margem >= 300, `margem ${margem}`);
+});
+
+test('venda com pouca margem dá desconto pequeno', () => {
+  const r = mn.negociarDesconto({ produto: { modelo: '17 pro max', gb: 256, cor: 'laranja' }, forma_pagamento: 'pix' });
+  // 6849 - 6300 = 549 -> máximo 249 -> etapas 100 e 200
+  assert.equal(r.desconto, 100);
+  const sem = mn.negociarDesconto({ produto: { modelo: '17 pro max', gb: 256, cor: 'azul' }, forma_pagamento: 'pix' });
+  // 7049 - 6400 = 649 -> máximo 349 -> etapas 150 e 300
+  assert.equal(sem.desconto, 150);
+});
+
+test('sem custo cadastrado a IA não negocia: chama humano', () => {
+  const r = m.negociarDesconto({ ...vendaComTroca });
+  assert.equal(r.status, 'humano');
 });

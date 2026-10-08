@@ -4,12 +4,15 @@ import { criarMotor } from './motor.js';
 
 const ler = (nome) => JSON.parse(readFileSync(new URL(`./dados/${nome}.json`, import.meta.url), 'utf8'));
 
-export function carregarMotor() {
+// overrides: troca uma tabela inteira (útil em testes), ex.: { custos: {...} }.
+export function carregarMotor(overrides = {}) {
   return criarMotor({
     catalogo: ler('catalogo'),
     upgrade: ler('upgrade'),
     assistencia: ler('assistencia'),
     maquininha: ler('maquininha'),
     loja: ler('loja'),
+    custos: ler('custos'),
+    ...overrides,
   });
 }
