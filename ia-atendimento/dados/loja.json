@@ -1,0 +1,27 @@
+{
+  "_atualizado_em": "2026-10-08",
+  "nome": "RR Prime Cell",
+  "endereco": null,
+  "horarios": {
+    "segunda": ["09:00", "20:30"],
+    "terca": ["09:00", "20:30"],
+    "quarta": ["09:00", "20:30"],
+    "quinta": ["09:00", "20:30"],
+    "sexta": ["09:00", "20:30"],
+    "sabado": ["09:00", "17:00"],
+    "domingo": null,
+    "feriado": ["10:00", "15:00"]
+  },
+  "ultimo_agendamento_min_antes_fechar": 30,
+  "avaliacao": {
+    "bateria_minima_sem_desconto": 80,
+    "ressalva": "valor de pré-avaliação, confirmado na loja depois do teste do aparelho"
+  },
+  "garantia": {
+    "lacrado": "1 ano de garantia Apple a partir da ativação (suporte Apple 0800-761-0867)",
+    "seminovo": "garantia da loja contra defeitos sistêmicos; não cobre mau uso (queda, tela/câmera/carcaça quebrada, bateria estufada), líquidos, acessórios de terceiros nem bloqueio de senha/iCloud do cliente",
+    "acionamento_seminovo": "segunda a sexta, 10h às 18h, com agendamento pelo setor de vendas",
+    "garantia_adicional": "opcional: +3 meses além da garantia legal, com aparelho reserva se o reparo passar de 3 dias úteis e 20% de desconto na assistência por 1 ano",
+    "sem_devolucao_presencial": true
+  }
+}

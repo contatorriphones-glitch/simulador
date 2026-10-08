@@ -1,0 +1,28 @@
+{
+  "_atualizado_em": "2026-10-08",
+  "_obs": "Quanto a loja paga pelo aparelho do cliente em ESTADO PERFEITO (modelo -> GB -> valor). Modelo/GB fora desta lista = não aceito na troca (passa para humano).",
+  "valores": {
+    "iPhone 11": { "64": 450, "128": 550 },
+    "iPhone 11 Pro": { "64": 700, "256": 800 },
+    "iPhone 11 Pro Max": { "64": 800, "256": 900 },
+    "iPhone 12": { "64": 800, "128": 900 },
+    "iPhone 12 Pro": { "128": 1350, "256": 1450 },
+    "iPhone 12 Pro Max": { "128": 1450, "256": 1600 },
+    "iPhone 13": { "128": 1350, "256": 1500 },
+    "iPhone 13 Pro": { "128": 1850, "256": 1950 },
+    "iPhone 13 Pro Max": { "128": 2200, "256": 2300 },
+    "iPhone 14": { "128": 1700, "256": 1750 },
+    "iPhone 14 Plus": { "128": 1950, "256": 2050 },
+    "iPhone 14 Pro": { "128": 2350, "256": 2450 },
+    "iPhone 14 Pro Max": { "128": 2700, "256": 2800, "512": 2850, "1024": 2950 },
+    "iPhone 15": { "128": 2250, "256": 2350 },
+    "iPhone 15 Pro": { "128": 2950, "256": 3050 },
+    "iPhone 15 Pro Max": { "256": 3550, "512": 3700 },
+    "iPhone 16": { "128": 3100, "256": 3200 },
+    "iPhone 16 Pro": { "128": 3700, "256": 3800 },
+    "iPhone 16 Pro Max": { "256": 4500, "512": 4650 },
+    "iPhone 17": { "256": 4100 },
+    "iPhone 17 Pro": { "256": 5850 },
+    "iPhone 17 Pro Max": { "256": 6100 }
+  }
+}

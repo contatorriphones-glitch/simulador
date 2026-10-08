@@ -1,0 +1,28 @@
+{
+  "_atualizado_em": "2026-10-08",
+  "_obs": "Taxas em %. 'formula': 'multiplica' = valor x (1 + taxa) (igual ao simulador atual); 'divide' = valor / (1 - taxa) (loja recebe o valor cheio).",
+  "formula": "multiplica",
+  "parcelas_padrao": [6, 10, 12, 18],
+  "max_parcelas": 18,
+  "taxas": {
+    "debito": 3.0,
+    "1": 5.0,
+    "2": 7.5,
+    "3": 8.5,
+    "4": 9.5,
+    "5": 10.0,
+    "6": 10.5,
+    "7": 11.5,
+    "8": 12.5,
+    "9": 13.0,
+    "10": 14.5,
+    "11": 15.5,
+    "12": 16.0,
+    "13": 16.0,
+    "14": 17.0,
+    "15": 17.5,
+    "16": 17.5,
+    "17": 18.0,
+    "18": 19.3
+  }
+}
