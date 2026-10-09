@@ -43,6 +43,7 @@
   .sistema { align-self: center; font-size: 12px; color: var(--sub); text-align: center; margin: 8px 0; max-width: 90%; }
   .sistema.erro { background: var(--erro); color: #ffb4b4; padding: 6px 10px; border-radius: 8px; }
   .sistema.agenda { background: var(--ok); color: #9ff0bf; padding: 8px 12px; border-radius: 8px; text-align: left; white-space: pre-wrap; }
+  .tentar { align-self: center; background: #0095f6; color: #fff; border: 0; border-radius: 8px; padding: 7px 14px; cursor: pointer; font-weight: 600; margin: 4px 0 10px; }
   .fb { align-self: flex-start; display: flex; gap: 6px; margin: 0 0 12px 4px; }
   .fb button { background: none; border: 1px solid var(--borda); border-radius: 12px; color: var(--sub); cursor: pointer; padding: 2px 8px; font-size: 13px; }
   .fb button.marcado { border-color: #0095f6; color: #fff; }
@@ -493,8 +494,8 @@ const MODELO_PADRAO = 'gemini-3.8-flash';
 const MODELOS_DESATIVADOS = ['gemini-2.5-flash'];
 function nomeModelo() { return ($('modelo').value.trim() || MODELO_PADRAO).replace(/^models\//, ''); }
 
-async function chamarGemini(tentouTrocar = false) {
-  const r = await fetch(`${API}/models/${encodeURIComponent(nomeModelo())}:generateContent`, {
+async function requisicao(modelo) {
+  const r = await fetch(`${API}/models/${encodeURIComponent(modelo)}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': $('chave').value.trim() },
     body: JSON.stringify({
@@ -504,21 +505,85 @@ async function chamarGemini(tentouTrocar = false) {
     }),
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    const msg = j.error?.message || `HTTP ${r.status}`;
-    // Quando o Google aposenta um modelo, a mensagem de erro indica o substituto: trocamos e tentamos de novo.
-    const sugerido = msg.match(/use (?:models\/)?(gemini-[\w.-]+)/i)?.[1]?.replace(/[.]$/, '');
-    if (!tentouTrocar && sugerido && sugerido !== nomeModelo()) {
-      sistema(`O modelo ${nomeModelo()} foi desativado pelo Google. Trocando para ${sugerido}.`);
-      $('modelo').value = sugerido;
-      LS.set('bia_modelo', sugerido);
-      return chamarGemini(true);
-    }
-    throw new Error(msg);
+  if (r.ok) {
+    const c = j.candidates?.[0]?.content;
+    if (!c?.parts) throw new Error('Resposta vazia (' + (j.candidates?.[0]?.finishReason || j.promptFeedback?.blockReason || 'sem motivo') + ')');
+    return { ok: true, conteudo: { role: 'model', parts: c.parts } };
   }
-  const c = j.candidates?.[0]?.content;
-  if (!c?.parts) throw new Error('Resposta vazia (' + (j.candidates?.[0]?.finishReason || j.promptFeedback?.blockReason || 'sem motivo') + ')');
-  return { role: 'model', parts: c.parts };
+  const msg = j.error?.message || `HTTP ${r.status}`;
+  const espera = parseFloat(j.error?.details?.find((d) => d.retryDelay)?.retryDelay) || null;
+  return { ok: false, status: r.status, msg, espera };
+}
+
+// Erros passageiros: servidor lotado (503/500) ou limite por minuto (429 sem ser o limite diário).
+const limiteDiario = (e) => e.status === 429 && /per ?day|daily|PerDay/i.test(e.msg);
+const passageiro = (e) => [500, 502, 503, 504].includes(e.status) || (e.status === 429 && !limiteDiario(e)) || /high demand|overloaded|unavailable/i.test(e.msg);
+
+let aviso = null;
+function avisar(texto) {
+  if (!aviso) { sistema(texto); aviso = $('chat').lastElementChild; } else aviso.textContent = texto;
+}
+
+// Modelos "flash" alternativos, do mais novo para o mais antigo (para quando o atual estiver lotado).
+let alternativos = null;
+async function modelosAlternativos() {
+  if (alternativos) return alternativos;
+  try {
+    const r = await fetch(`${API}/models?pageSize=200`, { headers: { 'x-goog-api-key': $('chave').value.trim() } });
+    const j = await r.json();
+    alternativos = (j.models || [])
+      .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map((m) => m.name.replace(/^models\//, ''))
+      .filter((n) => /flash/.test(n) && !/image|tts|audio|live|embed/.test(n))
+      .sort((x, y) => y.localeCompare(x, undefined, { numeric: true }));
+  } catch { alternativos = []; }
+  return alternativos;
+}
+
+async function chamarGemini() {
+  aviso = null;
+  const esperas = [3, 8, 15];
+  let erro;
+  for (let tentativa = 0; tentativa <= esperas.length; tentativa++) {
+    const res = await requisicao(nomeModelo());
+    if (res.ok) return res.conteudo;
+    erro = res;
+
+    // Quando o Google aposenta um modelo, a mensagem de erro indica o substituto: trocamos e tentamos de novo.
+    const sugerido = res.msg.match(/use (?:models\/)?(gemini-[\w.-]+)/i)?.[1]?.replace(/[.]$/, '');
+    if (sugerido && sugerido !== nomeModelo()) {
+      sistema(`O modelo ${nomeModelo()} foi desativado pelo Google. Trocando para ${sugerido}.`);
+      trocarModelo(sugerido);
+      continue;
+    }
+    if (limiteDiario(res)) throw new Error('O limite grátis do dia acabou. Ele reinicia de madrugada (meia-noite no horário da Califórnia). Dá para continuar amanhã ou usar outra chave.');
+    if (!passageiro(res) || tentativa === esperas.length) break;
+
+    const s = Math.min(res.espera || esperas[tentativa], 60);
+    avisar(`O Gemini está sobrecarregado agora. Tentando de novo em ${s}s… (${tentativa + 1}/${esperas.length})`);
+    digitando(true);
+    await sleep(s * 1000);
+  }
+
+  // Continua lotado: tenta outro modelo "flash" disponível na sua chave.
+  if (passageiro(erro)) {
+    for (const alt of (await modelosAlternativos()).filter((n) => n !== nomeModelo()).slice(0, 3)) {
+      avisar(`O ${nomeModelo()} continua sobrecarregado. Tentando com ${alt}…`);
+      const res = await requisicao(alt);
+      if (res.ok) {
+        sistema(`Passei a usar o ${alt}. Dá para trocar de volta em ⚙️ quando quiser.`);
+        trocarModelo(alt);
+        return res.conteudo;
+      }
+    }
+    throw new Error('O Gemini está sobrecarregado. Espere 1 ou 2 minutos e clique em "Tentar de novo".');
+  }
+  throw new Error(erro.msg);
+}
+
+function trocarModelo(nome) {
+  $('modelo').value = nome;
+  LS.set('bia_modelo', nome);
 }
 
 async function buscarModelos() {
@@ -535,13 +600,19 @@ async function buscarModelos() {
 }
 
 // ------------------------------------------------------------------ conversa
-async function processar() {
+async function processar({ repetir = false } = {}) {
   if (estado.ocupado || estado.humano) return;
   const textos = estado.pendentes.splice(0);
-  if (!textos.length) return;
+  if (!textos.length && !repetir) return;
   estado.ocupado = true;
   digitando(true);
-  estado.historico.push({ role: 'user', parts: textos.map((text) => ({ text })) });
+  if (textos.length) {
+    const ultima = estado.historico.at(-1);
+    const partes = textos.map((text) => ({ text }));
+    // Se a resposta anterior falhou, a última mensagem ainda é do cliente: junta em vez de duplicar o turno.
+    if (ultima?.role === 'user' && ultima.parts.every((p) => p.text)) ultima.parts.push(...partes);
+    else estado.historico.push({ role: 'user', parts: partes });
+  }
   try {
     for (let i = 0; i < 8; i++) {
       const resposta = await chamarGemini();
@@ -565,11 +636,21 @@ async function processar() {
     }
   } catch (e) {
     sistema('Erro ao falar com o Gemini: ' + e.message, 'erro');
+    botaoTentarDeNovo();
   } finally {
     estado.ocupado = false;
     digitando(false);
     if (estado.pendentes.length && !estado.humano) agendarProcessamento();
   }
+}
+
+function botaoTentarDeNovo() {
+  const b = document.createElement('button');
+  b.textContent = '🔁 Tentar de novo';
+  b.className = 'tentar';
+  b.onclick = () => { b.remove(); processar({ repetir: true }); };
+  $('chat').append(b);
+  rolar();
 }
 
 function limparMarkdown(t) { return t.replace(/\*\*(.+?)\*\*/g, '$1').replace(/^#+\s*/gm, ''); }
