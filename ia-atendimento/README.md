@@ -48,16 +48,29 @@ A Bia **não dá desconto logo de cara**. Primeiro contorna (brindes: fone Bluet
 cd ia-atendimento && npm test
 ```
 
-## Página de teste da Bia
+## Lojas
 
-`chat-teste.html` é um arquivo único: abra no navegador, cole a chave do Gemini em ⚙️ e converse como se fosse um cliente.
+Cada loja tem uma pasta em `lojas/` com `loja.json` (nome, endereço, horários, regras) e `garantia.md`.
+Tabelas próprias (ex.: `catalogo.json`) podem ser colocadas na pasta da loja; sem elas, valem as de `dados/`.
 
-- 🔎 mostra cada consulta às tabelas e o resultado (útil para conferir os valores).
-- 👍/👎 em cada resposta; no 👎, escreva como a Bia deveria ter respondido.
-- ⬇️ baixa a conversa com as avaliações, para revisarmos juntos.
-- Em ⚙️ dá para simular outra data/hora (ex.: sábado às 16h50) e marcar feriado.
+| Loja | Pasta | Página de teste |
+|---|---|---|
+| Kronos Phone (testes primeiro) | `lojas/kronos-phone` | `chat-teste-kronos-phone.html` |
+| RR Prime Cell | `lojas/rr-prime-cell` | `chat-teste-rr-prime-cell.html` |
 
-Mudou alguma tabela ou o prompt? Gere a página de novo:
+## Página de teste
+
+Arquivo único: abra no navegador, cole a chave do Gemini em ⚙️ e converse como se fosse um cliente.
+
+- 📚 **Conversas**: tudo é salvo sozinho (mensagens, 👍/👎, correções, observações 📝, agendamentos). Dá para abrir e continuar qualquer conversa, baixar e restaurar backups.
+- 🧠 **Aprendizados**: regras que a atendente segue em todas as conversas. Uma correção feita no 👎 pode virar regra na hora.
+- ➕ nova conversa · 🔎 mostra as consultas às tabelas · ⚙️ chave, modelo, data/hora simulada, nuvem.
+
+### Onde fica salvo
+- **No navegador**, sempre.
+- **Na nuvem (Supabase)**, no mesmo projeto do sistema de estoque, depois de criar as tabelas uma única vez: Supabase → SQL Editor → New query → colar `supabase/bia.sql` → Run.
+
+Mudou alguma tabela, o prompt ou uma loja? Gere as páginas de novo:
 
 ```
 cd ia-atendimento && npm run build

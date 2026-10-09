@@ -76,5 +76,9 @@
     ],
     "motivo": "para a segurança e o conforto dos nossos clientes, todas as vendas são feitas presencialmente na loja",
     "sinal_para_agendar": false
-  }
+  },
+  "slug": "rr-prime-cell",
+  "sigla": "RR",
+  "bairro": "Tatuapé, em São Paulo",
+  "emoji": "💙"
 }
