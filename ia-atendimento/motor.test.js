@@ -12,7 +12,7 @@ test('entende o jeito que o cliente escreve o modelo', () => {
 });
 
 test('17 Pro Max lacrado: preço muda por cor', () => {
-  const c = m.consultarCatalogo({ modelo: '17 pro max', gb: 256 });
+  const c = m.consultarCatalogo({ modelo: '17 pro max', gb: 256, condicao: 'lacrado' });
   assert.deepEqual(c.opcoes.map((o) => [o.cor, o.preco]), [['Azul', 7049], ['Laranja', 6849], ['Branco', 7199]]);
   assert.equal(c.a_partir_de, 6849);
 });
@@ -73,16 +73,40 @@ test('parcelamento do saldo usa a tabela da maquininha', () => {
 
 test('proposta completa: 17 Pro Max Branco com 15 Pro Max na troca', () => {
   const r = m.montarProposta({
-    produto: { modelo: '17 pro max', gb: 256, cor: 'branco' },
+    produto: { modelo: '17 pro max', gb: 256, cor: 'branco', condicao: 'lacrado' },
     trocas: [{ modelo: '15 pro max', gb: 256, bateria: 79, defeitos: ['vidro_tela'] }],
   });
   assert.equal(r.status, 'ok');
   assert.equal(r.saldo, 7199 - 3100);
 });
 
-test('proposta sem cor escolhida pede para o cliente escolher', () => {
-  const r = m.montarProposta({ produto: { modelo: '17 pro max', gb: 256 } });
-  assert.equal(r.status, 'precisa_escolher');
+test('proposta sem cor escolhida já calcula a diferença de cada opção', () => {
+  const r = m.montarProposta({
+    produto: { modelo: '17 pro max', gb: 256, condicao: 'lacrado' },
+    trocas: [{ modelo: '15 pro max', gb: 256, bateria: 82 }],
+  });
+  assert.equal(r.status, 'opcoes');
+  assert.deepEqual(r.propostas.map((p) => [p.item.cor, p.saldo]), [['Azul', 3499], ['Laranja', 3299], ['Branco', 3649]]);
+});
+
+test('sem condição informada, busca em lacrados e seminovos (16 Pro Max só existe seminovo)', () => {
+  const c = m.consultarCatalogo({ modelo: '16 pro max', gb: 256 });
+  assert.equal(c.encontrado, true);
+  assert.deepEqual(c.opcoes.map((o) => [o.condicao, o.preco]), [['seminovo', 4899]]);
+  const r = m.montarProposta({ produto: { modelo: '16 pro max', gb: 256 }, trocas: [{ modelo: '15 pro max', gb: 256, bateria: 79, defeitos: ['vidro_tela'] }] });
+  assert.equal(r.status, 'ok');
+  assert.equal(r.saldo, 4899 - 3100);
+});
+
+test('troca: aceitamos a partir do iPhone 11 (XR é recusado sem chamar ninguém)', () => {
+  const r = m.avaliarAparelho({ modelo: 'xr', gb: 64 });
+  assert.equal(r.status, 'nao_aceito');
+  assert.equal(r.acao, undefined);
+  assert.match(r.motivo, /a partir do iPhone 11/);
+});
+
+test('resumo do catálogo: linha mais atual é a 18 Pro / Pro Max', () => {
+  assert.deepEqual(m.resumoCatalogo().linha_mais_atual, ['iPhone 18 Pro', 'iPhone 18 Pro Max']);
 });
 
 test('orçamento de 5.000 sem troca sugere o melhor que cabe', () => {
@@ -93,19 +117,22 @@ test('orçamento de 5.000 sem troca sugere o melhor que cabe', () => {
 test('horários: agenda até 20h30 na semana e até 17h no sábado; domingo fechado', () => {
   const quinta = new Date(2026, 9, 8);
   assert.equal(m.verificarHorario(quinta, '20:30').aberto, true);
+  // tolerância de 10 minutos de atraso
+  assert.equal(m.verificarHorario(quinta, '20:40').aberto, true);
+  assert.equal(m.verificarHorario(quinta, '20:40').com_tolerancia, true);
   const r = m.verificarHorario(quinta, '20:45');
   assert.equal(r.aberto, false);
   assert.equal(r.ultimo_agendamento, '20:30');
   const sabado = new Date(2026, 9, 10);
   assert.equal(m.verificarHorario(sabado, '17:00').aberto, true);
-  assert.equal(m.verificarHorario(sabado, '17:30').aberto, false);
+  assert.equal(m.verificarHorario(sabado, '17:11').aberto, false);
   assert.equal(m.verificarHorario(new Date(2026, 9, 11), '12:00').aberto, false);
   assert.equal(m.verificarHorario(quinta, '16:00', { feriado: true }).aberto, false);
 });
 
 // ---------------------------------------------------------------- negociação
 const vendaComTroca = {
-  produto: { modelo: '17 pro max', gb: 256, cor: 'branco' },
+  produto: { modelo: '17 pro max', gb: 256, cor: 'branco', condicao: 'lacrado' },
   trocas: [{ modelo: '17 pro', gb: 256, bateria: 92 }],
 };
 
@@ -141,7 +168,7 @@ test('defeitos descontados não reduzem a margem da troca', () => {
   // lentes do 17 Pro não têm preço na tabela -> avaliação pendente
   assert.equal(comDefeito.status, 'avaliacao_pendente');
   const r = m.negociarDesconto({
-    produto: { modelo: '17 pro max', gb: 256, cor: 'branco' },
+    produto: { modelo: '17 pro max', gb: 256, cor: 'branco', condicao: 'lacrado' },
     trocas: [{ modelo: '15 pro max', gb: 256, bateria: 79, defeitos: ['vidro_tela'] }],
   });
   // 3949 - 3550 = 399 -> até 99 -> etapas 0 e 50
@@ -155,7 +182,7 @@ test('sem troca a IA não dá desconto: chama humano', () => {
 });
 
 test('aparelho da troca sem preço de revenda: chama humano', () => {
-  const r = m.negociarDesconto({ produto: { modelo: '17', gb: 256 }, trocas: [{ modelo: '11', gb: 128, bateria: 85 }] });
+  const r = m.negociarDesconto({ produto: { modelo: '17', gb: 256, condicao: 'lacrado' }, trocas: [{ modelo: '11', gb: 128, bateria: 85 }] });
   assert.equal(r.status, 'humano');
 });
 
@@ -178,7 +205,10 @@ test('dois aparelhos na troca: margem mínima calculada para cada um', () => {
 });
 
 test('sem valor na tabela: ferramentas sinalizam humano', () => {
-  assert.equal(m.consultarCatalogo({ modelo: '16 pro', condicao: 'lacrado' }).acao, 'humano');
+  // modelo que não vendemos: sem chamar humano, devolve o que temos para oferecer alternativa
+  const c = m.consultarCatalogo({ modelo: '16 pro', condicao: 'lacrado' });
+  assert.equal(c.encontrado, false);
+  assert.ok(c.modelos_lacrados.includes('iPhone 18 Pro Max'));
   assert.equal(m.avaliarAparelho({ modelo: '16 plus', gb: 128 }).acao, 'humano');
   assert.equal(m.avaliarAparelho({ modelo: '17 pro', gb: 256, bateria: 75 }).acao, 'humano');
   // modelo existe, só não tem a cor/GB pedida: a IA corrige o cliente, não chama humano

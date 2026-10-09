@@ -56,6 +56,7 @@
   .sistema { align-self: center; font-size: 12px; color: var(--sub); text-align: center; margin: 8px 0; max-width: 90%; }
   .sistema.erro { background: var(--erro); color: #ffb4b4; padding: 6px 10px; border-radius: 8px; }
   .sistema.agenda { background: var(--ok); color: #9ff0bf; padding: 8px 12px; border-radius: 8px; text-align: left; white-space: pre-wrap; }
+  .link-agenda { display: inline-block; margin-top: 6px; color: #fff; background: #1a73e8; padding: 5px 10px; border-radius: 6px; text-decoration: none; font-weight: 600; }
   .tentar { align-self: center; background: #0095f6; color: #fff; border: 0; border-radius: 8px; padding: 7px 14px; cursor: pointer; font-weight: 600; margin: 4px 0 10px; }
   .fb { align-self: flex-start; display: flex; gap: 6px; margin: 0 0 12px 4px; }
   .fb button { background: none; border: 1px solid var(--borda); border-radius: 12px; color: var(--sub); cursor: pointer; padding: 2px 8px; font-size: 13px; }
@@ -119,6 +120,14 @@
     <label class="check"><input id="feriado" type="checkbox"> Hoje é feriado</label>
     <label class="check"><input id="rapido" type="checkbox"> Modo rápido (sem espera de digitação)</label>
   </div>
+  <div class="linha">
+    <label>Google Agenda: link do Apps Script (opcional)
+      <input id="agendaUrl" type="text" placeholder="https://script.google.com/macros/s/.../exec">
+    </label>
+    <label>Senha do Apps Script
+      <input id="agendaSegredo" type="password" autocomplete="off">
+    </label>
+  </div>
   <label class="check"><input id="usarNuvem" type="checkbox" checked> Salvar conversas e aprendizados na nuvem (Supabase)</label>
   <div class="linha"><button id="btnSalvar" type="button">Salvar e começar</button></div>
   <div class="nota">No plano grátis, o Google pode usar as conversas para melhorar os produtos dele. Nos testes, não use dados reais de clientes.</div>
@@ -147,7 +156,7 @@ const LS = {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const estado = { historico: [], log: [], feedbacks: [], agendamentos: [], pendentes: [], humano: false, ocupado: false, timer: null };
+const estado = { historico: [], log: [], feedbacks: [], agendamentos: [], alertas: [], pendentes: [], humano: false, ocupado: false, timer: null };
 const LOJA = DADOS.loja;
 const NUVEM = /*__NUVEM__*/;
 
@@ -198,6 +207,7 @@ function conversaAtual() {
     avaliacoes: estado.feedbacks,
     agendamentos: estado.agendamentos,
     historico: estado.historico,
+    alertas: estado.alertas,
     humano: estado.humano,
   };
 }
@@ -350,12 +360,18 @@ function abrirConversa(id) {
   conversaId = id;
   carregadaEm = c.atualizado_em;
   LS.set(`bia_conversa_atual_${LOJA.slug}`, id);
+  // Conversas antigas usavam "transferir_humano"; hoje a ferramenta se chama "avisar_equipe".
+  const renomear = (p) => {
+    for (const k of ['functionCall', 'functionResponse']) if (p[k]?.name === 'transferir_humano') p[k].name = 'avisar_equipe';
+    return p;
+  };
+  (c.historico || []).forEach((h) => h.parts.forEach(renomear));
   Object.assign(estado, {
     historico: c.historico || [], log: c.log || [], feedbacks: c.avaliacoes || [], agendamentos: c.agendamentos || [],
-    pendentes: [], humano: !!c.humano,
+    alertas: c.alertas || [], pendentes: [], humano: !!c.humano,
   });
   $('chat').innerHTML = '';
-  $('banner').classList.toggle('on', estado.humano);
+  atualizarBanner();
   sistema(`Conversa de ${dataCurta(c.criado_em)}. Pode continuar de onde parou.`);
   estado.log.forEach((m, i) => {
     if (m.de === 'cliente') { bolha('cliente', m.texto); return; }
@@ -363,7 +379,7 @@ function abrirConversa(id) {
     partes.forEach((b, j) => { const el = bolha('bia', b); if (j === partes.length - 1) el.classList.add('grupo-fim'); });
     botoesAvaliacao(i);
   });
-  for (const a of estado.agendamentos) sistema('📅 Agendamento registrado\n' + Object.entries(a).filter(([k]) => k !== 'registrado_em').map(([k, v]) => `${k}: ${v}`).join('\n'), 'agenda');
+  for (const a of estado.agendamentos) mostrarAgendamento(a);
   renderConversas();
 }
 
@@ -475,25 +491,35 @@ const FERRAMENTAS = [
   },
   {
     name: 'registrar_agendamento',
-    description: 'Registra o agendamento depois que o cliente preencheu o questionário.',
-    parameters: { type: 'object', properties: { nome: { type: 'string' }, modelo_aparelho: { type: 'string' }, gb: { type: 'string' }, forma_pagamento: { type: 'string' }, dia_horario: { type: 'string' }, instagram: { type: 'string' }, whatsapp: { type: 'string' }, resumo: { type: 'string', description: 'Resumo da proposta combinada (valores, troca, desconto, brindes)' } }, required: ['nome', 'dia_horario', 'whatsapp'] },
+    description: 'Registra o agendamento depois que o cliente preencheu o questionário (e envia para o Google Agenda, se configurado).',
+    parameters: { type: 'object', properties: {
+      nome: { type: 'string' }, modelo_aparelho: { type: 'string' }, gb: { type: 'string' }, forma_pagamento: { type: 'string' },
+      data: { type: 'string', description: 'AAAA-MM-DD' }, horario: { type: 'string', description: 'HH:MM' },
+      instagram: { type: 'string' }, whatsapp: { type: 'string' },
+      resumo: { type: 'string', description: 'Resumo da proposta combinada (modelo, cor, valores, troca, desconto, brindes)' },
+    }, required: ['nome', 'data', 'horario', 'whatsapp'] },
     run: (a) => {
-      estado.agendamentos.push({ ...a, registrado_em: new Date().toISOString() });
+      const ag = { ...a, registrado_em: new Date().toISOString(), link_agenda: linkGoogleAgenda(a) };
+      estado.agendamentos.push(ag);
+      mostrarAgendamento(ag);
+      enviarParaGoogleAgenda(ag);
       salvar();
-      sistema('📅 Agendamento registrado\n' + Object.entries(a).map(([k, v]) => `${k}: ${v}`).join('\n'), 'agenda');
       return { ok: true };
     },
   },
   {
-    name: 'transferir_humano',
-    description: 'Passa a conversa para a equipe e pausa a Bia.',
+    name: 'avisar_equipe',
+    description: 'Avisa a equipe EM SEGUNDO PLANO (o cliente não fica sabendo). Você continua o atendimento normalmente.',
     parameters: { type: 'object', properties: { motivo: { type: 'string' } }, required: ['motivo'] },
     run: ({ motivo }) => {
-      estado.humano = true;
+      estado.alertas.push({ motivo, em: new Date().toISOString() });
+      sistema('🔔 Equipe avisada (o cliente não vê isso): ' + motivo);
+      atualizarBanner();
       salvar();
-      $('banner').classList.add('on');
-      sistema('Transferido para a equipe. Motivo: ' + motivo);
-      return { ok: true, instrucao: 'Avise o cliente, em uma mensagem curta, que alguém da equipe vai continuar o atendimento. Não diga mais nada.' };
+      return {
+        ok: true,
+        instrucao: 'A equipe foi avisada em segundo plano. NÃO mencione equipe, verificação nem espera. Continue o atendimento normalmente, sem inventar valores.',
+      };
     },
   },
 ];
@@ -562,6 +588,7 @@ function avisar(texto) {
 
 // Modelos "flash" alternativos, do mais novo para o mais antigo (para quando o atual estiver lotado).
 let alternativos = null;
+const versao = (n) => parseFloat(n.match(/gemini-(\d+(?:\.\d+)?)/)?.[1] || '0');
 async function modelosAlternativos() {
   if (alternativos) return alternativos;
   try {
@@ -570,8 +597,8 @@ async function modelosAlternativos() {
     alternativos = (j.models || [])
       .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
       .map((m) => m.name.replace(/^models\//, ''))
-      .filter((n) => /flash/.test(n) && !/image|tts|audio|live|embed/.test(n))
-      .sort((x, y) => y.localeCompare(x, undefined, { numeric: true }));
+      .filter((n) => /flash/.test(n) && !/image|tts|audio|live|embed|lite/.test(n))
+      .sort((x, y) => versao(y) - versao(x));
   } catch { alternativos = []; }
   return alternativos;
 }
@@ -607,8 +634,9 @@ async function chamarGemini() {
       avisar(`O ${nomeModelo()} continua sobrecarregado. Tentando com ${alt}…`);
       const res = await requisicao(alt);
       if (res.ok) {
-        sistema(`Passei a usar o ${alt}. Dá para trocar de volta em ⚙️ quando quiser.`);
-        trocarModelo(alt);
+        // Só nesta sessão: ao reabrir a página, volta para o modelo escolhido em ⚙️.
+        sistema(`O ${nomeModelo()} está lotado; usando o ${alt} por enquanto.`);
+        $('modelo').value = alt;
         return res.conteudo;
       }
     }
@@ -664,6 +692,7 @@ async function processar({ repetir = false } = {}) {
           let resultado;
           try { resultado = f ? f.run(fc.args || {}) : { erro: 'ferramenta desconhecida' }; }
           catch (e) { resultado = { erro: String(e.message || e) }; }
+          resultado = semTotais(resultado);
           depurar(fc.name, fc.args, resultado);
           return { functionResponse: { name: fc.name, response: { resultado } } };
         }),
@@ -686,6 +715,93 @@ function botaoTentarDeNovo() {
   b.className = 'tentar';
   b.onclick = () => { b.remove(); processar({ repetir: true }); };
   $('chat').append(b);
+  rolar();
+}
+
+function atualizarBanner() {
+  const ultimo = estado.alertas.at(-1);
+  $('banner').classList.toggle('on', estado.humano || !!ultimo);
+  if (estado.humano) {
+    $('bannerTexto').textContent = `👩‍💼 Você assumiu a conversa. A ${LOJA.atendente} está pausada.`;
+    $('btnDevolver').textContent = `Devolver para a ${LOJA.atendente}`;
+  } else if (ultimo) {
+    $('bannerTexto').textContent = `🔔 Equipe avisada: ${ultimo.motivo}. A ${LOJA.atendente} continua atendendo.`;
+    $('btnDevolver').textContent = 'Assumir a conversa';
+  }
+}
+
+// O cliente se assusta com o total parcelado: a IA só recebe o valor de cada parcela.
+function semTotais(v) {
+  if (Array.isArray(v)) return v.map(semTotais);
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).filter(([k]) => k !== 'total').map(([k, x]) => [k, semTotais(x)]));
+  return v;
+}
+
+// ------------------------------------------------------------------ Google Agenda
+function eventoAgenda(a) {
+  const [y, m, d] = String(a.data || '').split('-').map(Number);
+  const [h, min] = String(a.horario || '').split(':').map(Number);
+  if (!y || Number.isNaN(h)) return null;
+  const inicio = new Date(y, m - 1, d, h, min || 0);
+  const fim = new Date(inicio.getTime() + 30 * 60000);
+  return {
+    titulo: `Visita: ${a.nome} (${a.modelo_aparelho || 'iPhone'}${a.gb ? ' ' + a.gb + 'GB' : ''})`,
+    inicio, fim,
+    descricao: [
+      `Cliente: ${a.nome}`, `WhatsApp: ${a.whatsapp || '-'}`, `Instagram: ${a.instagram || '-'}`,
+      `Aparelho: ${a.modelo_aparelho || '-'} ${a.gb || ''}`, `Pagamento: ${a.forma_pagamento || '-'}`,
+      a.resumo ? `Proposta: ${a.resumo}` : '', `Agendado pela ${LOJA.atendente} (${LOJA.nome})`,
+    ].filter(Boolean).join('\n'),
+    local: LOJA.endereco || LOJA.nome,
+  };
+}
+
+function linkGoogleAgenda(a) {
+  const ev = eventoAgenda(a);
+  if (!ev) return null;
+  const p = (n) => String(n).padStart(2, '0');
+  const f = (d) => `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
+  const q = new URLSearchParams({ action: 'TEMPLATE', text: ev.titulo, dates: `${f(ev.inicio)}/${f(ev.fim)}`, details: ev.descricao, location: ev.local, ctz: 'America/Sao_Paulo' });
+  return `https://calendar.google.com/calendar/render?${q}`;
+}
+
+// Envio automático: um Apps Script na conta Google da loja cria o evento (veja google-agenda/LEIA-ME.md).
+async function enviarParaGoogleAgenda(a) {
+  const url = LS.get('bia_agenda_url').trim();
+  if (!url) return;
+  const ev = eventoAgenda(a);
+  if (!ev) return sistema('⚠️ Não deu para enviar ao Google Agenda: data ou horário inválido.', 'erro');
+  const p = (n) => String(n).padStart(2, '0');
+  const corpo = JSON.stringify({
+    segredo: LS.get('bia_agenda_segredo'), titulo: ev.titulo, descricao: ev.descricao, local: ev.local,
+    data: `${ev.inicio.getFullYear()}-${p(ev.inicio.getMonth() + 1)}-${p(ev.inicio.getDate())}`,
+    horario: `${p(ev.inicio.getHours())}:${p(ev.inicio.getMinutes())}`, duracao_min: 30,
+  });
+  try {
+    const r = await fetch(url, { method: 'POST', body: corpo });
+    const j = await r.json().catch(() => ({}));
+    sistema(j.ok ? '✅ Agendamento criado no Google Agenda da loja.' : '⚠️ Google Agenda: ' + (j.erro || 'resposta inesperada'), j.ok ? '' : 'erro');
+  } catch {
+    // Alguns navegadores bloqueiam a leitura da resposta: envia mesmo assim, sem confirmação.
+    try { await fetch(url, { method: 'POST', mode: 'no-cors', body: corpo }); sistema('📤 Agendamento enviado ao Google Agenda (confira na agenda).'); }
+    catch (e) { sistema('⚠️ Não consegui enviar ao Google Agenda: ' + e.message, 'erro'); }
+  }
+}
+
+function mostrarAgendamento(a) {
+  const campos = ['nome', 'modelo_aparelho', 'gb', 'forma_pagamento', 'data', 'horario', 'dia_horario', 'instagram', 'whatsapp', 'resumo'];
+  const el = document.createElement('div');
+  el.className = 'sistema agenda';
+  el.textContent = '📅 Agendamento registrado\n' + campos.filter((k) => a[k]).map((k) => `${k}: ${a[k]}`).join('\n');
+  const link = a.link_agenda || linkGoogleAgenda(a);
+  if (link) {
+    const b = document.createElement('a');
+    b.href = link; b.target = '_blank'; b.rel = 'noopener';
+    b.textContent = '➕ Adicionar ao Google Agenda';
+    b.className = 'link-agenda';
+    el.append(document.createElement('br'), b);
+  }
+  $('chat').append(el);
   rolar();
 }
 
@@ -795,9 +911,9 @@ function botoesAvaliacao(indice) {
 function novaConversa() {
   conversaId = uid();
   LS.set(`bia_conversa_atual_${LOJA.slug}`, conversaId);
-  Object.assign(estado, { historico: [], log: [], feedbacks: [], agendamentos: [], pendentes: [], humano: false });
+  Object.assign(estado, { historico: [], log: [], feedbacks: [], agendamentos: [], alertas: [], pendentes: [], humano: false });
   $('chat').innerHTML = '';
-  $('banner').classList.remove('on');
+  atualizarBanner();
   sistema('Nova conversa. Escreva como se fosse um cliente no Direct. As anteriores ficam em 📚.');
   renderConversas();
 }
@@ -805,13 +921,18 @@ function novaConversa() {
 // ------------------------------------------------------------------ início
 $('chave').value = LS.get('bia_chave');
 const salvo = LS.get('bia_modelo', MODELO_PADRAO);
-$('modelo').value = MODELOS_DESATIVADOS.includes(salvo) ? MODELO_PADRAO : salvo;
+// Modelos "lite" são fracos demais para vender: volta para o padrão.
+$('modelo').value = MODELOS_DESATIVADOS.includes(salvo) || /lite/.test(salvo) ? MODELO_PADRAO : salvo;
 $('rapido').checked = LS.get('bia_rapido') === '1';
+$('agendaUrl').value = LS.get('bia_agenda_url');
+$('agendaSegredo').value = LS.get('bia_agenda_segredo');
 $('config').hidden = !!$('chave').value;
 $('btnSalvar').onclick = () => {
   LS.set('bia_chave', $('chave').value.trim());
   LS.set('bia_modelo', $('modelo').value.trim());
   LS.set('bia_rapido', $('rapido').checked ? '1' : '0');
+  LS.set('bia_agenda_url', $('agendaUrl').value.trim());
+  LS.set('bia_agenda_segredo', $('agendaSegredo').value.trim());
   $('config').hidden = true;
   $('msg').focus();
 };
@@ -819,7 +940,12 @@ $('btnModelos').onclick = buscarModelos;
 $('btnConfig').onclick = () => { $('config').hidden = !$('config').hidden; };
 $('btnDebug').onclick = (e) => { document.body.classList.toggle('mostrar-debug'); e.currentTarget.classList.toggle('ativo'); };
 $('btnLimpar').onclick = novaConversa;
-$('btnDevolver').onclick = () => { estado.humano = false; $('banner').classList.remove('on'); sistema(`A ${LOJA.atendente} voltou a responder.`); salvar(); };
+$('btnDevolver').onclick = () => {
+  estado.humano = !estado.humano;
+  sistema(estado.humano ? `Você assumiu a conversa. A ${LOJA.atendente} está pausada.` : `A ${LOJA.atendente} voltou a responder.`);
+  atualizarBanner();
+  salvar();
+};
 $('btnEnviar').onclick = enviar;
 $('msg').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); } });
 $('btnConversas').onclick = () => { $('painelAprendizados').hidden = true; $('painelConversas').hidden = !$('painelConversas').hidden; };
@@ -830,8 +956,6 @@ $('arquivoBackup').onchange = (e) => { if (e.target.files[0]) restaurarBackup(e.
 $('usarNuvem').checked = LS.get('bia_nuvem', '1') === '1';
 $('usarNuvem').onchange = () => { LS.set('bia_nuvem', $('usarNuvem').checked ? '1' : '0'); sincronizar(); };
 document.title = `Teste: ${LOJA.atendente} · ${LOJA.nome}`;
-$('bannerTexto').textContent = `👩‍💼 Conversa transferida para a equipe. A ${LOJA.atendente} parou de responder.`;
-$('btnDevolver').textContent = `Devolver para a ${LOJA.atendente}`;
 $('digitando').textContent = `${LOJA.atendente} está digitando…`;
 $('sigla').textContent = LOJA.sigla || LOJA.nome.slice(0, 2).toUpperCase();
 $('nomeLoja').textContent = `${LOJA.nome} · ${LOJA.atendente}`;

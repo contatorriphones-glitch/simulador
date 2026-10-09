@@ -66,6 +66,9 @@ Arquivo único: abra no navegador, cole a chave do Gemini em ⚙️ e converse c
 - 🧠 **Aprendizados**: regras que a atendente segue em todas as conversas. Uma correção feita no 👎 pode virar regra na hora.
 - ➕ nova conversa · 🔎 mostra as consultas às tabelas · ⚙️ chave, modelo, data/hora simulada, nuvem.
 
+### Google Agenda
+Cada agendamento mostra o botão **➕ Adicionar ao Google Agenda**. Para a Bia criar o evento sozinha, siga `google-agenda/LEIA-ME.md`.
+
 ### Onde fica salvo
 - **No navegador**, sempre.
 - **Na nuvem (Supabase)**, no mesmo projeto do sistema de estoque, depois de criar as tabelas uma única vez: Supabase → SQL Editor → New query → colar `supabase/bia.sql` → Run.

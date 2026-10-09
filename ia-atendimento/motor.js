@@ -30,35 +30,57 @@ export function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja })
   function itensCatalogo(condicao) {
     return condicao === 'seminovo' ? catalogo.seminovos : catalogo.lacrados;
   }
+  const precosDe = (i) => (i.cores ? Object.values(i.cores) : [i.preco]);
+  const modelosDe = (lista) => [...new Set(lista.map((i) => i.modelo))];
 
-  // Lista as opções de um modelo (todas as capacidades/cores), para a IA responder
+  // Lista as opções de um modelo (capacidades, cores e condição), para a IA responder
   // "quanto tá o 17 pro max?" e também corrigir o cliente ("não tem 128GB").
-  function consultarCatalogo({ modelo, gb, cor, condicao = 'lacrado' }) {
+  // Sem condição informada, procura em lacrados E seminovos.
+  function consultarCatalogo({ modelo, gb, cor, condicao }) {
     const nome = normalizarModelo(modelo);
     const g = normalizarGb(gb);
-    const itens = itensCatalogo(condicao).filter((i) => i.modelo === nome);
-    // Modelo sem nenhum preço na tabela: a IA não sabe o valor, chama humano.
-    if (!itens.length) return { encontrado: false, modelo: nome, condicao, acao: 'humano' };
+    const condicoes = condicao ? [condicao] : ['lacrado', 'seminovo'];
+    const itens = condicoes.flatMap((c) => itensCatalogo(c).filter((i) => i.modelo === nome).map((i) => ({ ...i, condicao: c })));
+    if (!itens.length) {
+      // Não vendemos esse modelo (ou não existe): devolve o que temos para a IA oferecer alternativas.
+      return {
+        encontrado: false,
+        modelo: nome,
+        modelos_lacrados: modelosDe(catalogo.lacrados),
+        modelos_seminovos: modelosDe(catalogo.seminovos),
+      };
+    }
     const opcoes = [];
     for (const i of itens) {
       if (g && i.gb !== g) continue;
       if (i.cores) {
         for (const [c, preco] of Object.entries(i.cores)) {
           if (cor && c.toLowerCase() !== String(cor).toLowerCase()) continue;
-          opcoes.push({ modelo: i.modelo, gb: i.gb, cor: c, preco });
+          opcoes.push({ modelo: i.modelo, condicao: i.condicao, gb: i.gb, cor: c, preco });
         }
       } else {
-        opcoes.push({ modelo: i.modelo, gb: i.gb, cor: null, preco: i.preco });
+        opcoes.push({ modelo: i.modelo, condicao: i.condicao, gb: i.gb, cor: null, preco: i.preco });
       }
     }
     return {
       encontrado: opcoes.length > 0,
       modelo: nome,
-      condicao,
       opcoes,
+      condicoes_disponiveis: [...new Set(itens.map((i) => i.condicao))],
       capacidades_disponiveis: [...new Set(itens.map((i) => i.gb))],
       cores_disponiveis: [...new Set(itens.flatMap((i) => (i.cores ? Object.keys(i.cores) : [])))],
-      a_partir_de: Math.min(...itens.flatMap((i) => (i.cores ? Object.values(i.cores) : [i.preco]))),
+      a_partir_de: Math.min(...itens.flatMap(precosDe)),
+    };
+  }
+
+  // Resumo do que a loja vende, para o prompt (a IA nunca erra as linhas disponíveis).
+  function resumoCatalogo() {
+    const lacrados = modelosDe(catalogo.lacrados);
+    return {
+      lacrados,
+      seminovos: modelosDe(catalogo.seminovos),
+      linha_mais_atual: lacrados.filter((m) => m.includes(lacrados.at(-1).match(/iPhone \d+/)[0])),
+      troca_aceita: Object.keys(upgrade.valores),
     };
   }
 
@@ -69,7 +91,15 @@ export function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja })
     const nome = normalizarModelo(modelo);
     const g = normalizarGb(gb);
     const tabela = upgrade.valores[nome];
-    if (!tabela) return { status: 'nao_aceito', modelo: nome, motivo: 'modelo fora da tabela de upgrade', acao: 'humano' };
+    if (!tabela) {
+      // Mais antigo que o primeiro modelo aceito (ex.: XR, XS, 8): recusa sem chamar ninguém.
+      const minimo = Object.keys(upgrade.valores)[0];
+      const numero = (n) => (/XR|XS|SE|^iPhone [1-9]( |$)/.test(n) ? 0 : parseInt(n.replace('iPhone ', ''), 10));
+      if (nome && numero(nome) < numero(minimo)) {
+        return { status: 'nao_aceito', modelo: nome, motivo: `só aceitamos na troca a partir do ${minimo}` };
+      }
+      return { status: 'nao_aceito', modelo: nome, motivo: 'modelo fora da tabela de upgrade', acao: 'humano' };
+    }
     const base = tabela[String(g)];
     if (base == null) {
       return { status: 'nao_aceito', modelo: nome, gb: g, motivo: 'capacidade fora da tabela de upgrade', acao: 'humano' };
@@ -130,26 +160,25 @@ export function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja })
   }
 
   // Monta a proposta completa: produto - avaliação(ões) - entrada = saldo, e parcela o saldo.
+  // Quando o cliente ainda não escolheu cor/GB/condição, devolve a proposta de cada opção
+  // (status 'opcoes'), para a IA já mostrar a diferença de cada cor.
   function montarProposta({ produto, trocas = [], entrada = 0, parcelas }) {
     const consulta = consultarCatalogo(produto);
     if (!consulta.encontrado) return { status: 'produto_nao_encontrado', consulta };
-    if (consulta.opcoes.length > 1) return { status: 'precisa_escolher', consulta };
-    const item = consulta.opcoes[0];
 
     const avaliacoes = trocas.map(avaliarAparelho);
     const pendente = avaliacoes.find((a) => a.status !== 'ok');
-    if (pendente) return { status: 'avaliacao_pendente', item, avaliacoes };
+    if (pendente) return { status: 'avaliacao_pendente', avaliacoes };
 
     const totalTrocas = avaliacoes.reduce((s, a) => s + a.valor, 0);
-    const saldo = Math.max(0, item.preco - totalTrocas - entrada);
-    return {
-      status: 'ok',
-      item,
-      avaliacoes,
-      entrada,
-      saldo,
-      pagamento: saldo > 0 ? simularPagamento(saldo, { parcelas }) : null,
+    const calcular = (item) => {
+      const saldo = Math.max(0, item.preco - totalTrocas - entrada);
+      return { item, saldo, pagamento: saldo > 0 ? simularPagamento(saldo, { parcelas }) : null };
     };
+    if (consulta.opcoes.length > 1) {
+      return { status: 'opcoes', avaliacoes, entrada, propostas: consulta.opcoes.map(calcular) };
+    }
+    return { status: 'ok', avaliacoes, entrada, ...calcular(consulta.opcoes[0]) };
   }
 
   // Modelos que cabem no orçamento (já descontando a avaliação do aparelho, se houver).
@@ -188,6 +217,7 @@ export function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja })
   function negociarDesconto({ produto, trocas = [], entrada = 0, desconto_ja_dado = 0 }) {
     if (!trocas.length) return { status: 'humano', motivo: 'desconto só é negociado pela IA em venda com troca' };
     const p = montarProposta({ produto, trocas, entrada });
+    if (p.status === 'opcoes') return { status: 'precisa_escolher', mensagem: 'confirme cor/GB/condição com o cliente antes de negociar' };
     if (p.status !== 'ok') return { status: p.status, proposta: p };
 
     const { margem_minima, etapas, arredondar_para } = loja.negociacao;
@@ -234,18 +264,24 @@ export function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja })
     const abre = minutos(faixa[0]);
     const ultimo = minutos(faixa[1]) - loja.ultimo_agendamento_min_antes_fechar;
     const pedido = minutos(horario);
+    // Tolerância: o cliente que chega até X minutos depois do último horário ainda é atendido.
+    const tolerancia = loja.tolerancia_atraso_min || 0;
+    const comTolerancia = pedido > ultimo && pedido <= ultimo + tolerancia;
     return {
-      aberto: pedido >= abre && pedido <= ultimo,
+      aberto: pedido >= abre && pedido <= ultimo + tolerancia,
+      ...(comTolerancia && { com_tolerancia: true }),
       dia,
       abre: faixa[0],
       fecha: faixa[1],
       ultimo_agendamento: hhmm(ultimo),
+      tolerancia_min: tolerancia,
     };
   }
 
   return {
     normalizarModelo,
     consultarCatalogo,
+    resumoCatalogo,
     avaliarAparelho,
     simularPagamento,
     montarProposta,

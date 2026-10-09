@@ -80,5 +80,8 @@
   "slug": "rr-prime-cell",
   "sigla": "RR",
   "bairro": "Tatuapé, em São Paulo",
-  "emoji": "💙"
+  "emoji": "💙",
+  "tolerancia_atraso_min": 10,
+  "documento_portaria": "Trazer um documento com foto para o cadastro na recepção do prédio: RG, CNH ou documento digital.",
+  "outros_produtos": "Trabalhamos com toda a linha Apple: iPhone, MacBook, iPad, Apple Watch, AirPods e acessórios."
 }

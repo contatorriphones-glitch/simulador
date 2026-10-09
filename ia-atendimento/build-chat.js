@@ -4,6 +4,7 @@
 //      node build-chat.js kronos-phone -> só uma
 // Rode de novo sempre que mudar algo em dados/, lojas/ ou prompt/.
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import { criarMotor } from './motor.js';
 
 const ler = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const existe = (p) => existsSync(new URL(p, import.meta.url));
@@ -28,7 +29,18 @@ export function horariosTexto(h) {
   return abertos.join('; ') + '.' + (fechados.length ? ` **${fechados.join(' e ').replace(/^./, (c) => c.toUpperCase())}: fechado.**` : '');
 }
 
-function preencher(texto, loja) {
+// Lista do que a loja vende, gerada das tabelas: a IA nunca erra as linhas disponíveis.
+function catalogoTexto(r) {
+  const curto = (l) => l.map((m) => m.replace('iPhone ', '')).join(', ');
+  return [
+    `- **Linha mais atual da Apple:** ${r.linha_mais_atual.join(' e ')}.`,
+    `- **iPhones lacrados:** ${curto(r.lacrados)}.`,
+    `- **iPhones seminovos:** ${curto(r.seminovos)}.`,
+    `- **Aceitos na troca:** do ${r.troca_aceita[0]} ao ${r.troca_aceita.at(-1)} (modelos fora da tabela de troca: ${'`avisar_equipe`'}).`,
+  ].join('\n');
+}
+
+function preencher(texto, loja, resumo) {
   const naoCadastrado = 'ainda não cadastrado. Se o cliente perguntar, diga que vai confirmar e chame `transferir_humano`.';
   return texto
     .replaceAll('{{LOJA}}', loja.nome)
@@ -36,7 +48,11 @@ function preencher(texto, loja) {
     .replaceAll('{{EMOJI}}', loja.emoji || '')
     .replaceAll('{{BAIRRO}}', loja.bairro ? ` no ${loja.bairro}` : '')
     .replaceAll('{{ENDERECO}}', loja.endereco || naoCadastrado)
-    .replaceAll('{{HORARIOS}}', horariosTexto(loja.horarios));
+    .replaceAll('{{HORARIOS}}', horariosTexto(loja.horarios))
+    .replaceAll('{{TOLERANCIA}}', String(loja.tolerancia_atraso_min || 0))
+    .replaceAll('{{DOCUMENTO}}', loja.documento_portaria || '')
+    .replaceAll('{{OUTROS_PRODUTOS}}', loja.outros_produtos || '')
+    .replaceAll('{{CATALOGO}}', resumo ? catalogoTexto(resumo) : '');
 }
 
 function gerar(slug) {
@@ -45,12 +61,13 @@ function gerar(slug) {
   // Cada loja pode ter as próprias tabelas em lojas/<loja>/; sem elas, usa as de dados/.
   const tabela = (n) => JSON.parse(ler(existe(`${pasta}/${n}.json`) ? `${pasta}/${n}.json` : `./dados/${n}.json`));
   const dados = { ...Object.fromEntries(['catalogo', 'upgrade', 'assistencia', 'maquininha'].map((n) => [n, tabela(n)])), loja };
+  const resumo = criarMotor(dados).resumoCatalogo();
   const motor = ler('./motor.js').replace('export function criarMotor', 'function criarMotor');
   const garantia = preencher(ler(`${pasta}/garantia.md`).replace(/^<!--[\s\S]*?-->\n/, ''), loja);
 
   const html = ler('./teste/chat.template.html')
     .replace('/*__DADOS__*/', () => json(dados))
-    .replace('/*__PROMPT__*/', () => json(preencher(ler('./prompt/bia.md'), loja)))
+    .replace('/*__PROMPT__*/', () => json(preencher(ler('./prompt/bia.md'), loja, resumo)))
     .replace('/*__GARANTIA__*/', () => json(garantia))
     .replace('/*__NUVEM__*/', () => json(JSON.parse(ler('./dados/nuvem.json'))))
     .replace('/*__MOTOR__*/', () => motor);
