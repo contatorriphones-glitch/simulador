@@ -5,7 +5,7 @@ Há dois jeitos. O primeiro já funciona sem configurar nada; o segundo é autom
 O título do evento segue o modelo das vendedoras:
 
 ```
-Robert - iPhone 17 Pro Max Lacrado Azul 💙 - @robert.robert - 11 98765-4321 - (Upgrade iPhone 15 Pro Max 256GB Titânio Natural 🩶, avaliado em 3.100,00)
+ROBERT - IPHONE 17 PRO MAX 256GB LACRADO AZUL 💙 - @ROBERT.ROBERT - 11 98765-4321 - (UPGRADE IPHONE 15 PRO MAX 256GB TITÂNIO NATURAL 🩶, AVALIADO EM 3.100,00)
 ```
 
 - O coração tem a cor que o cliente escolheu; sem cor escolhida, fica só o modelo.

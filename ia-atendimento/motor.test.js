@@ -217,15 +217,16 @@ test('sem valor na tabela: ferramentas sinalizam humano', () => {
 
 test('título do Google Agenda no modelo das vendedoras', () => {
   assert.equal(
-    m.tituloAgendamento({ nome: 'robert silva', modelo: '17 pro max', condicao: 'lacrado', cor: 'azul', instagram: 'robert.robert', whatsapp: '11 98765-4321',
+    m.tituloAgendamento({ nome: 'robert silva', modelo: '17 pro max', gb: '256', condicao: 'lacrado', cor: 'azul', instagram: 'robert.robert', whatsapp: '11 98765-4321',
       trocas: [{ modelo: '15 pro max', gb: '256', cor: 'titânio natural', valor: 1799 }] }),
-    'Robert Silva - iPhone 17 Pro Max Lacrado Azul 💙 - @robert.robert - 11 98765-4321 - (Upgrade iPhone 15 Pro Max 256GB Titânio Natural 🩶, avaliado em 1.799,00)',
+    'ROBERT SILVA - IPHONE 17 PRO MAX 256GB LACRADO AZUL 💙 - @ROBERT.ROBERT - 11 98765-4321 - (UPGRADE IPHONE 15 PRO MAX 256GB TITÂNIO NATURAL 🩶, AVALIADO EM 1.799,00)',
   );
   // sem cor escolhida e sem troca: só o modelo
   assert.equal(
-    m.tituloAgendamento({ nome: 'Ana', modelo: 'iPhone 16 Pro', condicao: 'seminovo', instagram: '@ana', whatsapp: '11999990000' }),
-    'Ana - iPhone 16 Pro Seminovo - @ana - 11999990000',
+    m.tituloAgendamento({ nome: 'Ana', modelo: 'iPhone 16 Pro', gb: 128, condicao: 'seminovo', instagram: '@ana', whatsapp: '11999990000' }),
+    'ANA - IPHONE 16 PRO 128GB SEMINOVO - @ANA - 11999990000',
   );
+  assert.equal(m.tituloAgendamento({ nome: 'Bia', modelo: '17 pro max', gb: '1tb' }), 'BIA - IPHONE 17 PRO MAX 1TB');
   assert.equal(m.coracao('Laranja Cósmico'), '🧡');
   assert.equal(m.coracao('Bordô'), '❤️');
   assert.equal(m.coracao('Titânio Branco'), '🤍');

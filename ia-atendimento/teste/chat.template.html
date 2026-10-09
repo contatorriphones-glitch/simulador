@@ -772,7 +772,7 @@ function eventoAgenda(a) {
   const inicio = new Date(y, m - 1, d, h, min || 0);
   const fim = new Date(inicio.getTime() + 30 * 60000);
   const titulo = motor.tituloAgendamento({
-    nome: a.nome, modelo: a.modelo_aparelho, condicao: a.condicao, cor: a.cor,
+    nome: a.nome, modelo: a.modelo_aparelho, gb: a.gb, condicao: a.condicao, cor: a.cor,
     instagram: a.instagram, whatsapp: a.whatsapp, trocas: a.trocas || [],
   });
   return {

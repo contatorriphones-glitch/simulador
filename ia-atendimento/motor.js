@@ -264,18 +264,19 @@ export function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja })
   const capitalizar = (t) => String(t).trim().replace(/\s+/g, ' ').replace(/(^|\s)(\S)/g, (_, e, c) => e + c.toUpperCase());
   const moeda = (v) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // Ex.: "Robert - iPhone 17 Pro Max Lacrado Azul 💙 - @robert - 11999990000 - (Upgrade iPhone 15 Pro Max 256GB Natural 🩶, avaliado em 3.100,00)"
-  function tituloAgendamento({ nome, modelo, condicao, cor, instagram, whatsapp, trocas = [] }) {
+  // Tudo em maiúsculas, como as vendedoras usam. Ex.:
+  // "ROBERT - IPHONE 17 PRO MAX 256GB LACRADO AZUL 💙 - @ROBERT - 11999990000 - (UPGRADE IPHONE 15 PRO MAX 256GB NATURAL 🩶, AVALIADO EM 3.100,00)"
+  const capacidade = (gb) => (gb ? ` ${gb >= 1024 ? gb / 1024 + 'TB' : gb + 'GB'}` : '');
+  function tituloAgendamento({ nome, modelo, gb, condicao, cor, instagram, whatsapp, trocas = [] }) {
     const comCor = (c) => (c ? ` ${capitalizar(c)}${coracao(c) ? ' ' + coracao(c) : ''}` : '');
-    const aparelho = `${normalizarModelo(modelo) || capitalizar(modelo || 'iPhone')}${condicao ? ' ' + capitalizar(condicao) : ''}${comCor(cor)}`;
+    const aparelho = `${normalizarModelo(modelo) || capitalizar(modelo || 'iPhone')}${capacidade(normalizarGb(gb))}${condicao ? ' ' + capitalizar(condicao) : ''}${comCor(cor)}`;
     const insta = instagram ? '@' + String(instagram).trim().replace(/^@+/, '') : null;
     const partes = [capitalizar(nome || 'Cliente'), aparelho, insta, whatsapp ? String(whatsapp).trim() : null];
     for (const t of trocas) {
-      const gb = normalizarGb(t.gb);
-      const desc = `${normalizarModelo(t.modelo) || t.modelo}${gb ? ` ${gb >= 1024 ? gb / 1024 + 'TB' : gb + 'GB'}` : ''}${comCor(t.cor)}`;
+      const desc = `${normalizarModelo(t.modelo) || t.modelo}${capacidade(normalizarGb(t.gb))}${comCor(t.cor)}`;
       partes.push(`(Upgrade ${desc}${t.valor != null ? `, avaliado em ${moeda(t.valor)}` : ''})`);
     }
-    return partes.filter(Boolean).join(' - ');
+    return partes.filter(Boolean).join(' - ').toLocaleUpperCase('pt-BR');
   }
 
   // ---------------------------------------------------------------- horários
