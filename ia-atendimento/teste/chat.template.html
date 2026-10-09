@@ -73,7 +73,7 @@
   </label>
   <div class="linha">
     <label>Modelo
-      <input id="modelo" type="text" list="listaModelos" placeholder="gemini-2.5-flash">
+      <input id="modelo" type="text" list="listaModelos" placeholder="gemini-3.8-flash">
       <datalist id="listaModelos"></datalist>
     </label>
     <button class="sec" id="btnModelos" type="button">Buscar modelos disponíveis</button>
@@ -232,9 +232,12 @@ ${GARANTIA}`;
 
 // ------------------------------------------------------------------ Gemini
 const API = 'https://generativelanguage.googleapis.com/v1beta';
-function nomeModelo() { return ($('modelo').value.trim() || 'gemini-2.5-flash').replace(/^models\//, ''); }
+const MODELO_PADRAO = 'gemini-3.8-flash';
+// Modelos que o Google já desativou para contas novas: trocamos pelo padrão automaticamente.
+const MODELOS_DESATIVADOS = ['gemini-2.5-flash'];
+function nomeModelo() { return ($('modelo').value.trim() || MODELO_PADRAO).replace(/^models\//, ''); }
 
-async function chamarGemini() {
+async function chamarGemini(tentouTrocar = false) {
   const r = await fetch(`${API}/models/${encodeURIComponent(nomeModelo())}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': $('chave').value.trim() },
@@ -242,11 +245,21 @@ async function chamarGemini() {
       systemInstruction: { parts: [{ text: instrucoesSistema() }] },
       contents: estado.historico,
       tools: [{ functionDeclarations: FERRAMENTAS.map(({ run, ...f }) => f) }],
-      generationConfig: { temperature: 0.7 },
     }),
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error?.message || `HTTP ${r.status}`);
+  if (!r.ok) {
+    const msg = j.error?.message || `HTTP ${r.status}`;
+    // Quando o Google aposenta um modelo, a mensagem de erro indica o substituto: trocamos e tentamos de novo.
+    const sugerido = msg.match(/use (?:models\/)?(gemini-[\w.-]+)/i)?.[1]?.replace(/[.]$/, '');
+    if (!tentouTrocar && sugerido && sugerido !== nomeModelo()) {
+      sistema(`O modelo ${nomeModelo()} foi desativado pelo Google. Trocando para ${sugerido}.`);
+      $('modelo').value = sugerido;
+      LS.set('bia_modelo', sugerido);
+      return chamarGemini(true);
+    }
+    throw new Error(msg);
+  }
   const c = j.candidates?.[0]?.content;
   if (!c?.parts) throw new Error('Resposta vazia (' + (j.candidates?.[0]?.finishReason || j.promptFeedback?.blockReason || 'sem motivo') + ')');
   return { role: 'model', parts: c.parts };
@@ -410,7 +423,8 @@ function novaConversa() {
 
 // ------------------------------------------------------------------ início
 $('chave').value = LS.get('bia_chave');
-$('modelo').value = LS.get('bia_modelo', 'gemini-2.5-flash');
+const salvo = LS.get('bia_modelo', MODELO_PADRAO);
+$('modelo').value = MODELOS_DESATIVADOS.includes(salvo) ? MODELO_PADRAO : salvo;
 $('rapido').checked = LS.get('bia_rapido') === '1';
 $('config').hidden = !!$('chave').value;
 $('btnSalvar').onclick = () => {
