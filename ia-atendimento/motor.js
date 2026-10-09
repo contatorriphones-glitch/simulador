@@ -248,6 +248,36 @@ export function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja })
     };
   }
 
+  // ---------------------------------------------------------------- agenda
+  // Coração na cor do aparelho, como as vendedoras usam no título do Google Agenda.
+  const CORACOES = [
+    [/bord[oô]|vermelh|red/i, '❤️'], [/laranja|orange/i, '🧡'], [/amarel|dourad|gold/i, '💛'],
+    [/verde|green/i, '💚'], [/azul|blue/i, '💙'], [/roxo|lil[aá]s|purple/i, '💜'], [/rosa|pink/i, '🩷'],
+    [/pret|black|grafite|meia-noite|midnight/i, '🖤'], [/branc|white|estelar|starlight/i, '🤍'],
+    [/natural|cinza|prata|silver|gray|grey/i, '🩶'], [/desert|deserto|marrom|bronze/i, '🤎'],
+  ];
+  function coracao(cor) {
+    if (!cor) return '';
+    return CORACOES.find(([re]) => re.test(cor))?.[1] || '';
+  }
+
+  const capitalizar = (t) => String(t).trim().replace(/\s+/g, ' ').replace(/(^|\s)(\S)/g, (_, e, c) => e + c.toUpperCase());
+  const moeda = (v) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Ex.: "Robert - iPhone 17 Pro Max Lacrado Azul 💙 - @robert - 11999990000 - (Upgrade iPhone 15 Pro Max 256GB Natural 🩶, avaliado em 3.100,00)"
+  function tituloAgendamento({ nome, modelo, condicao, cor, instagram, whatsapp, trocas = [] }) {
+    const comCor = (c) => (c ? ` ${capitalizar(c)}${coracao(c) ? ' ' + coracao(c) : ''}` : '');
+    const aparelho = `${normalizarModelo(modelo) || capitalizar(modelo || 'iPhone')}${condicao ? ' ' + capitalizar(condicao) : ''}${comCor(cor)}`;
+    const insta = instagram ? '@' + String(instagram).trim().replace(/^@+/, '') : null;
+    const partes = [capitalizar(nome || 'Cliente'), aparelho, insta, whatsapp ? String(whatsapp).trim() : null];
+    for (const t of trocas) {
+      const gb = normalizarGb(t.gb);
+      const desc = `${normalizarModelo(t.modelo) || t.modelo}${gb ? ` ${gb >= 1024 ? gb / 1024 + 'TB' : gb + 'GB'}` : ''}${comCor(t.cor)}`;
+      partes.push(`(Upgrade ${desc}${t.valor != null ? `, avaliado em ${moeda(t.valor)}` : ''})`);
+    }
+    return partes.filter(Boolean).join(' - ');
+  }
+
   // ---------------------------------------------------------------- horários
   const DIAS = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
   const minutos = (hhmm) => {
@@ -282,6 +312,8 @@ export function criarMotor({ catalogo, upgrade, assistencia, maquininha, loja })
     normalizarModelo,
     consultarCatalogo,
     resumoCatalogo,
+    tituloAgendamento,
+    coracao,
     avaliarAparelho,
     simularPagamento,
     montarProposta,

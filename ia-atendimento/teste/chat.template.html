@@ -493,13 +493,25 @@ const FERRAMENTAS = [
     name: 'registrar_agendamento',
     description: 'Registra o agendamento depois que o cliente preencheu o questionário (e envia para o Google Agenda, se configurado).',
     parameters: { type: 'object', properties: {
-      nome: { type: 'string' }, modelo_aparelho: { type: 'string' }, gb: { type: 'string' }, forma_pagamento: { type: 'string' },
+      nome: { type: 'string' },
+      modelo_aparelho: { type: 'string', description: 'iPhone que o cliente vai adquirir, ex.: "17 Pro Max"' },
+      gb: { type: 'string' },
+      condicao: { type: 'string', enum: ['lacrado', 'seminovo'] },
+      cor: { type: 'string', description: 'Cor que o cliente escolheu. Deixe vazio se ele não falou a cor.' },
+      forma_pagamento: { type: 'string' },
       data: { type: 'string', description: 'AAAA-MM-DD' }, horario: { type: 'string', description: 'HH:MM' },
       instagram: { type: 'string' }, whatsapp: { type: 'string' },
-      resumo: { type: 'string', description: 'Resumo da proposta combinada (modelo, cor, valores, troca, desconto, brindes)' },
-    }, required: ['nome', 'data', 'horario', 'whatsapp'] },
+      trocas: {
+        type: 'array', description: 'Aparelhos que o cliente vai dar como parte do pagamento (vazio se não tiver troca).',
+        items: { type: 'object', properties: { modelo: { type: 'string' }, gb: { type: 'integer' }, cor: { type: 'string' } }, required: ['modelo'] },
+      },
+      resumo: { type: 'string', description: 'Resumo da proposta combinada (valores, desconto, brindes)' },
+    }, required: ['nome', 'modelo_aparelho', 'data', 'horario', 'whatsapp'] },
     run: (a) => {
-      const ag = { ...a, registrado_em: new Date().toISOString(), link_agenda: linkGoogleAgenda(a) };
+      const trocas = (a.trocas || []).map((t) => ({ ...t, valor: avaliacaoFeita(t) }));
+      const ag = { ...a, trocas, registrado_em: new Date().toISOString() };
+      ag.titulo_agenda = eventoAgenda(ag)?.titulo || null;
+      ag.link_agenda = linkGoogleAgenda(ag);
       estado.agendamentos.push(ag);
       mostrarAgendamento(ag);
       enviarParaGoogleAgenda(ag);
@@ -738,18 +750,38 @@ function semTotais(v) {
 }
 
 // ------------------------------------------------------------------ Google Agenda
+// Valor da pré-avaliação já calculado nesta conversa (pelas ferramentas, nunca pela IA).
+function avaliacaoFeita(t) {
+  const modelo = motor.normalizarModelo(t.modelo);
+  let achado = null;
+  for (const h of estado.historico) {
+    for (const p of h.parts || []) {
+      const r = p.functionResponse?.response?.resultado;
+      for (const av of [r, ...(r?.avaliacoes || [])]) {
+        if (av?.status === 'ok' && av.modelo === modelo && (!t.gb || av.gb === Number(t.gb)) && av.valor != null) achado = av.valor;
+      }
+    }
+  }
+  return achado;
+}
+
 function eventoAgenda(a) {
   const [y, m, d] = String(a.data || '').split('-').map(Number);
   const [h, min] = String(a.horario || '').split(':').map(Number);
   if (!y || Number.isNaN(h)) return null;
   const inicio = new Date(y, m - 1, d, h, min || 0);
   const fim = new Date(inicio.getTime() + 30 * 60000);
+  const titulo = motor.tituloAgendamento({
+    nome: a.nome, modelo: a.modelo_aparelho, condicao: a.condicao, cor: a.cor,
+    instagram: a.instagram, whatsapp: a.whatsapp, trocas: a.trocas || [],
+  });
   return {
-    titulo: `Visita: ${a.nome} (${a.modelo_aparelho || 'iPhone'}${a.gb ? ' ' + a.gb + 'GB' : ''})`,
+    titulo,
     inicio, fim,
     descricao: [
       `Cliente: ${a.nome}`, `WhatsApp: ${a.whatsapp || '-'}`, `Instagram: ${a.instagram || '-'}`,
-      `Aparelho: ${a.modelo_aparelho || '-'} ${a.gb || ''}`, `Pagamento: ${a.forma_pagamento || '-'}`,
+      `Aparelho: ${a.modelo_aparelho || '-'} ${a.gb ? a.gb + 'GB' : ''} ${a.condicao || ''} ${a.cor || ''}`.trim(),
+      `Pagamento: ${a.forma_pagamento || '-'}`,
       a.resumo ? `Proposta: ${a.resumo}` : '', `Agendado pela ${LOJA.atendente} (${LOJA.nome})`,
     ].filter(Boolean).join('\n'),
     local: LOJA.endereco || LOJA.nome,
@@ -761,8 +793,8 @@ function linkGoogleAgenda(a) {
   if (!ev) return null;
   const p = (n) => String(n).padStart(2, '0');
   const f = (d) => `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
-  const q = new URLSearchParams({ action: 'TEMPLATE', text: ev.titulo, dates: `${f(ev.inicio)}/${f(ev.fim)}`, details: ev.descricao, location: ev.local, ctz: 'America/Sao_Paulo' });
-  return `https://calendar.google.com/calendar/render?${q}`;
+  const q = { action: 'TEMPLATE', text: ev.titulo, dates: `${f(ev.inicio)}/${f(ev.fim)}`, details: ev.descricao, location: ev.local, ctz: 'America/Sao_Paulo' };
+  return 'https://calendar.google.com/calendar/render?' + Object.entries(q).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
 }
 
 // Envio automático: um Apps Script na conta Google da loja cria o evento (veja google-agenda/LEIA-ME.md).
@@ -775,7 +807,7 @@ async function enviarParaGoogleAgenda(a) {
   const corpo = JSON.stringify({
     segredo: LS.get('bia_agenda_segredo'), titulo: ev.titulo, descricao: ev.descricao, local: ev.local,
     data: `${ev.inicio.getFullYear()}-${p(ev.inicio.getMonth() + 1)}-${p(ev.inicio.getDate())}`,
-    horario: `${p(ev.inicio.getHours())}:${p(ev.inicio.getMinutes())}`, duracao_min: 30,
+    horario: `${p(ev.inicio.getHours())}:${p(ev.inicio.getMinutes())}`, duracao_min: 30, lembrete_min: 30,
   });
   try {
     const r = await fetch(url, { method: 'POST', body: corpo });
@@ -789,10 +821,11 @@ async function enviarParaGoogleAgenda(a) {
 }
 
 function mostrarAgendamento(a) {
-  const campos = ['nome', 'modelo_aparelho', 'gb', 'forma_pagamento', 'data', 'horario', 'dia_horario', 'instagram', 'whatsapp', 'resumo'];
   const el = document.createElement('div');
   el.className = 'sistema agenda';
-  el.textContent = '📅 Agendamento registrado\n' + campos.filter((k) => a[k]).map((k) => `${k}: ${a[k]}`).join('\n');
+  const titulo = a.titulo_agenda || eventoAgenda(a)?.titulo || a.nome;
+  const quando = a.data ? `${a.data.split('-').reverse().join('/')} às ${a.horario}` : a.dia_horario || '';
+  el.textContent = `📅 Agendamento registrado: ${quando}\n${titulo}${a.resumo ? '\n' + a.resumo : ''}`;
   const link = a.link_agenda || linkGoogleAgenda(a);
   if (link) {
     const b = document.createElement('a');
@@ -893,7 +926,11 @@ function botoesAvaliacao(indice) {
     obs: () => {
       const f = registro();
       const o = prompt('Observação sobre esta resposta:', f.obs || '');
-      if (o !== null) f.obs = o.trim();
+      if (o === null) return;
+      f.obs = o.trim();
+      if (f.obs && confirm('Transformar essa observação em regra para a atendente seguir a partir de agora? (fica em 🧠 Aprendizados)')) {
+        novoAprendizado(f.obs, 'observação de resposta');
+      }
     },
   };
   for (const [nota, rotulo] of [['boa', '👍'], ['ruim', '👎'], ['obs', '📝']]) {

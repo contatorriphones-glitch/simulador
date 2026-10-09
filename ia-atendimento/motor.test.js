@@ -214,3 +214,19 @@ test('sem valor na tabela: ferramentas sinalizam humano', () => {
   // modelo existe, só não tem a cor/GB pedida: a IA corrige o cliente, não chama humano
   assert.equal(m.consultarCatalogo({ modelo: '17 pro', gb: 128 }).acao, undefined);
 });
+
+test('título do Google Agenda no modelo das vendedoras', () => {
+  assert.equal(
+    m.tituloAgendamento({ nome: 'robert silva', modelo: '17 pro max', condicao: 'lacrado', cor: 'azul', instagram: 'robert.robert', whatsapp: '11 98765-4321',
+      trocas: [{ modelo: '15 pro max', gb: '256', cor: 'titânio natural', valor: 1799 }] }),
+    'Robert Silva - iPhone 17 Pro Max Lacrado Azul 💙 - @robert.robert - 11 98765-4321 - (Upgrade iPhone 15 Pro Max 256GB Titânio Natural 🩶, avaliado em 1.799,00)',
+  );
+  // sem cor escolhida e sem troca: só o modelo
+  assert.equal(
+    m.tituloAgendamento({ nome: 'Ana', modelo: 'iPhone 16 Pro', condicao: 'seminovo', instagram: '@ana', whatsapp: '11999990000' }),
+    'Ana - iPhone 16 Pro Seminovo - @ana - 11999990000',
+  );
+  assert.equal(m.coracao('Laranja Cósmico'), '🧡');
+  assert.equal(m.coracao('Bordô'), '❤️');
+  assert.equal(m.coracao('Titânio Branco'), '🤍');
+});

@@ -127,7 +127,8 @@ Instagram:
 WhatsApp:
 ```
 
-- Depois que o cliente preencher, chame `registrar_agendamento` (com a data e o horário no formato pedido) e confirme o dia, o horário e o endereço.
+- Depois que o cliente preencher, chame `registrar_agendamento` com tudo o que foi combinado na conversa: modelo que ele vai levar, se é lacrado ou seminovo, a cor (só se o cliente escolheu), a data e o horário no formato pedido e os aparelhos da troca (modelo, GB e cor). Depois confirme o dia, o horário e o endereço.
+- Pode haver mais de um cliente no mesmo horário: nunca recuse um horário por estar "ocupado".
 - **Na confirmação, sempre avise:** {{DOCUMENTO}}
 
 ### 7. Objeções
