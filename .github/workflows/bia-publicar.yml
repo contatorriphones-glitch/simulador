@@ -1,6 +1,6 @@
-# Testa e publica a Bia no Supabase (servidor do Instagram) a cada mudança em ia-atendimento/.
-# As chaves ficam em Settings > Secrets and variables > Actions (nunca no código).
-name: Publicar a Bia
+# Testa a página de teste e o núcleo da Bia a cada mudança em ia-atendimento/.
+# A Bia de produção (Instagram da Kronos) é publicada pelo repositório Kronos-Phone, no Supabase da Kronos.
+name: Testar a Bia
 
 on:
   workflow_dispatch:
@@ -9,14 +9,11 @@ on:
     paths: ['ia-atendimento/**', '.github/workflows/bia-publicar.yml']
 
 jobs:
-  testar-e-publicar:
+  testar:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ia-atendimento
-    env:
-      PROJETO: gcawgwnthuqijgamkvhv
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,37 +27,3 @@ jobs:
         run: npm test
       - name: Testar o servidor do Instagram
         run: npm run test:servidor
-
-      - uses: supabase/setup-cli@v1
-        if: env.SUPABASE_ACCESS_TOKEN != ''
-        with:
-          version: latest
-
-      - name: Atualizar as chaves no Supabase
-        if: env.SUPABASE_ACCESS_TOKEN != ''
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          IG_APP_SECRET: ${{ secrets.IG_APP_SECRET }}
-          IG_VERIFY_TOKEN: ${{ secrets.IG_VERIFY_TOKEN }}
-          IG_TOKEN: ${{ secrets.IG_TOKEN }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          AGENDA_URL: ${{ secrets.AGENDA_URL }}
-          AGENDA_SEGREDO: ${{ secrets.AGENDA_SEGREDO }}
-        run: |
-          : > ../.chaves.env
-          for nome in GEMINI_API_KEY IG_APP_SECRET IG_VERIFY_TOKEN IG_TOKEN TELEGRAM_BOT_TOKEN AGENDA_URL AGENDA_SEGREDO; do
-            valor="${!nome}"
-            if [ -n "$valor" ]; then echo "$nome=$valor" >> ../.chaves.env; fi
-          done
-          if [ -s ../.chaves.env ]; then supabase secrets set --project-ref "$PROJETO" --env-file ../.chaves.env; fi
-          rm -f ../.chaves.env
-
-      - name: Publicar as funções
-        if: env.SUPABASE_ACCESS_TOKEN != ''
-        run: |
-          supabase functions deploy instagram --project-ref "$PROJETO" --no-verify-jwt
-          supabase functions deploy rotinas --project-ref "$PROJETO" --no-verify-jwt
-
-      - name: Aviso
-        if: env.SUPABASE_ACCESS_TOKEN == ''
-        run: echo "::notice::Testes ok. Para publicar, cadastre o secret SUPABASE_ACCESS_TOKEN (veja docs/ia-atendimento/04-ligar-no-instagram.md)."
