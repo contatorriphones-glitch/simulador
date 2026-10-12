@@ -1,0 +1,10 @@
+# Projeto Supabase da loja (o mesmo do sistema de estoque).
+project_id = "gcawgwnthuqijgamkvhv"
+
+# O Instagram e o agendador chamam estas funções sem login do Supabase:
+# a segurança é feita dentro delas (assinatura da Meta e login do painel).
+[functions.instagram]
+verify_jwt = false
+
+[functions.rotinas]
+verify_jwt = false

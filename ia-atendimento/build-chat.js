@@ -10,6 +10,12 @@ const ler = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const existe = (p) => existsSync(new URL(p, import.meta.url));
 const json = (v) => JSON.stringify(v).replace(/<\/script/gi, '<\\/script');
 
+// Embute um módulo ES num <script> comum, como objeto (ex.: NUCLEO.relogio), sem conflito de nomes.
+function comoObjeto(nome, codigo) {
+  const exportados = [...codigo.matchAll(/^export (?:async )?function (\w+)/gm)].map((m) => m[1]);
+  return `const ${nome} = (() => {\n${codigo.replace(/^export /gm, '')}\nreturn { ${exportados.join(', ')} };\n})();`;
+}
+
 const DIAS = [['segunda', 'segunda'], ['terca', 'terça'], ['quarta', 'quarta'], ['quinta', 'quinta'], ['sexta', 'sexta'], ['sabado', 'sábado'], ['domingo', 'domingo']];
 const hora = (h) => h.replace(/^0/, '').replace(':00', 'h').replace(':', 'h');
 
@@ -40,7 +46,7 @@ function catalogoTexto(r) {
   ].join('\n');
 }
 
-function preencher(texto, loja, resumo) {
+export function preencher(texto, loja, resumo) {
   const naoCadastrado = 'ainda não cadastrado. Se o cliente perguntar, diga que vai confirmar e chame `transferir_humano`.';
   return texto
     .replaceAll('{{LOJA}}', loja.nome)
@@ -55,30 +61,40 @@ function preencher(texto, loja, resumo) {
     .replaceAll('{{CATALOGO}}', resumo ? catalogoTexto(resumo) : '');
 }
 
-function gerar(slug) {
+// Dados, prompt e garantia de uma loja, prontos para usar (página de teste e servidor).
+export function dadosDaLoja(slug) {
   const pasta = `./lojas/${slug}`;
   const loja = JSON.parse(ler(`${pasta}/loja.json`));
-  // Cada loja pode ter as próprias tabelas em lojas/<loja>/; sem elas, usa as de dados/.
   const tabela = (n) => JSON.parse(ler(existe(`${pasta}/${n}.json`) ? `${pasta}/${n}.json` : `./dados/${n}.json`));
   const dados = { ...Object.fromEntries(['catalogo', 'upgrade', 'assistencia', 'maquininha'].map((n) => [n, tabela(n)])), loja };
   const resumo = criarMotor(dados).resumoCatalogo();
+  return {
+    dados,
+    prompt: preencher(ler('./prompt/bia.md'), loja, resumo),
+    garantia: preencher(ler(`${pasta}/garantia.md`).replace(/^<!--[\s\S]*?-->\n/, ''), loja),
+  };
+}
+
+export const lojasDisponiveis = () => readdirSync(new URL('./lojas', import.meta.url));
+
+function gerar(slug) {
+  const { dados, prompt, garantia } = dadosDaLoja(slug);
   const motor = ler('./motor.js').replace('export function criarMotor', 'function criarMotor');
-  const garantia = preencher(ler(`${pasta}/garantia.md`).replace(/^<!--[\s\S]*?-->\n/, ''), loja);
 
   const html = ler('./teste/chat.template.html')
     .replace('/*__DADOS__*/', () => json(dados))
-    .replace('/*__PROMPT__*/', () => json(preencher(ler('./prompt/bia.md'), loja, resumo)))
+    .replace('/*__PROMPT__*/', () => json(prompt))
     .replace('/*__GARANTIA__*/', () => json(garantia))
     .replace('/*__NUVEM__*/', () => json(JSON.parse(ler('./dados/nuvem.json'))))
-    .replace('/*__MOTOR__*/', () => motor);
+    .replace('/*__MOTOR__*/', () => motor)
+    .replace('/*__NUCLEO__*/', () => comoObjeto('NUCLEO', ler('./nucleo.js')));
 
   const saida = `chat-teste-${slug}.html`;
   writeFileSync(new URL(`./${saida}`, import.meta.url), html);
-  console.log(`${saida} gerado${loja._pendente ? `  (pendente: ${loja._pendente})` : ''}`);
+  console.log(`${saida} gerado${dados.loja._pendente ? `  (pendente: ${dados.loja._pendente})` : ''}`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const pedidas = process.argv.slice(2);
-  const todas = readdirSync(new URL('./lojas', import.meta.url));
-  for (const slug of pedidas.length ? pedidas : todas) gerar(slug);
+  for (const slug of pedidas.length ? pedidas : lojasDisponiveis()) gerar(slug);
 }

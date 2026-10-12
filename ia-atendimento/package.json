@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "build": "node build-chat.js"
+    "build": "node build-chat.js",
+    "servidor": "node preparar-servidor.js"
   }
 }
