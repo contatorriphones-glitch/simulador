@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test",
+    "test": "node --test motor.test.js",
     "build": "node build-chat.js",
-    "servidor": "node preparar-servidor.js"
+    "servidor": "node preparar-servidor.js",
+    "test:servidor": "node preparar-servidor.js && deno test --allow-env --allow-net=jsr.io supabase/functions/_shared/"
   }
 }
