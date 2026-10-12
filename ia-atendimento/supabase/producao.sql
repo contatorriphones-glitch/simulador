@@ -125,7 +125,7 @@ end $$;
 -- ---------------------------------------------------------------- rotinas automáticas
 -- A cada hora: retomada de clientes que sumiram, análise diária (uma vez por dia) e renovação do token.
 create extension if not exists pg_cron;
-create extension if not exists pg_net;
+create extension if not exists pg_net with schema extensions;
 select cron.unschedule('bia-rotinas') where exists (select 1 from cron.job where jobname = 'bia-rotinas');
 select cron.schedule('bia-rotinas', '7 * * * *', $$
   select net.http_post(

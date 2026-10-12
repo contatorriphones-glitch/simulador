@@ -94,7 +94,15 @@ function gerar(slug) {
   console.log(`${saida} gerado${dados.loja._pendente ? `  (pendente: ${dados.loja._pendente})` : ''}`);
 }
 
+// Painel da equipe (um só arquivo, abre no navegador).
+function gerarPainel() {
+  const html = ler('./painel/painel.template.html').replace('/*__NUVEM__*/', () => json(JSON.parse(ler('./dados/nuvem.json'))));
+  writeFileSync(new URL('./painel.html', import.meta.url), html);
+  console.log('painel.html gerado');
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const pedidas = process.argv.slice(2);
   for (const slug of pedidas.length ? pedidas : lojasDisponiveis()) gerar(slug);
+  gerarPainel();
 }

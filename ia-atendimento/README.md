@@ -78,3 +78,20 @@ Mudou alguma tabela, o prompt ou uma loja? Gere as páginas de novo:
 ```
 cd ia-atendimento && npm run build
 ```
+
+## Instagram (produção)
+
+| Peça | Onde |
+|---|---|
+| Servidor (webhook, respostas, retomadas, análise diária) | `supabase/functions/` |
+| Núcleo compartilhado com a página de teste | `nucleo.js` + `motor.js` |
+| Banco de produção | `supabase/producao.sql` |
+| Painel da equipe | `painel.html` (gerado de `painel/painel.template.html`) |
+| Publicação automática | `.github/workflows/bia-publicar.yml` |
+| Passo a passo para ligar | `docs/ia-atendimento/04-ligar-no-instagram.md` |
+
+```
+npm test               # motor de cálculo
+npm run test:servidor  # servidor do Instagram (precisa do Deno)
+npm run build          # páginas de teste + painel
+```
