@@ -437,6 +437,7 @@
     <div class="tab-pane" id="tab-aparelhos">
       <main class="grid" style="margin-top:20px">
         <section class="card">
+          <div class="equipe-chip-slot"></div>
           <h2 class="title">Cadastrar / Editar Aparelho</h2>
           <p class="section-copy">Registre a entrada de um aparelho. Se o IMEI já existir, você pode ver o histórico ou registrar uma nova passagem.</p>
 
@@ -503,8 +504,8 @@
                 <input id="ap-data-entrada" type="date">
               </div>
             </div>
-            <label for="ap-cadastrador">Colaboradora responsável por esta movimentação <span style="color:var(--danger)">*</span></label>
-            <select id="ap-cadastrador" required>
+            <label for="ap-cadastrador" style="display:none">Colaboradora</label>
+            <select id="ap-cadastrador" style="display:none">
               <option value="">Selecione quem está fazendo esta ação...</option>
               <option value="Joana">Joana</option>
               <option value="Gaby">Gaby</option>
@@ -576,8 +577,9 @@
         <section class="card">
           <h2 class="title">📅 Fechamento do Dia</h2>
           <p class="section-copy">Movimentações de hoje e o estoque disponível na loja, prontos para colar no WhatsApp.</p>
-          <label for="fechamento-usuario">Quem está fazendo este fechamento <span style="color:var(--danger)">*</span></label>
-          <select id="fechamento-usuario" required onchange="gerarFechamentoDia()">
+          <div class="equipe-chip-slot"></div>
+          <label for="fechamento-usuario" style="display:none">Quem está fechando</label>
+          <select id="fechamento-usuario" style="display:none">
             <option value="">Selecione quem está fechando...</option>
             <option value="Joana">Joana</option>
             <option value="Gaby">Gaby</option>
@@ -687,6 +689,22 @@
       </div>
     </div><!-- /tab-comissao -->
   </div><!-- /tab container -->
+
+  <!-- [equipe] Login por PIN -->
+  <div id="equipe-modal" class="admin-modal" aria-hidden="true">
+    <div class="admin-panel" role="dialog" aria-modal="true" aria-labelledby="equipe-titulo" style="max-width:420px">
+      <h2 class="admin-title" id="equipe-titulo">Quem está usando?</h2>
+      <p style="margin:6px 0 14px;color:var(--muted);font-size:14px">Tudo que você registrar fica no seu nome.</p>
+      <div id="equipe-nomes" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+      <div id="equipe-pin-wrap" style="display:none;margin-top:16px">
+        <label for="equipe-pin" id="equipe-pin-label">PIN</label>
+        <input id="equipe-pin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="Seu PIN" onkeydown="if(event.key==='Enter')equipeEntrar()">
+        <button type="button" class="btn" style="width:100%;margin-top:12px" id="equipe-entrar-btn" onclick="equipeEntrar()">Entrar</button>
+      </div>
+      <div id="equipe-erro" class="feedback error" style="display:none;margin-top:12px" role="alert"></div>
+      <div class="admin-actions"><button type="button" class="btn ghost" onclick="equipeFecharModal()">Voltar ao simulador</button></div>
+    </div>
+  </div>
 
   <!-- Histórico do Aparelho Modal -->
   <div id="ap-hist-modal" class="admin-modal" aria-hidden="true">
@@ -1267,6 +1285,98 @@
   const SUPABASE_URL='https://gcawgwnthuqijgamkvhv.supabase.co';
   const SUPABASE_KEY='sb_publishable_dKxYwbmA8K96WijpCS2HEA_WtqxUZdl';
   const sbClient=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+  // =====================================================================
+  // [equipe] LOGIN POR PIN + SERVIDOR (aparelhos não são mais gravados direto no banco)
+  // =====================================================================
+  const RR_API='https://fechamento-rr-prime-cell--robertmoraiss10.replit.app/api';
+  const LS_EQUIPE='equipe_sessao';
+  const EQUIPE_INATIVO_MS=15*60*1000;
+  let _equipeEscolhido=null,_equipeUltimaAcao=Date.now();
+  function equipeSessao(){
+    try{
+      const s=JSON.parse(localStorage.getItem(LS_EQUIPE)||'null');
+      if(!s||!s.token||!s.usuario)return null;
+      const exp=Number((s.token.split('.')[1])||0);
+      if(!(exp>Date.now()))return null;
+      return s;
+    }catch(e){return null}
+  }
+  function equipeSair(motivo){
+    try{localStorage.removeItem(LS_EQUIPE)}catch(e){}
+    _apCache=[];
+    if(typeof renderAparelhos==='function')renderAparelhos();
+    equipeAtualizarChips();
+    if(motivo)equipeAbrirModal(motivo);
+  }
+  function equipeAtualizarChips(){
+    const s=equipeSessao();
+    document.querySelectorAll('.equipe-chip-slot').forEach(el=>{
+      el.innerHTML=s
+        ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--card-soft);border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-bottom:14px"><span style="font-weight:800;color:var(--ink)">👤 ${esc(s.usuario.nome)}</span><button type="button" class="btn ghost" style="padding:6px 12px;min-height:0" onclick="equipeSair()">Sair</button></div>`
+        : `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:8px 12px;margin-bottom:14px"><span style="font-weight:700;color:#9a3412">Entre com seu PIN para usar</span><button type="button" class="btn" style="padding:6px 12px;min-height:0" onclick="equipeAbrirModal()">Entrar</button></div>`;
+    });
+  }
+  async function equipeAbrirModal(msg){
+    _equipeEscolhido=null;
+    document.getElementById('equipe-pin-wrap').style.display='none';
+    document.getElementById('equipe-pin').value='';
+    const erro=document.getElementById('equipe-erro');
+    if(msg){erro.textContent=msg;erro.style.display='block'}else{erro.style.display='none'}
+    const box=document.getElementById('equipe-nomes');
+    box.innerHTML='<div class="muted">Carregando...</div>';
+    const m=document.getElementById('equipe-modal');m.classList.add('open');m.setAttribute('aria-hidden','false');
+    try{
+      const r=await fetch(RR_API+'/equipe/nomes');const j=await r.json();
+      const lista=(j&&j.equipe)||[];
+      box.innerHTML=lista.length?lista.map(p=>`<button type="button" class="btn ghost" style="min-height:52px" onclick="equipeEscolher('${esc(p.id)}','${esc(p.nome)}',this)">${esc(p.nome)}</button>`).join(''):'<div class="muted">Ninguém cadastrado ainda. Peça ao Robert para cadastrar você.</div>';
+    }catch(e){box.innerHTML='<div class="muted">Sem conexão com o servidor.</div>'}
+  }
+  function equipeFecharModal(){const m=document.getElementById('equipe-modal');m.classList.remove('open');m.setAttribute('aria-hidden','true')}
+  function equipeEscolher(id,nome,btn){
+    _equipeEscolhido=id;
+    document.querySelectorAll('#equipe-nomes button').forEach(b=>{b.classList.add('ghost')});
+    btn.classList.remove('ghost');
+    document.getElementById('equipe-pin-label').textContent='PIN de '+nome;
+    document.getElementById('equipe-pin-wrap').style.display='block';
+    const pin=document.getElementById('equipe-pin');pin.value='';pin.focus();
+  }
+  async function equipeEntrar(){
+    const pin=document.getElementById('equipe-pin').value.trim();
+    const erro=document.getElementById('equipe-erro');erro.style.display='none';
+    if(!_equipeEscolhido||!/^\d{4,6}$/.test(pin)){erro.textContent='Escolha seu nome e digite o PIN (4 a 6 números).';erro.style.display='block';return}
+    const btn=document.getElementById('equipe-entrar-btn');btn.disabled=true;btn.textContent='Entrando...';
+    try{
+      const r=await fetch(RR_API+'/equipe/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:_equipeEscolhido,pin})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok||!j.ok){erro.textContent=j.error||'Não foi possível entrar.';erro.style.display='block';return}
+      localStorage.setItem(LS_EQUIPE,JSON.stringify({token:j.token,usuario:j.usuario}));
+      _equipeUltimaAcao=Date.now();
+      equipeFecharModal();equipeAtualizarChips();
+      await carregarAparelhos();
+      if(document.getElementById('tab-fechamento').classList.contains('active'))gerarFechamentoDia();
+    }catch(e){erro.textContent='Sem conexão com o servidor.';erro.style.display='block'}
+    finally{btn.disabled=false;btn.textContent='Entrar'}
+  }
+  // Chamada ao servidor com o token de quem está logado. 401 = sessão acabou.
+  async function equipeFetch(caminho,opts){
+    const s=equipeSessao();
+    if(!s){equipeSair('Entre com seu PIN.');throw new Error('sem_sessao')}
+    _equipeUltimaAcao=Date.now();
+    opts=opts||{};
+    const headers=Object.assign({'Authorization':'Bearer '+s.token},opts.headers||{});
+    const r=await fetch(RR_API+caminho,Object.assign({},opts,{headers}));
+    if(r.status===401){equipeSair('Sua sessão terminou. Entre de novo com o PIN.');throw new Error('sessao_expirada')}
+    return r;
+  }
+  // Sai sozinho depois de 15 min parado (computador da loja é compartilhado).
+  ['click','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,()=>{_equipeUltimaAcao=Date.now()},{passive:true}));
+  setInterval(()=>{if(equipeSessao()&&Date.now()-_equipeUltimaAcao>EQUIPE_INATIVO_MS)equipeSair()},30000);
+  function imeiValidoLocal(imei){
+    if(!/^\d{15}$/.test(imei))return false;
+    let soma=0;for(let i=0;i<15;i++){let d=+imei[14-i];if(i%2===1){d*=2;if(d>9)d-=9}soma+=d}
+    return soma%10===0;
+  }
   let _apEditandoId=null,_apEditandoSnapshot=null,_apHistImei=null,_apCache=[],_apCarregando=false;
 
   function toRow(o){return{id:o.id,nome:o.nome||null,gb:o.gb||null,cor:o.cor||null,imei:o.imei,origem:o.origem||null,cadastrador:o.cadastrador,data_entrada:o.dataEntrada||null,destino:o.destino||null,assistencia_nome:o.assistenciaNome||null,data_saida:o.dataSaida||null,obs:o.obs||null,criado_em:o.criadoEm,tipo:o.tipo||null,atualizado_em:o.atualizadoEm||new Date().toISOString(),atualizado_por:o.atualizadoPor||null,bateria:o.bateria||null,aviso_peca:o.avisoPeca||null,garantia_apple:!!o.garantiaApple}}
@@ -1277,17 +1387,19 @@
   // sempre obrigatória e explícita no momento de cada ação (campo select).
   // =====================================================================
   const LS_USUARIO='rrprimecell_usuario';
-  function obterUsuarioAtual(){ try{ return (localStorage.getItem(LS_USUARIO)||'').trim(); }catch(e){ return ''; } }
+  function obterUsuarioAtual(){ const s=equipeSessao(); return s?s.usuario.nome:''; }
   function salvarUsuarioAtual(nome){ try{ localStorage.setItem(LS_USUARIO, nome); }catch(e){} }
   function getBucket(item){if(item.tipo==='cliente')return'assistencia_clientes';if(item.destino==='assistencia')return'assistencia_estoque';if(item.destino==='estoque_r1')return'estoque_r1';return'loja'}
   const BUCKET_LABEL={loja:'📦 Estoque Loja',estoque_r1:'🏬 Estoque R1',assistencia_estoque:'🔧 Assistência Estoque',assistencia_clientes:'🧑‍🔧 Assistência B.O Clientes'};
   function getAparelhos(){return _apCache}
 
   async function carregarAparelhos(mostrarErro){
+    if(!equipeSessao()){_apCache=[];renderAparelhos();return}
     _apCarregando=true;
-    const{data,error}=await sbClient.from('aparelhos').select('*').order('criado_em',{ascending:false});
+    let data=null,error=null;
+    try{const r=await equipeFetch('/aparelhos');const j=await r.json();if(!r.ok)error=j.error||'erro';else data=j.aparelhos}catch(e){error=e.message}
     _apCarregando=false;
-    if(error){console.error(error);if(mostrarErro!==false)mostrarApFeedback('error','Não foi possível carregar os aparelhos. Verifique sua internet.');return}
+    if(error){console.error(error);if(mostrarErro!==false&&error!=='sessao_expirada'&&error!=='sem_sessao')mostrarApFeedback('error','Não foi possível carregar os aparelhos. Verifique sua internet.');return}
     _apCache=(data||[]).map(fromRow);
     renderAparelhos();
   }
@@ -1356,8 +1468,9 @@
 
   function checarImei(val){
     const hint=document.getElementById('ap-imei-hint');
-    const imei=val.trim();
+    const imei=val.replace(/\D/g,'');
     if(!imei||_apEditandoId){hint.classList.remove('show');hint.innerHTML='';return}
+    if(imei.length>=15&&!imeiValidoLocal(imei)){hint.innerHTML='<span style="color:var(--danger);font-weight:700">IMEI inválido.</span> Confira os 15 números na caixa ou em Ajustes › Geral › Sobre.';hint.classList.add('show');return}
     const qtd=getAparelhos().filter(a=>a.imei===imei).length;
     if(qtd){
       hint.innerHTML=`Este IMEI já tem ${qtd} passagem(ns) registrada(s). <a href="#" onclick="verHistoricoAparelho('${esc(imei)}');return false" style="color:var(--brand);font-weight:700">Ver histórico</a>`;
@@ -1388,7 +1501,7 @@
     const cor=document.getElementById('ap-cor').value.trim();
     const imei=document.getElementById('ap-imei').value.trim();
     const origem=document.getElementById('ap-origem').value.trim();
-    const cadastrador=document.getElementById('ap-cadastrador').value.trim();
+    const cadastrador=obterUsuarioAtual();
     const dataEntrada=document.getElementById('ap-data-entrada').value||hojeISO();
     const destino=document.getElementById('ap-destino').value;
     const assistenciaNome=document.getElementById('ap-assistencia-nome').value.trim();
@@ -1401,7 +1514,9 @@
 
     if(!nome){mostrarApFeedback('error','Informe o nome do aparelho.');return}
     if(!imei){mostrarApFeedback('error','Informe o IMEI do aparelho.');return}
-    if(!cadastrador){mostrarApFeedback('error','Selecione quem está fazendo esta ação.');return}
+    if(!cadastrador){equipeAbrirModal('Entre com seu PIN para registrar.');return}
+    const imeiNovo=!_apEditandoId||((_apCache.find(a=>a.id===_apEditandoId)||{}).imei!==imei);
+    if(imeiNovo&&!imeiValidoLocal(imei.replace(/\D/g,''))){mostrarApFeedback('error','IMEI inválido. Confira os 15 números na caixa ou em Ajustes › Geral › Sobre.');return}
     if(destino==='assistencia'&&!assistenciaNome){mostrarApFeedback('error','Informe para qual assistência o aparelho foi enviado.');return}
     if(destino&&!dataSaida){mostrarApFeedback('error','Informe a data de saída.');return}
 
@@ -1411,42 +1526,20 @@
       if(duplicado){mostrarApFeedback('error','Este aparelho (mesmo IMEI) já está cadastrado e ainda ativo (aguardando ou em assistência). Edite o registro existente, ou finalize a saída dele antes de cadastrar novamente.');return}
     }
 
-    const usuarioAtual=cadastrador;
-    salvarUsuarioAtual(usuarioAtual);
-
     const btn=document.getElementById('ap-btn-salvar');
     const txtOriginal=btn.textContent;
-
-    if(isEdit){
-      btn.disabled=true;btn.textContent='Verificando...';
-      const{data:atual,error:errCheck}=await sbClient.from('aparelhos').select('atualizado_em,atualizado_por').eq('id',_apEditandoId).maybeSingle();
-      if(!errCheck && atual && _apEditandoSnapshot && atual.atualizado_em && atual.atualizado_em!==_apEditandoSnapshot){
-        btn.disabled=false;btn.textContent=txtOriginal;
-        mostrarApFeedback('error',`Este aparelho foi alterado por ${atual.atualizado_por||'outra pessoa'} enquanto você editava. Os dados foram recarregados — confira e salve novamente.`);
-        await carregarAparelhos(false);
-        const itemAtual=_apCache.find(a=>a.id===_apEditandoId);
-        if(itemAtual)editarAparelho(itemAtual.id);
-        return;
-      }
-    }
-
-    const anterior=isEdit?_apCache.find(a=>a.id===_apEditandoId):null;
-    const id=isEdit?_apEditandoId:(Date.now()+'-'+Math.random().toString(36).slice(2,7));
-    const agora=new Date().toISOString();
-    const registro={id,nome,gb,cor,imei,origem,cadastrador,dataEntrada,destino,assistenciaNome,dataSaida,obs,tipo,bateria,avisoPeca,garantiaApple,criadoEm:anterior?anterior.criadoEm:Date.now(),atualizadoEm:agora,atualizadoPor:usuarioAtual};
-
     btn.disabled=true;btn.textContent='Salvando...';
-    const row=toRow(registro);
-    const{error}=isEdit?await sbClient.from('aparelhos').update(row).eq('id',id):await sbClient.from('aparelhos').insert(row);
-    btn.disabled=false;btn.textContent=txtOriginal;
-
-    if(error){console.error(error);mostrarApFeedback('error','Erro ao salvar no banco de dados. Verifique sua internet e tente novamente.');return}
-
-    const destinoAnterior=anterior?anterior.destino:null;
-    if(!isEdit||destinoAnterior!==destino){
-      const evento=isEdit?(destino||'aguardando'):'entrada';
-      sbClient.from('aparelhos_historico').insert({aparelho_id:id,imei,nome,gb,cor,evento,assistencia_nome:destino==='assistencia'?assistenciaNome:null,usuario:usuarioAtual,criado_em:agora}).then(({error:errHist})=>{if(errHist)console.error('historico:',errHist)});
-    }
+    let j={},ok=false;
+    try{
+      const r=await equipeFetch('/aparelhos/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        id:_apEditandoId||null,esperado:isEdit?_apEditandoSnapshot:null,nome,gb,cor,imei,origem,dataEntrada,destino,assistenciaNome,dataSaida,obs,tipo,bateria,avisoPeca,garantiaApple})});
+      j=await r.json().catch(()=>({}));ok=r.ok&&j.ok;
+      if(r.status===409&&isEdit){mostrarApFeedback('error',j.error||'Este aparelho foi alterado por outra pessoa.');await carregarAparelhos(false);const it=_apCache.find(a=>a.id===_apEditandoId);if(it)editarAparelho(it.id);return}
+    }catch(e){j={error:e.message==='sessao_expirada'||e.message==='sem_sessao'?'Entre de novo com o PIN.':'Sem conexão com o servidor.'}}
+    finally{btn.disabled=false;btn.textContent=txtOriginal}
+    if(!ok){mostrarApFeedback('error',j.error||'Erro ao salvar. Tente novamente.');return}
+    const registro=fromRow(j.aparelho);
+    const id=registro.id;
 
     if(isEdit){
       const idx=_apCache.findIndex(a=>a.id===id);
@@ -1498,14 +1591,9 @@
     if(!item)return;
     const linhaModelo=[item.nome||'Sem nome',item.gb,item.cor].filter(Boolean).join(' · ');
     if(!confirm(`Excluir definitivamente o cadastro de "${linhaModelo}" (IMEI ${item.imei||'—'})? Esta ação não pode ser desfeita.`))return;
-    const{data,error}=await sbClient.from('aparelhos').delete().eq('id',id).select();
-    if(error){console.error(error);mostrarApFeedback('error','Erro ao excluir. Verifique sua internet e tente novamente.');return}
-    if(!data||data.length===0){
-      mostrarApFeedback('error','O banco de dados recusou a exclusão (falta permissão de DELETE na tabela). Peça para liberar a exclusão no Supabase — veja a instrução técnica enviada.');
-      await carregarAparelhos(false);
-      return;
-    }
-    sbClient.from('aparelhos_historico').insert({aparelho_id:id,imei:item.imei,nome:item.nome,gb:item.gb,cor:item.cor,evento:'excluido',usuario:obterUsuarioAtual()||'—',criado_em:new Date().toISOString()}).then(({error:errHist})=>{if(errHist)console.error('historico:',errHist)});
+    let j={},ok=false;
+    try{const r=await equipeFetch('/aparelhos/'+encodeURIComponent(id),{method:'DELETE'});j=await r.json().catch(()=>({}));ok=r.ok&&j.ok}catch(e){j={error:'Sem conexão com o servidor.'}}
+    if(!ok){mostrarApFeedback('error',j.error||'Erro ao excluir.');return}
     _apCache=_apCache.filter(a=>a.id!==id);
     if(_apEditandoId===id)limparFormAparelho();
     renderAparelhos();
@@ -1611,16 +1699,18 @@
 
   async function gerarFechamentoDia(){
     const prev=document.getElementById('fechamento-preview');
-    const usuarioFechamento=document.getElementById('fechamento-usuario').value;
+    equipeAtualizarChips();
+    const usuarioFechamento=obterUsuarioAtual();
     if(!usuarioFechamento){
       _fechamentoTexto='';
-      prev.textContent='Selecione, acima, quem está fazendo este fechamento para gerar o texto.';
-      mostrarFechamentoFeedback('error','Selecione quem está fazendo este fechamento.');
+      prev.textContent='Entre com seu PIN (botão acima) para gerar o fechamento.';
       return;
     }
+    if(!_apCache.length)await carregarAparelhos(false);
     prev.textContent='Carregando...';
     const{inicio,fim}=inicioFimHojeISO();
-    const{data,error}=await sbClient.from('aparelhos_historico').select('*').gte('criado_em',inicio).lt('criado_em',fim).order('criado_em',{ascending:true});
+    let data=null,error=null;
+    try{const r=await equipeFetch('/aparelhos/historico?inicio='+encodeURIComponent(inicio)+'&fim='+encodeURIComponent(fim));const j=await r.json();if(r.ok)data=j.historico;else error=j.error||'erro'}catch(e){error=e.message}
     if(error)console.error(error);
     const historicoIndisponivel=!!error;
 
@@ -1635,7 +1725,7 @@
     const linhas=[`📦 *Fechamento do Dia — RR Prime Cell*`,`📅 ${hojeFmt}`,''];
 
     if(historicoIndisponivel){
-      linhas.push('⚠️ Não foi possível carregar as movimentações de hoje (tabela de histórico ainda não configurada no Supabase).','');
+      linhas.push('⚠️ Não foi possível carregar as movimentações de hoje. Verifique a internet e clique em Atualizar.','');
     }else if(!movimentos.length){
       linhas.push('⚪ Nenhuma movimentação registrada hoje.','');
     }else{
@@ -1706,7 +1796,9 @@
     onDestinoChange();
     carregarAparelhos();
     comissaoCheckDesbloqueado();
-    sbClient.channel('aparelhos-changes').on('postgres_changes',{event:'*',schema:'public',table:'aparelhos'},()=>{carregarAparelhos(false)}).subscribe();
+    equipeAtualizarChips();
+    // Atualiza a lista a cada 30s enquanto a aba de aparelhos estiver aberta.
+    setInterval(()=>{if(equipeSessao()&&document.getElementById('tab-aparelhos').classList.contains('active')&&!_apEditandoId)carregarAparelhos(false)},30000);
     carregarTaxas(false);
     sbClient.channel('taxas-changes').on('postgres_changes',{event:'*',schema:'public',table:'config_taxas'},()=>{carregarTaxas(false)}).subscribe();
     document.getElementById('ap-hist-modal').addEventListener('click',e=>{if(e.target===document.getElementById('ap-hist-modal'))fecharHistoricoAparelho()});
@@ -1726,6 +1818,7 @@
       if (e.key==='Escape') {
         if (document.getElementById('admin-modal').classList.contains('open')) fecharAdmin();
         if (document.getElementById('ap-hist-modal').classList.contains('open')) fecharHistoricoAparelho();
+        if (document.getElementById('equipe-modal').classList.contains('open')) equipeFecharModal();
       }
     });
     document.getElementById('admin-modal').addEventListener('click', e => {
@@ -1741,6 +1834,8 @@
     document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
     document.getElementById('tab-' + nome).classList.add('active');
     btn.classList.add('active');
+    if((nome==='aparelhos'||nome==='fechamento')&&!equipeSessao()){equipeAtualizarChips();equipeAbrirModal();}
+    else if(nome==='aparelhos')carregarAparelhos(false);
     if(nome==='fechamento')gerarFechamentoDia();
   }
 
