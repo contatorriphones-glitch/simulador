@@ -253,6 +253,85 @@
     .ap-empty{padding:26px 10px;text-align:center;color:var(--muted);font-size:13px}
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- BIA:CSS -->
+<style>
+  /* Aba Carol (atendente do Instagram). Tudo fica dentro de #tab-bia para não mexer no resto do simulador. */
+  .bia-badge{display:none;margin-left:6px;min-width:20px;padding:1px 7px;border-radius:999px;background:#f97316;color:#fff;font-size:12px;font-weight:800;vertical-align:middle}
+  .bia-badge.on{display:inline-block;animation:bia-pulso 1.6s ease-in-out infinite}
+  @keyframes bia-pulso{50%{transform:scale(1.12)}}
+  #tab-bia{padding:18px 0 40px}
+  #tab-bia button,#tab-bia input,#tab-bia select,#tab-bia textarea{width:auto;font-family:inherit}
+  #tab-bia .bia-bt{padding:9px 14px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink)}
+  #tab-bia .bia-bt:hover{background:var(--card-soft)}
+  #tab-bia .bia-bt.pri{background:linear-gradient(135deg,var(--brand2),var(--brand));color:#fff;border:none}
+  #tab-bia .bia-bt.ok{border-color:#86efac;color:#15803d}
+  #tab-bia .bia-bt.nao{border-color:#fecaca;color:var(--danger)}
+  #tab-bia .bia-bt.mini{padding:6px 10px;font-size:13px}
+  #tab-bia .bia-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px 18px;margin-bottom:12px;box-shadow:0 4px 20px rgba(26,63,196,.06)}
+  #tab-bia .bia-card.alerta-forte{border-color:#fdba74}
+  #tab-bia .bia-linha{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  #tab-bia .bia-sub{color:var(--muted);font-size:13px}
+  #tab-bia .bia-tag{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700;background:var(--card-soft);color:var(--ink);white-space:nowrap}
+  #tab-bia .t-quente{background:#ffedd5;color:#9a3412} #tab-bia .t-morno{background:#fef3c7;color:#92400e} #tab-bia .t-frio{background:#e0f2fe;color:#075985}
+  #tab-bia .t-equipe{background:#ede9fe;color:#5b21b6} #tab-bia .t-alerta{background:#f97316;color:#fff}
+  #tab-bia .bia-abas{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 14px}
+  #tab-bia .bia-abas button{padding:8px 12px;border-radius:12px;border:1px solid var(--line);background:#fff;color:var(--muted);font-weight:700;font-size:14px;cursor:pointer}
+  #tab-bia .bia-abas button.ativa{background:var(--brand);color:#fff;border-color:var(--brand)}
+  #tab-bia .bia-grade{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px}
+  @media (max-width:860px){#tab-bia .bia-grade{grid-template-columns:1fr} #tab-bia .bia-grade.com-detalhe .bia-lista{display:none}}
+  #tab-bia .bia-item{cursor:pointer} #tab-bia .bia-item.aberta{border-color:var(--brand);box-shadow:0 0 0 2px rgba(26,63,196,.18)}
+  #tab-bia .bia-chat{display:flex;flex-direction:column;gap:6px;max-height:60vh;overflow-y:auto}
+  #tab-bia .bia-msg{max-width:85%;padding:8px 12px;border-radius:16px;white-space:pre-wrap;word-wrap:break-word;font-size:14px}
+  #tab-bia .bia-msg small{display:block;opacity:.6;font-size:11px;margin-top:2px}
+  #tab-bia .m-cliente{align-self:flex-start;background:#eef2ff;color:var(--ink)}
+  #tab-bia .m-bia{align-self:flex-end;background:linear-gradient(135deg,var(--brand2),var(--brand));color:#fff}
+  #tab-bia .m-equipe{align-self:flex-end;background:#dcfce7;color:#14532d}
+  #tab-bia .bia-num{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+  #tab-bia .bia-num .bia-card{margin:0} #tab-bia .bia-num b{display:block;font-size:24px;color:var(--ink)}
+  #tab-bia input[type=password],#tab-bia input[type=number],#tab-bia input[type=text],#tab-bia textarea{border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:15px;background:#fff;color:var(--ink)}
+  #tab-bia textarea{width:100%;resize:vertical}
+  #tab-bia .bia-chave{display:inline-flex;align-items:center;gap:8px;font-weight:800;cursor:pointer;user-select:none}
+  #tab-bia .bia-chave i{width:46px;height:26px;border-radius:999px;background:#cbd5e1;position:relative;transition:.2s}
+  #tab-bia .bia-chave i::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}
+  #tab-bia .bia-chave.on i{background:#22c55e} #tab-bia .bia-chave.on i::after{left:23px}
+  #tab-bia ul{margin:6px 0;padding-left:20px}
+  #tab-bia .bia-vazio{text-align:center;color:var(--muted);padding:26px 10px}
+  #tab-bia .bia-gl{display:grid;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--line)}
+  #tab-bia .bia-gl.cab{font-size:12px;font-weight:800;color:var(--muted);border-bottom:2px solid var(--line)}
+  #tab-bia .bia-gl input{width:100%;min-width:0;padding:7px 8px;font-size:14px;border-radius:10px}
+  #tab-bia .g-catalogo{grid-template-columns:minmax(0,2fr) 64px minmax(0,1.3fr) 92px 34px}
+  #tab-bia .g-troca{grid-template-columns:minmax(0,2fr) 64px 92px 34px}
+  #tab-bia .g-assist{grid-template-columns:minmax(0,2fr) 110px 34px}
+  #tab-bia .g-horario{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr) 92px}
+  #tab-bia .so-gerencia{display:none !important}
+  #tab-bia.gerencia .so-gerencia{display:inline-block !important}
+  #tab-bia.gerencia nav .so-gerencia{display:inline-flex !important}
+  #tab-bia.gerencia div.so-gerencia{display:block !important}
+  #tab-bia label.bia-opcao{display:flex;gap:8px;align-items:flex-start;cursor:pointer}
+  #tab-bia label.bia-opcao input{margin-top:3px;flex:0 0 auto}
+  #tab-bia .g-hbia{grid-template-columns:minmax(0,1fr) 84px minmax(0,1fr) minmax(0,1fr)}
+  #tab-bia .bia-gl .x{padding:6px 0;border:none;background:none;color:var(--danger);font-size:16px;cursor:pointer}
+  #tab-bia .bia-grid-corpo{max-height:60vh;overflow-y:auto}
+  #tab-bia select.bia-sel{padding:9px;border-radius:12px;border:1px solid var(--line);background:#fff;max-width:100%}
+  #tab-bia .bia-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:12px}
+  #tab-bia .bia-cards .bia-card{margin:0;cursor:pointer;transition:.15s}
+  #tab-bia .bia-cards .bia-card:hover{border-color:var(--brand)}
+  #tab-bia .bia-cards .bia-card.aberta{border-color:var(--brand);box-shadow:0 0 0 2px rgba(26,63,196,.18)}
+  #tab-bia .bia-cards .grande{font-size:34px;font-weight:900;line-height:1.1;color:var(--ink)}
+  #tab-bia .bia-cards .emo{font-size:22px;float:right}
+  #tab-bia .bia-barra{height:6px;border-radius:99px;background:var(--card-soft);margin-top:8px;overflow:hidden}
+  #tab-bia .bia-barra i{display:block;height:100%;background:var(--brand)}
+  #tab-bia .bia-tipos{display:flex;gap:8px;flex-wrap:wrap}
+  #tab-bia .bia-tipos button{padding:12px 14px;border-radius:14px;border:2px solid var(--line);background:#fff;font-weight:800;font-size:15px;cursor:pointer;color:var(--ink)}
+  #tab-bia .bia-tipos button.ativa{border-color:var(--brand);background:#eef2ff}
+  #tab-bia .mud{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:6px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+  #tab-bia .mud s{color:var(--muted)}
+  #tab-bia .mud.novo{background:#f0fdf4} #tab-bia .mud.saiu{background:#fef2f2} #tab-bia .mud.mudou{background:#fffbeb}
+  #tab-bia .t-todas{background:#e0e7ff;color:#3730a3} #tab-bia .t-loja{background:#fef3c7;color:#92400e}
+  .bia-flutuante{position:fixed;right:16px;bottom:16px;z-index:60;display:none;padding:10px 16px;border-radius:999px;border:none;background:#f97316;color:#fff;font-weight:800;box-shadow:0 8px 24px rgba(249,115,22,.4);cursor:pointer;width:auto}
+  .bia-flutuante.on{display:block}
+</style>
+<!-- /BIA:CSS -->
 </head>
 <body>
   <header>
@@ -274,6 +353,9 @@
       <button class="tab-btn active" onclick="trocarTab('simulador',this)">📱 Simulador</button>
       <button class="tab-btn" onclick="trocarTab('atalhos',this)">⚡ Gerador de Atalhos</button>
       <button class="tab-btn" onclick="trocarTab('aparelhos',this)">📦 Controle de Aparelhos</button>
+      <!-- BIA:BOTAO -->
+<button class="tab-btn" id="bia-tab-btn" onclick="trocarTab('bia',this)">🤖 Carol<span id="bia-badge" class="bia-badge"></span></button>
+<!-- /BIA:BOTAO -->
       <button class="tab-btn" onclick="trocarTab('fechamento',this)">📅 Fechamento do Dia</button>
       <button class="tab-btn" onclick="trocarTab('comissao',this)">💼 Comissão</button>
     </div>
@@ -569,6 +651,231 @@
         </section>
       </main>
     </div><!-- /tab-aparelhos -->
+<!-- BIA:ABA -->
+<div class="tab-pane" id="tab-bia">
+  <section id="bia-login" class="bia-card" style="max-width:380px;margin:30px auto;text-align:center">
+    <div style="font-size:32px">🔒</div>
+    <h2 class="title" style="font-size:20px">Painel da Carol</h2>
+    <p class="bia-sub">Conversas dos clientes do Instagram. Digite a senha da equipe.</p>
+    <div class="bia-linha" style="justify-content:center;margin-top:10px">
+      <input id="bia-senha" type="password" placeholder="Senha da equipe" style="flex:1;min-width:180px">
+      <button class="bia-bt pri" id="bia-entrar">Entrar</button>
+    </div>
+    <p id="bia-erro-login" class="bia-sub" style="color:var(--danger)"></p>
+  </section>
+
+  <div id="bia-app" style="display:none">
+    <div class="bia-card">
+      <div class="bia-linha">
+        <div style="font-size:30px">🤖</div>
+        <div style="flex:1;min-width:190px">
+          <div class="bia-sub">Agora quem responde o Direct:</div>
+          <b id="bia-quem" style="font-size:19px">…</b>
+          <div class="bia-sub" id="bia-status">Carregando…</div>
+        </div>
+        <button class="bia-bt pri" id="bia-reforco-ligar" title="Equipe ocupada? A Carol responde todos os clientes por 1 hora.">⚡ Carol assume por 1 hora</button>
+      </div>
+      <div class="bia-linha" style="margin-top:10px;justify-content:flex-end">
+        <button class="bia-bt mini" id="bia-notif">🔔 Ativar avisos</button>
+        <button class="bia-bt mini" id="bia-gerencia-bt" title="Configurações da Carol (para o dono ou gerente)">🔧 Gerência</button>
+        <button class="bia-bt mini" id="bia-sair">Sair</button>
+      </div>
+    </div>
+
+    <nav class="bia-abas" id="bia-abas">
+      <button data-secao="alertas" class="ativa">🔔 Avisos</button>
+      <button data-secao="conversas">💬 Conversas</button>
+      <button data-secao="agenda">📅 Agendamentos</button>
+      <button data-secao="followup">🔁 Follow-up</button>
+      <button data-secao="colar">📋 Colar preços</button>
+      <span class="so-gerencia bia-sub" style="align-self:center;margin-left:6px">Gerência:</span>
+      <button data-secao="ajustes" class="so-gerencia">⚙️ Como a Carol trabalha</button>
+      <button data-secao="tabelas" class="so-gerencia">💲 Preços e tabelas</button>
+      <button data-secao="sac" class="so-gerencia">🎧 Respostas do SAC</button>
+      <button data-secao="aprendizados" class="so-gerencia">🧠 Regras da Carol</button>
+      <button data-secao="relatorio" class="so-gerencia">📊 Relatório</button>
+    </nav>
+
+    <section data-secao="alertas" id="bia-alertas"></section>
+    <section data-secao="conversas" style="display:none">
+      <div class="bia-grade" id="bia-grade">
+        <div class="bia-lista">
+          <div class="bia-linha" style="margin-bottom:10px">
+            <select id="bia-filtro" style="padding:9px;border-radius:12px;border:1px solid var(--line)">
+              <option value="todas">Todas</option><option value="quente">🔥 Quentes</option><option value="morno">🌤️ Mornos</option>
+              <option value="frio">❄️ Frios</option><option value="equipe">👩‍💼 Com a equipe</option>
+            </select>
+            <input id="bia-busca" type="text" placeholder="Buscar nome ou @" style="flex:1;min-width:140px">
+          </div>
+          <div id="bia-lista-conversas"></div>
+        </div>
+        <div id="bia-detalhe"><div class="bia-card bia-vazio">Escolha uma conversa para ver as mensagens e o perfil do cliente.</div></div>
+      </div>
+    </section>
+    <section data-secao="agenda" style="display:none" id="bia-agenda"></section>
+    <section data-secao="followup" style="display:none">
+      <div class="bia-card">
+        <b>🔁 Follow-up: a Carol retoma quem parou de responder</b>
+        <p class="bia-sub" style="margin:4px 0 0" id="bia-fu-regra"></p>
+      </div>
+      <div class="bia-card so-gerencia">
+        <b>Ajustes do follow-up</b>
+        <label class="bia-opcao" style="margin:8px 0"><input type="checkbox" id="bia-fu-ativo"> <span>Follow-up ligado</span></label>
+        <label class="bia-linha">1ª mensagem quando o cliente ficar <input type="number" id="bia-fu-1" min="1" max="20" style="width:64px"> horas sem responder</label>
+        <label class="bia-linha" style="margin-top:6px">2ª mensagem (a última) depois de <input type="number" id="bia-fu-2" min="2" max="22" style="width:64px"> horas <span class="bia-sub">(no máximo 22h, para caber nas 24h do Instagram)</span></label>
+        <div class="bia-linha" style="margin-top:10px"><button class="bia-bt pri mini" id="bia-fu-salvar">Salvar</button><span class="bia-sub" id="bia-fu-status"></span></div>
+      </div>
+      <div class="bia-num" id="bia-fu-numeros" style="margin-bottom:12px"></div>
+      <h3>☎️ Retomar pessoalmente</h3>
+      <p class="bia-sub" style="margin-top:-6px">Clientes quentes que não responderam às 2 mensagens da Carol. As 24h já passaram: só uma pessoa pode escrever, pelo app do Instagram.</p>
+      <div id="bia-fu-pessoal"></div>
+      <h3>⏳ Próximas retomadas</h3>
+      <div id="bia-fu-fila"></div>
+      <h3>📨 Enviadas nos últimos 7 dias</h3>
+      <div id="bia-fu-enviadas"></div>
+    </section>
+    <section data-secao="colar" style="display:none">
+      <div class="bia-card">
+        <b>1. O que você vai colar?</b>
+        <div class="bia-tipos" id="bia-colar-tipos" style="margin-top:8px">
+          <button data-tipo="lacrados" class="ativa">📦 Lacrados</button>
+          <button data-tipo="seminovos">📱 Seminovos</button>
+          <button data-tipo="troca">🔄 Troca (quanto pagamos)</button>
+          <button data-tipo="assistencia">🛠️ Assistência</button>
+        </div>
+        <select id="bia-colar-reparo" class="bia-sel" style="display:none;margin-top:8px"></select>
+      </div>
+      <div class="bia-card">
+        <b>2. Cole a lista aqui</b> <span class="bia-sub">(do WhatsApp, da planilha ou do fornecedor, do jeito que veio)</span>
+        <textarea id="bia-colar-texto" rows="10" style="margin-top:8px;font-family:ui-monospace,Menlo,monospace;font-size:14px"></textarea>
+        <div class="bia-linha" style="margin-top:8px">
+          <label class="bia-linha"><input type="radio" name="bia-colar-modo" value="atualizar" checked> Só mudar os modelos que colei</label>
+          <label class="bia-linha"><input type="radio" name="bia-colar-modo" value="substituir"> A lista colada é a tabela completa (o que não estiver nela sai)</label>
+        </div>
+        <div class="bia-linha" style="margin-top:10px"><button class="bia-bt pri" id="bia-colar-conferir">3. Conferir</button><span class="bia-sub" id="bia-colar-status"></span></div>
+      </div>
+      <div id="bia-colar-previa"></div>
+    </section>
+    <section data-secao="aprendizados" style="display:none">
+      <div class="bia-card">
+        <b>Nova regra para a Carol</b>
+        <textarea id="bia-nova-regra" rows="2" style="margin:8px 0" placeholder="Ex.: Quando o cliente perguntar de capinha, diga que temos várias cores na loja."></textarea>
+        <div class="bia-linha">
+          <button class="bia-bt pri mini" id="bia-add-regra">🌐 Adicionar para todas as lojas</button>
+          <button class="bia-bt mini" id="bia-add-regra-loja">📍 Adicionar só para a Carol</button>
+        </div>
+        <div class="bia-sub" style="margin-top:6px">🌐 vai na hora para as atendentes das outras lojas. 📍 fica só aqui.</div>
+      </div>
+      <div class="bia-card" id="bia-cerebro"></div>
+      <div class="bia-card">
+        <div class="bia-linha">
+          <input id="bia-regras-busca" type="search" placeholder="🔎 Pesquisar nas regras (palavra ou frase)" style="flex:1;min-width:200px">
+          <button class="bia-bt mini" id="bia-repetidas">🧹 Procurar regras repetidas</button>
+        </div>
+        <div id="bia-repetidas-res"></div>
+      </div>
+      <h3>💡 Sugestões da Carol</h3><div id="bia-sugestoes"></div>
+      <h3>✅ Regras que a Carol segue</h3><div id="bia-regras"></div>
+    </section>
+    <section data-secao="sac" style="display:none">
+      <div class="bia-card">
+        <b id="bia-sac-titulo">Nova resposta do SAC</b>
+        <p class="bia-sub" style="margin:4px 0 8px">Ensine a Carol a responder dúvidas de quem já comprou ou de atendimento em geral. Escreva como a loja responderia: ela usa a ideia com as palavras dela e de forma curta.</p>
+        <input id="bia-sac-pergunta" type="text" placeholder="Assunto ou pergunta. Ex.: Como acionar a garantia do seminovo?" style="width:100%;margin-bottom:8px">
+        <textarea id="bia-sac-resposta" rows="3" placeholder="Resposta da loja. Ex.: Traga o aparelho na loja com o comprovante da compra. A equipe testa na hora e, se for defeito coberto, resolve dentro da garantia de 6 meses."></textarea>
+        <div class="bia-linha" style="margin-top:8px"><button class="bia-bt pri mini" id="bia-sac-salvar">🌐 Adicionar para todas as lojas</button><button class="bia-bt mini" id="bia-sac-salvar-loja">📍 Adicionar só para a Carol</button><button class="bia-bt mini" id="bia-sac-cancelar" style="display:none">Cancelar</button><span class="bia-sub" id="bia-sac-status"></span></div>
+      </div>
+      <div id="bia-sac-lista"></div>
+    </section>
+    <section data-secao="tabelas" style="display:none">
+      <div class="bia-card">
+        <div class="bia-linha" style="margin-bottom:8px">
+          <select id="bia-tab-escolha" class="bia-sel">
+            <option value="lacrados">📦 Preços dos lacrados</option>
+            <option value="seminovos">📱 Preços dos seminovos</option>
+            <option value="troca">🔄 Quanto pagamos na troca</option>
+            <option value="assistencia">🛠️ Descontos de assistência</option>
+            <option value="horarios">🕘 Horário de funcionamento</option>
+            <option value="taxas">💳 Taxas da maquininha</option>
+          </select>
+          <select id="bia-tab-assist" class="bia-sel" style="display:none"></select>
+          <input id="bia-tab-busca" type="text" placeholder="Buscar modelo" style="flex:1;min-width:120px">
+        </div>
+        <div class="bia-sub" id="bia-tab-info"></div>
+        <div id="bia-tab-grade" style="margin-top:8px"></div>
+        <div class="bia-linha" id="bia-tab-botoes" style="margin-top:10px">
+          <button class="bia-bt mini" id="bia-tab-add">+ Adicionar linha</button>
+          <button class="bia-bt pri mini" id="bia-tab-salvar">Salvar</button>
+          <button class="bia-bt nao mini" id="bia-tab-padrao">Voltar à tabela de fábrica</button>
+          <span class="bia-sub" id="bia-tab-status"></span>
+        </div>
+      </div>
+    </section>
+    <section data-secao="relatorio" style="display:none">
+      <div class="bia-card">
+        <b style="font-size:17px">Por que os clientes não agendaram?</b>
+        <div class="bia-linha" style="margin-top:8px">
+          <label class="bia-linha">De <input type="date" id="bia-rel-de" class="bia-sel"></label>
+          <label class="bia-linha">até <input type="date" id="bia-rel-ate" class="bia-sel"></label>
+          <button class="bia-bt pri mini" id="bia-rel-ver">Ver</button>
+        </div>
+        <div class="bia-linha" style="margin-top:6px">
+          <button class="bia-bt mini" data-rel="hoje">Hoje</button><button class="bia-bt mini" data-rel="7">7 dias</button>
+          <button class="bia-bt mini" data-rel="30">30 dias</button><button class="bia-bt mini" data-rel="mes">Este mês</button>
+          <button class="bia-bt mini" data-rel="mes-passado">Mês passado</button>
+        </div>
+        <div class="bia-sub" id="bia-rel-progresso" style="margin-top:8px"></div>
+      </div>
+      <div class="bia-num" id="bia-rel-geral" style="margin-bottom:12px"></div>
+      <div class="bia-cards" id="bia-rel-cards"></div>
+      <div id="bia-rel-lista"></div>
+      <p class="bia-sub" id="bia-rel-nota"></p>
+      <h3 style="margin-top:22px">🎯 Clientes para recuperar</h3>
+      <p class="bia-sub" style="margin-top:-6px">Quem não agendou, dos mais quentes para os mais frios, com o que fazer e uma mensagem pronta. Toque no nome para abrir a conversa.</p>
+      <div id="bia-rel-recuperar"></div>
+      <h3 style="margin-top:22px">🧠 Análise da semana (IA)</h3>
+      <div class="bia-linha" style="margin-bottom:12px"><button class="bia-bt mini" id="bia-analisar">Analisar agora</button><span class="bia-sub" id="bia-status-analise"></span></div>
+      <div id="bia-relatorio"></div>
+    </section>
+    <section data-secao="ajustes" style="display:none">
+      <div class="bia-card bia-linha">
+        <div style="flex:1;min-width:200px"><b>1. Carol ligada</b><div class="bia-sub">Desligada, ela não responde ninguém. As mensagens continuam aparecendo em Conversas.</div></div>
+        <span class="bia-chave" id="bia-chave" title="Liga ou desliga a Carol no Instagram"><i></i><span>Desligada</span></span>
+      </div>
+      <div class="bia-card">
+        <b>2. Horário da Carol</b>
+        <p class="bia-sub" style="margin:4px 0 8px">Quando a Carol responde sozinha. No resto do tempo, quem responde é a equipe (e você não gasta com a Carol).</p>
+        <div class="bia-linha" style="margin-bottom:8px">
+          <label class="bia-linha"><input type="radio" name="bia-hmodo" value="sempre"> 24 horas</label>
+          <label class="bia-linha"><input type="radio" name="bia-hmodo" value="horarios"> Só nos horários abaixo</label>
+          <button class="bia-bt mini" id="bia-hsugerir">Preencher com "loja fechada"</button>
+        </div>
+        <div id="bia-hgrade"></div>
+        <label class="bia-opcao" style="margin-top:8px"><input type="checkbox" id="bia-hcontinuar"> <span>Se o horário acabar no meio de uma conversa, ela termina (até 1h)</span></label>
+        <div class="bia-linha" style="margin-top:10px"><button class="bia-bt pri mini" id="bia-hsalvar">Salvar horário</button><span class="bia-sub" id="bia-hstatus"></span></div>
+      </div>
+      <div class="bia-card" style="display:grid;gap:12px">
+        <b>3. Equipe e Carol juntas</b>
+        <div>
+          <label class="bia-linha">Cliente sem resposta da equipe por <input type="number" id="bia-cfg-assumir" min="0" max="240" style="width:70px"> minutos: a Carol entra. <span class="bia-sub">(0 = nunca)</span></label>
+          <div class="bia-sub" id="bia-verif" style="margin-top:4px"></div>
+        </div>
+        <label class="bia-linha">Vendedora respondeu um cliente: a Carol não fala com ele por <input type="number" id="bia-cfg-pausa" min="1" max="72" style="width:70px"> horas.</label>
+        <label class="bia-opcao"><input type="checkbox" id="bia-cfg-auto"> <span>Aprovar sozinhas as sugestões simples da Carol (nunca as de preço, desconto, brinde ou garantia)</span></label>
+        <div><button class="bia-bt pri mini" id="bia-salvar-cfg">Salvar</button> <span class="bia-sub" id="bia-status-cfg"></span></div>
+      </div>
+      <div class="bia-card">
+        <b>4. Quanto a Carol está custando</b>
+        <div id="bia-uso" style="margin-top:8px"></div>
+        <details style="margin-top:8px"><summary class="bia-sub" style="cursor:pointer">Preço do Gemini usado na conta</summary>
+          <div class="bia-linha bia-sub" style="margin:8px 0">US$ por milhão de tokens: entrada <input id="bia-preco-e" type="text" style="width:70px"> saída <input id="bia-preco-s" type="text" style="width:70px"> dólar (R$) <input id="bia-dolar" type="text" style="width:70px"></div>
+          <div class="bia-sub">Confira em ai.google.dev/pricing.</div>
+        </details>
+      </div>
+    </section>
+  </div>
+</div>
+<!-- /BIA:ABA -->
 
     <!-- TAB FECHAMENTO DO DIA -->
     <div class="tab-pane" id="tab-fechamento">
@@ -2579,5 +2886,1073 @@
     }
   }
   </script>
+<!-- BIA:SCRIPT -->
+<button class="bia-flutuante" id="bia-flutuante" onclick="document.getElementById('bia-tab-btn').click()"></button>
+<script>
+// =====================================================================
+// ABA BIA: painel da atendente do Instagram (dados no Supabase da RR Prime Cell).
+// Login: conta única da equipe no Supabase Auth (Authentication > Users).
+// =====================================================================
+(function () {
+  const EMAIL_EQUIPE = 'equipe@rrprimecell.bia';
+  const LOJA_PAINEL = 'rr-prime-cell';
+  // As regras circulam escritas com o nome "Carol"; aqui aparecem com o nome da atendente desta loja.
+  const ATENDENTE_PAINEL = 'Carol';
+  const comNome = (t) => String(t || '').replace(new RegExp('(?<![\\p{L}])B' + 'ia(?![\\p{L}])', 'gu'), ATENDENTE_PAINEL);
+  // (o "B" + "ia" é de propósito: a instalação troca "Carol" pelo nome da atendente da loja, e aqui não pode)
+  const NOMES_LOJAS = { 'kronos-phone': 'B' + 'ia · Kronos', 'rr-prime-cell': 'Carol · RR Prime Cell', 'legacy-phone': 'Ana · Legacy Phone' };
+  // Etiqueta do cérebro: vale para todas as lojas ou só para esta.
+  const tagEscopo = (r) => (r.escopo === 'loja'
+    ? el('span', { class: 'bia-tag t-loja' }, '📍 Só para a Carol')
+    : el('span', { class: 'bia-tag t-todas' }, '🌐 Todas as lojas'));
+  const tagOrigem = (r) => (r.loja_origem && r.loja_origem !== LOJA_PAINEL ? el('span', { class: 'bia-tag' }, '🧠 veio da ' + (NOMES_LOJAS[r.loja_origem] || r.loja_origem)) : null);
+  const faltaSql = (e) => (String(e?.message || e).includes('escopo') || String(e?.message || e).includes('excluido')
+    ? 'Rode o SQL do cérebro compartilhado (cerebro.sql) no Supabase desta loja.' : e);
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { storageKey: 'rr-bia-auth' } });
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, attrs = {}, ...filhos) => {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === 'class') e.className = v; else if (k.startsWith('on')) e[k] = v; else if (v !== false && v != null) e.setAttribute(k, v);
+    }
+    for (const f of filhos.flat()) if (f != null && f !== false) e.append(f.nodeType ? f : document.createTextNode(String(f)));
+    return e;
+  };
+  const LS = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+  const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '');
+  const dataBR = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : '');
+  const nome = (c) => (c?.nome || (c?.usuario ? '@' + c.usuario : 'Cliente'));
+  const TEMP = { quente: '🔥 Quente', morno: '🌤️ Morno', frio: '❄️ Frio' };
+  const EMOJI = { ajuda: '🙋', quente: '🔥', agendamento: '📅', erro: '⚠️', resumo: '📊' };
+  const tagTemp = (l) => (l?.temperatura ? el('span', { class: 'bia-tag t-' + l.temperatura }, TEMP[l.temperatura] + (l.intencao != null ? ` · ${l.intencao}%` : '')) : null);
+  const vazio = (t) => el('div', { class: 'bia-card bia-vazio' }, t);
+  function erro(e) { console.error('Carol:', e); alert('Carol: ' + (e?.message || e)); }
+
+  let logado = false, config = null, secao = 'alertas', aberta = null, alertas = [];
+
+  // ------------------------------------------------------------------ login
+  async function iniciar() {
+    const { data } = await sb.auth.getSession();
+    logado = !!data.session;
+    $('bia-login').style.display = logado ? 'none' : '';
+    $('bia-app').style.display = logado ? '' : 'none';
+    if (logado) { await carregarConfig(); await atualizarAlertas(true); mostrarSecao(secao); }
+  }
+  async function entrar() {
+    $('bia-erro-login').textContent = '';
+    const { error } = await sb.auth.signInWithPassword({ email: EMAIL_EQUIPE, password: $('bia-senha').value });
+    if (error) { $('bia-erro-login').textContent = 'Senha incorreta.'; return; }
+    $('bia-senha').value = '';
+    iniciar();
+  }
+  $('bia-entrar').onclick = entrar;
+  $('bia-senha').onkeydown = (e) => { if (e.key === 'Enter') entrar(); };
+  $('bia-sair').onclick = async () => { await sb.auth.signOut(); iniciar(); };
+
+  // ------------------------------------------------------------------ seções
+  function mostrarSecao(s) {
+    secao = s;
+    document.querySelectorAll('#bia-abas button').forEach((b) => b.classList.toggle('ativa', b.dataset.secao === s));
+    document.querySelectorAll('#bia-app > section').forEach((x) => { x.style.display = x.dataset.secao === s ? '' : 'none'; });
+    ({ alertas: renderAlertas, conversas: carregarConversas, agenda: carregarAgenda, aprendizados: carregarAprendizados, sac: carregarSac,
+      tabelas: carregarTabelas, relatorio: carregarRelatorio, ajustes: carregarAjustes, followup: carregarFollowup, colar: prepararColar })[s]?.();
+  }
+  document.querySelectorAll('#bia-abas button').forEach((b) => { b.onclick = () => mostrarSecao(b.dataset.secao); });
+
+  // ------------------------------------------------------------------ chave geral
+  async function carregarConfig() {
+    const { data, error } = await sb.from('bia_config').select('*').eq('id', 1).maybeSingle();
+    if (error) return erro(error.message.includes('does not exist') ? 'As tabelas da Carol ainda não foram instaladas no Supabase.' : error);
+    config = data;
+    $('bia-chave').classList.toggle('on', !!data?.ativo);
+    $('bia-chave').querySelector('span').textContent = data?.ativo ? 'Ligada' : 'Desligada';
+    const teste = data?.testadores?.length ? ' · Fase de testes: a Carol só responde as contas de teste.' : '';
+    const reforco = data?.ativo && data?.reforco_ate && new Date(data.reforco_ate) > new Date();
+    const hora = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    let quem, detalhe;
+    if (!data?.ativo) { quem = '👩‍💼 Equipe'; detalhe = 'A Carol está desligada.'; }
+    else if (reforco) { quem = '🤖 Carol'; detalhe = `A equipe pediu ajuda: a Carol responde todos até ${hora(data.reforco_ate)}.`; }
+    else if (biaAtendeAgora(data.horario_bia)) { quem = '🤖 Carol'; detalhe = data.horario_bia ? 'É o horário dela (loja fechada).' : 'Ela atende 24 horas.'; }
+    else { quem = '👩‍💼 Equipe'; detalhe = data.assumir_apos_min ? `Se ninguém responder um cliente em ${data.assumir_apos_min} minutos, a Carol entra.` : 'Responda os clientes pelo Instagram, como sempre.'; }
+    $('bia-quem').textContent = quem;
+    $('bia-status').textContent = detalhe + teste;
+    $('bia-reforco-ligar').textContent = reforco ? '✋ Equipe volta a atender' : '⚡ Carol assume por 1 hora';
+    $('bia-reforco-ligar').style.display = data?.ativo && (reforco || quem.includes('Equipe')) ? '' : 'none';
+  }
+  $('bia-chave').onclick = async () => {
+    const ligar = !config?.ativo;
+    if (!confirm(ligar ? 'Ligar a Carol? Ela vai responder os clientes no Instagram.' : 'Desligar a Carol? Ela para de responder imediatamente.')) return;
+    const { error } = await sb.from('bia_config').update({ ativo: ligar, atualizado_em: new Date().toISOString() }).eq('id', 1);
+    if (error) return erro(error);
+    carregarConfig();
+  };
+  function atualizarBotaoNotif() {
+    const pode = 'Notification' in window;
+    $('bia-notif').style.display = pode && Notification.permission !== 'granted' ? '' : 'none';
+  }
+  $('bia-notif').onclick = async () => { await Notification.requestPermission(); atualizarBotaoNotif(); };
+  atualizarBotaoNotif();
+
+  // ------------------------------------------------------------------ alertas (com aviso sonoro e notificação)
+  function tocarAviso() {
+    try {
+      const ctx = new AudioContext();
+      [0, 0.18].forEach((t) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.15);
+        o.connect(g).connect(ctx.destination); o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.16);
+      });
+    } catch {}
+  }
+  async function atualizarAlertas(primeira = false) {
+    if (!logado) return;
+    const { data, error } = await sb.from('bia_alertas').select('*, ig_conversas(nome, usuario)').eq('resolvido', false).order('criado_em', { ascending: false }).limit(200);
+    if (error) return;
+    alertas = data;
+    const n = alertas.length;
+    $('bia-badge').textContent = n > 99 ? '99+' : n;
+    $('bia-badge').classList.toggle('on', n > 0);
+    const naAba = $('tab-bia').classList.contains('active');
+    $('bia-flutuante').textContent = `🔔 ${n} ${n === 1 ? 'aviso' : 'avisos'} da Carol`;
+    $('bia-flutuante').classList.toggle('on', n > 0 && !naAba);
+    document.querySelector('#bia-abas [data-secao=alertas]').textContent = `🔔 Avisos${n ? ` (${n})` : ''}`;
+    const ultimo = Number(LS.get('rr-bia-ultimo-alerta', 0));
+    const novos = alertas.filter((a) => a.id > ultimo);
+    if (novos.length) {
+      LS.set('rr-bia-ultimo-alerta', Math.max(...alertas.map((a) => a.id)));
+      if (!primeira) {
+        tocarAviso();
+        if ('Notification' in window && Notification.permission === 'granted') {
+          for (const a of novos.slice(0, 3)) new Notification(`${EMOJI[a.tipo] || '🔔'} Carol · RR Prime Cell`, { body: a.titulo, tag: 'bia-' + a.id });
+        }
+      }
+    }
+    if (secao === 'alertas' && naAba) renderAlertas();
+  }
+  function renderAlertas() {
+    const box = $('bia-alertas');
+    if (!alertas.length) { box.replaceChildren(vazio('Nenhum alerta pendente. A Carol está dando conta 😊')); return; }
+    const resolver = async (id) => {
+      const q = sb.from('bia_alertas').update({ resolvido: true, resolvido_em: new Date().toISOString() });
+      const { error } = await (id ? q.eq('id', id) : q.eq('resolvido', false));
+      if (error) return erro(error);
+      atualizarAlertas();
+    };
+    box.replaceChildren(
+      el('div', { class: 'bia-linha', style: 'justify-content:flex-end;margin-bottom:10px' }, el('button', { class: 'bia-bt mini', onclick: () => resolver() }, '✔ Marcar todos como resolvidos')),
+      ...alertas.map((a) => el('div', { class: 'bia-card bia-linha' + (a.tipo === 'ajuda' || a.tipo === 'erro' ? ' alerta-forte' : '') },
+        el('div', { style: 'flex:1;min-width:200px' },
+          el('b', {}, `${EMOJI[a.tipo] || '🔔'} ${a.titulo}`),
+          a.texto ? el('div', { class: 'bia-sub' }, a.texto) : null,
+          el('div', { class: 'bia-sub', style: 'font-size:12px' }, quando(a.criado_em))),
+        a.conversa_id ? el('button', { class: 'bia-bt pri mini', onclick: () => abrirConversa(a.conversa_id) }, 'Ver conversa') : null,
+        el('button', { class: 'bia-bt mini', onclick: () => resolver(a.id) }, 'Resolvido'))));
+  }
+  setInterval(atualizarAlertas, 15000);
+
+  // ------------------------------------------------------------------ conversas
+  let conversas = [];
+  async function carregarConversas() {
+    const { data, error } = await sb.from('ig_conversas').select('id,nome,usuario,status,pausada_ate,lead,resultado,ultima_msg_em')
+      .order('ultima_msg_em', { ascending: false, nullsFirst: false }).limit(300);
+    if (error) return erro(error);
+    conversas = data;
+    renderConversas();
+    if (aberta) abrirConversa(aberta, false);
+  }
+  function renderConversas() {
+    const f = $('bia-filtro').value, q = $('bia-busca').value.trim().toLowerCase();
+    const comAlerta = new Set(alertas.map((a) => a.conversa_id));
+    const lista = conversas.filter((c) => (f === 'todas' || c.lead?.temperatura === f || (f === 'equipe' && c.status === 'equipe')) &&
+      (!q || `${c.nome || ''} ${c.usuario || ''}`.toLowerCase().includes(q)));
+    $('bia-lista-conversas').replaceChildren(...(lista.length ? lista.map((c) => el('div', { class: 'bia-card bia-item' + (c.id === aberta ? ' aberta' : ''), onclick: () => abrirConversa(c.id) },
+      el('div', { class: 'bia-linha' }, el('b', { style: 'flex:1' }, nome(c)), tagTemp(c.lead),
+        c.status === 'equipe' ? el('span', { class: 'bia-tag t-equipe' }, '👩‍💼 Equipe') : null,
+        comAlerta.has(c.id) ? el('span', { class: 'bia-tag t-alerta' }, '🔔') : null,
+        c.resultado ? el('span', { class: 'bia-tag' }, c.resultado.replace('_', ' ')) : null),
+      el('div', { class: 'bia-sub' }, [c.lead?.interesse, c.lead?.estagio, quando(c.ultima_msg_em)].filter(Boolean).join(' · '))))
+      : [vazio('Nenhuma conversa.')]));
+  }
+  $('bia-filtro').onchange = renderConversas;
+  $('bia-busca').oninput = renderConversas;
+
+  async function abrirConversa(id, rolarFim = true) {
+    aberta = id;
+    if (secao !== 'conversas') { mostrarSecao('conversas'); return; }
+    const [{ data: c, error }, { data: msgs }, { data: ags }] = await Promise.all([
+      sb.from('ig_conversas').select('*').eq('id', id).maybeSingle(),
+      sb.from('ig_mensagens').select('de,texto,criado_em').eq('conversa_id', id).order('id').limit(500),
+      sb.from('ig_agendamentos').select('data,horario,resultado').eq('conversa_id', id).order('data', { ascending: false }),
+    ]);
+    if (error || !c) return erro(error || 'Conversa não encontrada');
+    renderConversas();
+    $('bia-grade').classList.add('com-detalhe');
+    const lead = c.lead || {};
+    const atualizar = async (campos) => {
+      const { error: e } = await sb.from('ig_conversas').update({ ...campos, atualizado_em: new Date().toISOString() }).eq('id', id);
+      if (e) return erro(e);
+      carregarConversas();
+    };
+    const chat = el('div', { class: 'bia-chat' }, (msgs || []).map((m) => el('div', { class: 'bia-msg m-' + m.de }, m.texto || '[anexo]',
+      el('small', {}, `${m.de === 'bia' ? 'Carol' : m.de === 'equipe' ? 'Equipe' : 'Cliente'} · ${quando(m.criado_em)}`))));
+    $('bia-detalhe').replaceChildren(
+      el('button', { class: 'bia-bt mini', style: 'margin-bottom:10px', onclick: () => { aberta = null; $('bia-grade').classList.remove('com-detalhe'); $('bia-detalhe').replaceChildren(vazio('Escolha uma conversa.')); renderConversas(); } }, '← Voltar para a lista'),
+      el('div', { class: 'bia-card' },
+        el('div', { class: 'bia-linha' }, el('b', { style: 'flex:1;font-size:17px' }, nome(c), c.usuario && c.nome ? el('span', { class: 'bia-sub' }, '  @' + c.usuario) : null), tagTemp(lead)),
+        lead.resumo ? el('p', { style: 'margin:8px 0' }, lead.resumo) : null,
+        lead.interesse ? el('div', {}, '🎯 ', el('b', {}, 'Quer: '), lead.interesse) : null,
+        lead.proximo_passo ? el('div', {}, '➡️ ', el('b', {}, 'Próximo passo: '), lead.proximo_passo) : null,
+        lead.dica_recuperacao ? el('div', { style: 'margin-top:4px;padding:8px 10px;border-radius:10px;background:#f0fdf4;white-space:pre-wrap' }, '💡 ', el('b', {}, 'Como recuperar: '), lead.dica_recuperacao) : null,
+        lead.sinais?.length ? el('div', {}, '✅ ', el('b', {}, 'Sinais: '), lead.sinais.join('; ')) : null,
+        lead.objecoes?.length ? el('div', {}, '⚠️ ', el('b', {}, 'Objeções: '), lead.objecoes.join('; ')) : null,
+        ...(ags || []).map((a) => el('div', {}, '📅 ', el('b', {}, 'Agendado: '), `${dataBR(a.data)} às ${a.horario}${a.resultado ? ` (${a.resultado.replace('_', ' ')})` : ''}`)),
+        c.status === 'equipe' && c.pausada_ate ? el('div', { class: 'bia-sub', style: 'margin-top:6px;background:var(--card-soft);padding:8px;border-radius:10px' }, `👩‍💼 A equipe está atendendo. A Carol volta sozinha em ${quando(c.pausada_ate)} se ninguém responder.`) : null,
+        el('div', { class: 'bia-linha', style: 'margin-top:10px' },
+          c.status === 'equipe'
+            ? el('button', { class: 'bia-bt pri mini', onclick: async (ev) => {
+              // A Carol volta e já responde o que o cliente mandou (com todo o contexto da conversa).
+              ev.target.disabled = true; ev.target.textContent = '⏳ A Carol está respondendo…';
+              try {
+                const r = await chamarServidor('devolver', { id });
+                if (!r.ok) throw new Error(r.erro || 'não deu');
+              } catch (e) { await atualizar({ status: 'bia', pausada_ate: null }); alert('Devolvi para a Carol, mas ela não conseguiu responder agora (' + e.message + '). Ela tenta de novo sozinha em instantes.'); }
+              carregarConversas(); abrirConversa(id);
+            } }, '🤖 Devolver para a Carol')
+            : el('button', { class: 'bia-bt mini', onclick: () => atualizar({ status: 'equipe', pausada_ate: new Date(Date.now() + (config?.pausa_horas || 12) * 3600e3).toISOString() }) }, '👩‍💼 Assumir (pausar a Carol)'),
+          el('button', { class: 'bia-bt ok mini', onclick: () => atualizar({ resultado: 'comprou' }) }, '💰 Comprou'),
+          el('button', { class: 'bia-bt nao mini', onclick: () => atualizar({ resultado: 'perdido' }) }, 'Perdido'),
+          c.usuario ? el('a', { href: 'https://instagram.com/' + c.usuario, target: '_blank', rel: 'noopener', style: 'color:var(--brand);font-weight:700' }, 'Abrir perfil') : null),
+        el('p', { class: 'bia-sub', style: 'margin:8px 0 0' }, 'Para responder o cliente, use o Direct do Instagram: a Carol percebe e sai da conversa sozinha.')),
+      el('div', { class: 'bia-card' }, chat));
+    if (rolarFim) chat.scrollTop = chat.scrollHeight;
+  }
+
+  // ------------------------------------------------------------------ agendamentos
+  // Link que abre o Google Agenda com o evento preenchido (funciona sem configurar nada).
+  function linkAgenda(a) {
+    const [y, m, d] = String(a.data || '').split('-'), [h, mi] = String(a.horario || '00:00').split(':');
+    const fim = new Date(Number(y), Number(m) - 1, Number(d), Number(h), Number(mi) + 30);
+    const p = (n) => String(n).padStart(2, '0');
+    const f = (Y, M, D, H, MI) => `${Y}${p(M)}${p(D)}T${p(H)}${p(MI)}00`;
+    const x = a.dados || {};
+    const detalhes = [`Cliente: ${x.nome || '-'}`, `WhatsApp: ${x.whatsapp || '-'}`, `Instagram: ${x.instagram || '-'}`, x.forma_pagamento ? `Pagamento: ${x.forma_pagamento}` : '', x.resumo ? `Proposta: ${x.resumo}` : '', 'Agendado pela Carol'].filter(Boolean).join('\n');
+    const q = { action: 'TEMPLATE', text: a.titulo || x.nome || 'Agendamento', ctz: 'America/Sao_Paulo', details: detalhes,
+      dates: `${f(y, Number(m), Number(d), Number(h), Number(mi))}/${f(fim.getFullYear(), fim.getMonth() + 1, fim.getDate(), fim.getHours(), fim.getMinutes())}` };
+    return 'https://calendar.google.com/calendar/render?' + Object.entries(q).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+  }
+  async function carregarAgenda() {
+    const desde = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
+    const { data, error } = await sb.from('ig_agendamentos').select('*').gte('data', desde).order('data').order('horario');
+    if (error) return erro(error);
+    const marcar = async (a, resultado) => {
+      const { error: e } = await sb.from('ig_agendamentos').update({ resultado }).eq('id', a.id);
+      if (e) return erro(e);
+      if (a.conversa_id && resultado !== 'remarcou') await sb.from('ig_conversas').update({ resultado }).eq('id', a.conversa_id);
+      carregarAgenda();
+    };
+    $('bia-agenda').replaceChildren(
+      el('p', { class: 'bia-sub' }, 'Marque o que aconteceu em cada visita: é assim que a Carol aprende quais conversas viram venda.'),
+      ...(data.length ? data.map((a) => el('div', { class: 'bia-card' },
+        el('div', { class: 'bia-linha' }, el('b', { style: 'flex:1' }, `📅 ${dataBR(a.data)} às ${a.horario}`), a.resultado ? el('span', { class: 'bia-tag' }, a.resultado.replace('_', ' ')) : null),
+        el('div', { style: 'margin:4px 0' }, a.titulo || a.dados?.nome),
+        a.dados?.resumo ? el('div', { class: 'bia-sub' }, a.dados.resumo) : null,
+        el('div', { class: 'bia-linha', style: 'margin-top:8px' },
+          el('button', { class: 'bia-bt mini', onclick: () => marcar(a, 'compareceu') }, 'Compareceu'),
+          el('button', { class: 'bia-bt ok mini', onclick: () => marcar(a, 'comprou') }, '💰 Comprou'),
+          el('button', { class: 'bia-bt nao mini', onclick: () => marcar(a, 'nao_veio') }, 'Não veio'),
+          el('button', { class: 'bia-bt mini', onclick: () => marcar(a, 'remarcou') }, 'Remarcou'),
+          a.conversa_id ? el('button', { class: 'bia-bt mini', onclick: () => abrirConversa(a.conversa_id) }, 'Ver conversa') : null),
+        el('div', { class: 'bia-linha', style: 'margin-top:6px' },
+          el('a', { class: 'bia-bt mini', href: linkAgenda(a), target: '_blank', rel: 'noopener', style: 'text-decoration:none' }, '➕ Abrir no Google Agenda'),
+          el('button', { class: 'bia-bt mini', onclick: async (ev) => {
+            ev.target.disabled = true; ev.target.textContent = 'Enviando…';
+            try { await chamarServidor('enviar_agenda', { id: a.id }); ev.target.textContent = '✓ Está na agenda'; }
+            catch (e) { ev.target.disabled = false; ev.target.textContent = '📤 Enviar para a agenda'; alert('Não foi: ' + e.message + '\n\nUse "Abrir no Google Agenda" e salve o evento.'); }
+          } }, '📤 Enviar para a agenda'))))
+        : [vazio('Nenhum agendamento nos últimos 14 dias.')]));
+  }
+
+  // ------------------------------------------------------------------ aprendizados
+  async function carregarAprendizados() {
+    const { data, error } = await sb.from('bia_aprendizados').select('*').eq('excluido', false).neq('status', 'rejeitado').order('criado_em', { ascending: false });
+    if (error) return erro(faltaSql(error));
+    const salvar = async (id, campos) => {
+      const { error: e } = await sb.from('bia_aprendizados').update({ ...campos, atualizado_em: new Date().toISOString() }).eq('id', id);
+      if (e) return erro(faltaSql(e));
+      await carregarAprendizados();
+      if (campos.status !== 'rejeitado') cerebroMudou();
+    };
+    const busca = semAcento($('bia-regras-busca').value.trim());
+    const acha = (a) => !busca || semAcento(comNome(a.texto)).includes(busca);
+    const sugestoes = data.filter((a) => a.status === 'sugerido' && acha(a));
+    const todasRegras = data.filter((a) => a.status === 'ativo');
+    const regras = todasRegras.filter(acha);
+    $('bia-sugestoes').replaceChildren(...(sugestoes.length ? sugestoes.map((a) => sugEditando === a.id
+      ? el('div', { class: 'bia-card', style: 'border-color:#c7d2fe' }, caixaEdicao(comNome(a.texto),
+        async (texto) => { sugEditando = null; await decidirSugestao(a.id, { texto }); carregarAprendizados(); },
+        () => { sugEditando = null; carregarAprendizados(); }))
+      : el('div', { class: 'bia-card', style: 'border-color:#c7d2fe' },
+      el('div', {}, destacar(comNome(a.texto), busca)),
+      a.evidencia ? el('div', { class: 'bia-sub', style: 'margin-top:4px' }, '🔎 ' + a.evidencia) : null,
+      el('div', { class: 'bia-linha', style: 'margin-top:8px' },
+        el('button', { class: 'bia-bt pri mini', onclick: async () => { await salvar(a.id, { ativo: true, status: 'ativo', escopo: 'todas' }); gerarExemplo(a.id, comNome(a.texto)); } }, '✅ Aprovar para todas as lojas'),
+        el('button', { class: 'bia-bt mini', onclick: async () => { await salvar(a.id, { ativo: true, status: 'ativo', escopo: 'loja' }); gerarExemplo(a.id, comNome(a.texto)); } }, '📍 Aprovar só para a Carol'),
+        el('button', { class: 'bia-bt mini', onclick: () => { sugEditando = a.id; carregarAprendizados(); } }, '✏️ Editar'),
+        el('button', { class: 'bia-bt mini', onclick: () => salvar(a.id, { ativo: false, status: 'rejeitado' }) }, 'Rejeitar'))))
+      : [el('p', { class: 'bia-sub' }, busca ? 'Nenhuma sugestão com essa palavra.' : 'Nenhuma sugestão pendente. A Carol analisa os atendimentos todo dia às 22h.')]));
+    const todas = regras.filter((a) => a.escopo !== 'loja').length;
+    $('bia-regras').replaceChildren(
+      busca
+        ? el('p', { class: 'bia-sub' }, regras.length ? `🔎 ${regras.length} de ${todasRegras.length} regras têm “${$('bia-regras-busca').value.trim()}”.` : `🔎 Nenhuma regra tem “${$('bia-regras-busca').value.trim()}”.`)
+        : el('p', { class: 'bia-sub' }, `${regras.length} regras: ${todas} valem para todas as lojas (🌐) e ${regras.length - todas} só para a Carol (📍). Mudança numa regra 🌐 vale em todas as lojas.`),
+      ...regras.map((a) => regraEditando === a.id
+        ? el('div', { class: 'bia-card' },
+          el('textarea', { id: 'bia-editar-regra', rows: 4, style: 'width:100%;box-sizing:border-box' }, comNome(a.texto)),
+          el('div', { class: 'bia-linha', style: 'margin-top:6px' },
+            el('button', { class: 'bia-bt pri mini', onclick: async () => {
+              const texto = $('bia-editar-regra').value.trim();
+              if (!texto) return;
+              regraEditando = null;
+              await salvar(a.id, { texto });
+              gerarExemplo(a.id, texto);
+            } }, '💾 Salvar'),
+            el('button', { class: 'bia-bt mini', onclick: () => { regraEditando = null; carregarAprendizados(); } }, 'Cancelar'),
+            el('span', { class: 'bia-sub' }, a.escopo === 'loja' ? 'Muda só aqui.' : 'Muda em todas as lojas.')))
+        : el('div', { class: 'bia-card' },
+          el('div', { class: 'bia-linha' },
+            el('input', { type: 'checkbox', checked: a.ativo ? '' : false, title: a.escopo === 'loja' ? 'Liga/desliga só aqui' : 'Liga/desliga em todas as lojas', onchange: (e) => salvar(a.id, { ativo: e.target.checked }) }),
+            el('div', { style: 'flex:1;min-width:200px' }, destacar(comNome(a.texto), busca),
+              el('div', { class: 'bia-linha', style: 'margin-top:4px' }, tagEscopo(a), tagOrigem(a), el('span', { class: 'bia-sub' }, a.origem || ''))),
+            el('button', { class: 'bia-bt mini', onclick: () => { regraEditando = a.id; carregarAprendizados(); } }, '✏️ Editar'),
+            el('button', { class: 'bia-bt mini', onclick: () => salvar(a.id, { escopo: a.escopo === 'loja' ? 'todas' : 'loja' }) },
+              a.escopo === 'loja' ? '🌐 Liberar para todas' : '📍 Deixar só para a Carol'),
+            el('button', { class: 'bia-bt nao mini', onclick: () => {
+              if (confirm(a.escopo === 'loja' ? 'Apagar esta regra?' : 'Apagar esta regra em TODAS as lojas?')) salvar(a.id, { excluido: true, ativo: false });
+            } }, '🗑')),
+          exemploEl(a))));
+    desenharCerebro();
+  }
+  // Pesquisa nas regras: sem diferença de acento e maiúscula; o trecho achado fica marcado.
+  const semAcento = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  function destacar(texto, busca) {
+    if (!busca) return texto;
+    const i = semAcento(texto).indexOf(busca);
+    if (i < 0) return texto;
+    return el('span', {}, texto.slice(0, i), el('mark', {}, texto.slice(i, i + busca.length)), texto.slice(i + busca.length));
+  }
+  let buscaTimer = null;
+  $('bia-regras-busca').oninput = () => { clearTimeout(buscaTimer); buscaTimer = setTimeout(carregarAprendizados, 250); };
+
+  // Regras repetidas: a Carol revisa todas e mostra os grupos; o dono escolhe qual excluir.
+  let repetidas = null;
+  const TIPOS_REPETIDAS = { repetida: '🔁 Dizem a mesma coisa', parecida: '🪞 Muito parecidas', contraditoria: '⚔️ Se contradizem' };
+  $('bia-repetidas').onclick = async (ev) => {
+    ev.target.disabled = true; ev.target.textContent = '⏳ Analisando todas as regras…';
+    $('bia-repetidas-res').replaceChildren(el('p', { class: 'bia-sub' }, 'A Carol está lendo todas as regras e comparando uma com a outra. Pode levar até 1 minuto.'));
+    try { repetidas = { ...(await chamarServidor('regras_repetidas')), ignorados: new Set(), excluidas: new Set() }; }
+    catch (e) { repetidas = null; $('bia-repetidas-res').replaceChildren(vazio('Não consegui analisar agora: ' + e.message)); }
+    ev.target.disabled = false; ev.target.textContent = '🧹 Procurar regras repetidas';
+    if (repetidas) desenharRepetidas();
+  };
+  function desenharRepetidas() {
+    const r = repetidas;
+    const abertos = r.grupos.map((g, i) => ({ ...g, i, regras: g.regras.filter((x) => !r.excluidas.has(x.id)) }))
+      .filter((g) => !r.ignorados.has(g.i) && g.regras.length >= 2);
+    const excluir = async (x) => {
+      if (!confirm((x.escopo === 'loja' ? 'Excluir esta regra?' : 'Excluir esta regra em TODAS as lojas?') + '\n\n' + x.texto)) return;
+      const { error } = await sb.from('bia_aprendizados').update({ excluido: true, ativo: false, atualizado_em: new Date().toISOString() }).eq('id', x.id);
+      if (error) return erro(faltaSql(error));
+      r.excluidas.add(x.id);
+      desenharRepetidas(); carregarAprendizados(); cerebroMudou();
+    };
+    $('bia-repetidas-res').replaceChildren(
+      el('p', { class: 'bia-sub', style: 'margin:10px 0 4px' }, abertos.length
+        ? `A Carol revisou ${r.total} regras e achou ${abertos.length} ${abertos.length === 1 ? 'grupo' : 'grupos'} para você conferir. Exclua a que sobra (⭐ = a que ela manteria).`
+        : `✅ A Carol revisou ${r.total} regras e não há mais repetidas, parecidas ou contraditórias.`),
+      ...abertos.map((g) => el('div', { class: 'bia-card', style: 'border-color:#fcd34d;margin-top:8px' },
+        el('b', {}, TIPOS_REPETIDAS[g.tipo] || g.tipo), el('div', { class: 'bia-sub', style: 'margin:2px 0 6px' }, g.motivo),
+        ...g.regras.map((x) => el('div', { class: 'bia-linha', style: 'padding:8px 0;border-top:1px solid var(--line)' },
+          el('div', { style: 'flex:1;min-width:200px' }, x.manter ? el('b', {}, '⭐ ') : null, comNome(x.texto),
+            el('div', { style: 'margin-top:4px' }, tagEscopo(x))),
+          el('button', { class: 'bia-bt nao mini', onclick: () => excluir(x) }, '🗑 Excluir'))),
+        el('div', { style: 'margin-top:6px' }, el('button', { class: 'bia-bt mini', onclick: () => { r.ignorados.add(g.i); desenharRepetidas(); } }, 'Manter todas')))));
+  }
+
+  // Exemplo de como a Carol aplicaria cada regra (gerado sozinho ao criar ou editar).
+  let regraEditando = null, sugEditando = null;
+  // Caixa para editar o texto de uma regra ou sugestão (Salvar / Cancelar).
+  function caixaEdicao(texto, aoSalvar, aoCancelar) {
+    const caixa = el('textarea', { rows: 4, class: 'bia-editar-texto', style: 'width:100%;box-sizing:border-box' }, texto);
+    return el('div', {}, caixa, el('div', { class: 'bia-linha', style: 'margin-top:6px' },
+      el('button', { class: 'bia-bt pri mini', onclick: () => { const t = caixa.value.trim(); if (t) aoSalvar(t); } }, '💾 Salvar'),
+      el('button', { class: 'bia-bt mini', onclick: aoCancelar }, 'Cancelar')));
+  }
+  // Aprovar, rejeitar ou editar uma sugestão (da aba de regras ou de um card do relatório).
+  async function decidirSugestao(id, campos) {
+    const { error } = await sb.from('bia_aprendizados').update({ ...campos, atualizado_em: new Date().toISOString() }).eq('id', id);
+    if (error) { erro(faltaSql(error)); return false; }
+    if (campos.status === 'ativo') cerebroMudou();
+    return true;
+  }
+  const gerandoExemplo = new Set(), exemplosNovos = new Map();
+  function exemploEl(a) {
+    const ex = exemplosNovos.get(a.id) || a.exemplo;
+    const botao = el('button', { class: 'bia-bt mini', disabled: gerandoExemplo.has(a.id) ? '' : false, onclick: () => gerarExemplo(a.id, comNome(a.texto)) },
+      gerandoExemplo.has(a.id) ? '⏳ Gerando exemplo…' : ex ? '🔄 Novo exemplo' : '💬 Ver exemplo');
+    if (!ex?.dialogo?.length) return el('div', { style: 'margin-top:6px' }, botao);
+    return el('div', { style: 'margin-top:8px;padding:8px;border-radius:8px;background:rgba(99,102,241,.07)' },
+      el('b', {}, '💬 Como a Carol aplicaria:'),
+      ...ex.dialogo.map((f) => el('div', { style: 'margin-top:4px' }, el('b', {}, f.quem === 'cliente' ? 'Cliente: ' : 'Carol: '), f.texto)),
+      ex.explicacao ? el('div', { class: 'bia-sub', style: 'margin-top:4px' }, '🧩 ' + ex.explicacao) : null,
+      el('div', { style: 'margin-top:6px' }, botao));
+  }
+  async function gerarExemplo(id, texto) {
+    gerandoExemplo.add(id); carregarAprendizados();
+    try { exemplosNovos.set(id, (await chamarServidor('exemplo_regra', { id, texto })).exemplo); }
+    catch (e) { alert('Não consegui gerar o exemplo agora: ' + e.message); }
+    gerandoExemplo.delete(id); carregarAprendizados();
+  }
+  // Tempo real: depois de qualquer mudança em regra ou SAC, avisa as outras lojas (sem botão).
+  let cerebroEnviando = false;
+  async function cerebroMudou() {
+    cerebroEnviando = true; desenharCerebro();
+    try { config = { ...config, cerebro_resultado: await chamarServidor('cerebro_avisar') }; }
+    catch (e) { config = { ...config, cerebro_resultado: { erro: 'não consegui avisar as outras lojas agora (' + e.message + '). Elas recebem na próxima hora.' } }; }
+    cerebroEnviando = false; desenharCerebro();
+  }
+  function desenharCerebro() {
+    if (!$('bia-cerebro')) return;
+    const r = config?.cerebro_resultado;
+    const linhas = (r?.lojas || []).map((l) => {
+      const nome = NOMES_LOJAS[l.loja] || l.loja;
+      if (!l.ok) return el('div', {}, `⏳ ${nome}: ainda não instalada ou fora do ar (${l.erro || 'erro'}).`);
+      const ap = l.aprendizados || {}, sac = l.sac || {};
+      const igual = !ap.faltam && !sac.faltam && !ap.so_aqui && !sac.so_aqui;
+      return el('div', {}, `${igual ? '✅' : '🔄'} ${nome}: ${ap.aqui ?? '-'} regras e ${sac.aqui ?? '-'} respostas do SAC compartilhadas` +
+        (igual ? ' (iguais).' : ' (atualizando…).'));
+    });
+    $('bia-cerebro').replaceChildren(
+      el('b', {}, '🧠 Cérebro compartilhado'),
+      el('p', { class: 'bia-sub', style: 'margin:4px 0' }, 'Regras e respostas do SAC 🌐 vão sozinhas, na hora, para as atendentes das outras lojas. As 📍 ficam só aqui.'),
+      ...(cerebroEnviando ? [el('div', { class: 'bia-sub' }, '🔄 Enviando para as outras lojas…')] : []),
+      ...(r?.lojas ? [...linhas, el('div', { class: 'bia-sub', style: 'margin-top:4px' }, `Conferido em ${quando(r.em)}`)]
+        : [el('div', { class: 'bia-sub' }, r?.erro ? '⚠️ ' + r.erro : 'Ainda não conferido.')]));
+  }
+  async function novaRegra(escopo) {
+    const texto = $('bia-nova-regra').value.trim();
+    if (!texto) return;
+    const id = crypto.randomUUID();
+    const { error } = await sb.from('bia_aprendizados').insert({ id, texto, ativo: true, status: 'ativo', origem: 'adicionada no painel', escopo, loja_origem: LOJA_PAINEL });
+    if (error) return erro(faltaSql(error));
+    $('bia-nova-regra').value = '';
+    await carregarAprendizados();
+    cerebroMudou();
+    gerarExemplo(id, texto);
+  }
+  $('bia-add-regra').onclick = () => novaRegra('todas');
+  $('bia-add-regra-loja').onclick = () => novaRegra('loja');
+
+  // ------------------------------------------------------------------ relatório
+  let relAberto = null;
+  // Período: datas no formato AAAA-MM-DD (horário de Brasília).
+  const diaISO = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  function definirPeriodo(tipo) {
+    const hoje = new Date(); let de = new Date(hoje), ate = new Date(hoje);
+    if (tipo === '7') de.setDate(hoje.getDate() - 6);
+    if (tipo === '30') de.setDate(hoje.getDate() - 29);
+    if (tipo === 'mes') de = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    if (tipo === 'mes-passado') { de = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1); ate = new Date(hoje.getFullYear(), hoje.getMonth(), 0); }
+    $('bia-rel-de').value = diaISO(de); $('bia-rel-ate').value = diaISO(ate);
+  }
+  document.querySelectorAll('[data-rel]').forEach((b) => { b.onclick = () => { definirPeriodo(b.dataset.rel); carregarRelatorio(); }; });
+  $('bia-rel-ver').onclick = () => carregarRelatorio();
+  const dicaEl = (x) => (x.dica ? el('div', { style: 'margin-top:4px;padding:8px 10px;border-radius:10px;background:#f0fdf4;font-size:14px;white-space:pre-wrap' }, '💡 ' + x.dica) : null);
+  const clienteEl = (x) => el('div', { style: 'padding:10px 0;border-top:1px solid var(--line)' },
+    el('div', { class: 'bia-linha bia-item', onclick: () => abrirConversa(x.id) }, el('b', {}, x.nome), tagTemp({ temperatura: x.temperatura }),
+      x.interesse ? el('span', { class: 'bia-sub' }, '🎯 ' + x.interesse) : null, el('span', { class: 'bia-sub', style: 'margin-left:auto' }, quando(x.quando))),
+    x.resumo ? el('div', { class: 'bia-sub' }, x.resumo) : null, dicaEl(x));
+
+  let relAnalisando = false;
+  async function carregarRelatorio() {
+    carregarAnalise();
+    if (!$('bia-rel-de').value) definirPeriodo('30');
+    const periodo = { de: $('bia-rel-de').value, ate: $('bia-rel-ate').value };
+    $('bia-rel-cards').replaceChildren(el('div', { class: 'bia-sub' }, 'Carregando…'));
+    let r;
+    try { r = await chamarServidor('relatorio', periodo); }
+    catch (e) { $('bia-rel-cards').replaceChildren(vazio('Não consegui carregar o relatório: ' + e.message)); return; }
+    const num = (rot, v) => el('div', { class: 'bia-card' }, el('b', {}, v ?? '-'), el('span', { class: 'bia-sub' }, rot));
+    const pct = (n) => (r.conversas ? Math.round((n / r.conversas) * 100) : 0);
+    $('bia-rel-geral').replaceChildren(num('conversas no período', r.conversas), num(`analisadas (${pct(r.analisadas)}%)`, r.analisadas),
+      num(`agendaram (${pct(r.agendaram)}%)`, r.agendaram), num('vieram na loja', r.compareceram), num('compraram', r.compraram));
+    const lista = (c) => {
+      relAberto = relAberto === c.id ? null : c.id;
+      document.querySelectorAll('#bia-rel-cards .bia-card').forEach((x) => x.classList.toggle('aberta', x.dataset.id === relAberto));
+      if (!relAberto) { $('bia-rel-lista').replaceChildren(); return; }
+      $('bia-rel-lista').replaceChildren(el('div', { class: 'bia-card' }, el('b', {}, `${c.emoji} ${c.titulo} (${c.total})`),
+        ...(c.clientes.length ? c.clientes.map(clienteEl) : [el('p', { class: 'bia-sub' }, 'Nenhum cliente neste período.')])));
+    };
+    $('bia-rel-cards').replaceChildren(...r.cards.map((c) => el('div', { class: 'bia-card' + (relAberto === c.id ? ' aberta' : ''), 'data-id': c.id, onclick: () => lista(c) },
+      el('span', { class: 'emo' }, c.emoji), el('div', { class: 'grande' }, c.total),
+      el('div', { style: 'font-weight:700;margin-top:4px' }, c.titulo),
+      el('div', { class: 'bia-sub' }, `${pct(c.total)}% das conversas · toque para ver quem`),
+      el('div', { class: 'bia-barra' }, el('i', { style: `width:${pct(c.total)}%` })),
+      solucaoEl(c, periodo))));
+    const aberto = r.cards.find((c) => c.id === relAberto);
+    if (aberto) { relAberto = null; lista(aberto); }
+    $('bia-rel-recuperar').replaceChildren(...(r.recuperar?.length
+      ? [el('div', { class: 'bia-card' }, ...r.recuperar.map(clienteEl))]
+      : [el('p', { class: 'bia-sub' }, 'Nenhum cliente para recuperar neste período.')]));
+    const faltam = r.conversas - r.analisadas;
+    $('bia-rel-nota').textContent = faltam > 0 ? '' : `✅ Todas as ${r.conversas} conversas do período foram analisadas.`;
+    if (faltam > 0 && !relAnalisando) analisarTudo(periodo, r.conversas);
+    // Com tudo analisado, a IA propõe uma solução para cada card que ainda não tem (uma vez por período).
+    const chave = periodo.de + '|' + periodo.ate;
+    if (!faltam && !relSugerindo && !relSugerido.has(chave) && r.cards.some((c) => c.total > 0 && !c.sugestao)) {
+      relSugerido.add(chave); sugerirSolucoes(periodo);
+    }
+  }
+  // Solução sugerida para o problema do card: aprovar (vira regra), editar, rejeitar ou pedir outra.
+  let relSugerindo = false, cardEditando = null;
+  const relSugerido = new Set();
+  async function sugerirSolucoes(periodo, card) {
+    relSugerindo = card || true;
+    $('bia-rel-progresso').textContent = '💡 Pensando em como resolver cada problema…';
+    if (card) carregarRelatorio();
+    try { await chamarServidor('sugerir_cards', { ...periodo, card }); $('bia-rel-progresso').textContent = ''; }
+    catch (e) { $('bia-rel-progresso').textContent = '⚠️ Não consegui sugerir agora: ' + e.message; }
+    relSugerindo = false;
+    carregarRelatorio();
+  }
+  function solucaoEl(c, periodo) {
+    const s = c.sugestao;
+    const caixa = (...filhos) => el('div', { style: 'margin-top:10px;padding:10px;border-radius:10px;background:#fefce8;cursor:default;font-size:14px', onclick: (e) => e.stopPropagation() }, ...filhos);
+    const outra = el('button', { class: 'bia-bt mini', onclick: () => sugerirSolucoes(periodo, c.id) }, s ? '🔄 Sugerir outra' : '💡 Sugerir solução');
+    const decidir = async (campos) => {
+      if (await decidirSugestao(s.id, campos) && campos.status === 'ativo') gerarExemplo(s.id, comNome(campos.texto || s.texto));
+      carregarRelatorio(); carregarAprendizados();
+    };
+    if (relSugerindo === c.id || (relSugerindo === true && !s && c.total)) return caixa(el('div', { class: 'bia-sub' }, '💡 Pensando numa solução…'));
+    if (!c.total && !s) return null;
+    if (!s) return caixa(outra);
+    if (s.status === 'ativo') return caixa(el('div', {}, el('b', {}, '✅ Em prática: '), comNome(s.texto)), el('div', { style: 'margin-top:6px' }, outra));
+    if (s.status !== 'sugerido') return caixa(el('div', { class: 'bia-sub' }, 'Última sugestão rejeitada.'), el('div', { style: 'margin-top:6px' }, outra));
+    if (cardEditando === c.id) return caixa(caixaEdicao(comNome(s.texto),
+      async (texto) => { cardEditando = null; await decidirSugestao(s.id, { texto }); carregarRelatorio(); carregarAprendizados(); },
+      () => { cardEditando = null; carregarRelatorio(); }));
+    return caixa(el('b', {}, '💡 Como resolver:'), el('div', { style: 'margin-top:4px;white-space:pre-wrap' }, comNome(s.texto)),
+      s.evidencia ? el('div', { class: 'bia-sub', style: 'margin-top:4px' }, '🔎 ' + s.evidencia) : null,
+      el('div', { class: 'bia-linha', style: 'margin-top:8px' },
+        el('button', { class: 'bia-bt pri mini', onclick: () => decidir({ ativo: true, status: 'ativo', escopo: 'todas' }) }, '✅ Aprovar para todas as lojas'),
+        el('button', { class: 'bia-bt mini', onclick: () => decidir({ ativo: true, status: 'ativo', escopo: 'loja' }) }, '📍 Aprovar só para a Carol'),
+        el('button', { class: 'bia-bt mini', onclick: () => { cardEditando = c.id; carregarRelatorio(); } }, '✏️ Editar'),
+        el('button', { class: 'bia-bt mini', onclick: () => decidir({ ativo: false, status: 'rejeitado' }) }, 'Rejeitar'),
+        outra));
+  }
+  // Analisa 100% das conversas do período (em lotes), mostrando o progresso, e atualiza o relatório.
+  async function analisarTudo(periodo, total) {
+    relAnalisando = true;
+    try {
+      for (let volta = 0; volta < 200; volta++) {
+        const a = await chamarServidor('analisar_periodo', { ...periodo, limite: 30 });
+        $('bia-rel-progresso').textContent = `🔎 Analisando as conversas do período: ${total - a.faltam} de ${total}…`;
+        if (!a.faltam || !a.feitas) break;
+      }
+      $('bia-rel-progresso').textContent = '';
+    } catch (e) { $('bia-rel-progresso').textContent = '⚠️ Parei a análise: ' + e.message; }
+    relAnalisando = false;
+    carregarRelatorio();
+  }
+
+  async function carregarAnalise() {
+    const { data, error } = await sb.from('bia_relatorios').select('*').order('criado_em', { ascending: false }).limit(1);
+    if (error) return erro(error);
+    const r = data[0];
+    if (!r) { $('bia-relatorio').replaceChildren(vazio('Ainda não há análise. Ela sai todo dia às 22h, ou clique em "Analisar agora".')); return; }
+    const a = r.analise || {};
+    $('bia-relatorio').replaceChildren(
+      el('p', { class: 'bia-sub' }, `Análise de ${quando(r.criado_em)} (${r.periodo})`),
+      el('div', { class: 'bia-card' }, el('p', {}, a.resumo || ''),
+        el('b', {}, '✅ O que está funcionando'), el('ul', {}, (a.funciona || []).map((t) => el('li', {}, t))),
+        el('b', {}, '❌ O que não está funcionando'), el('ul', {}, (a.nao_funciona || []).map((t) => el('li', {}, t)))));
+  }
+  // Chama o servidor da Carol com o login da equipe.
+  async function chamarServidor(acao, extra = {}) {
+    const { data } = await sb.auth.getSession();
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/rotinas`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session?.access_token}`, apikey: SUPABASE_KEY },
+      body: JSON.stringify({ acao, ...extra }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.erro || `erro ${r.status}`);
+    return j;
+  }
+  $('bia-analisar').onclick = async () => {
+    $('bia-status-analise').textContent = 'Analisando… (pode levar até 1 minuto)';
+    try {
+      await chamarServidor('analisar_agora');
+      $('bia-status-analise').textContent = 'Pronto. Veja também as sugestões em 🧠 Regras da Carol.';
+      carregarAnalise();
+    } catch (e) { $('bia-status-analise').textContent = 'Erro: ' + e.message; }
+  };
+
+  // ------------------------------------------------------------------ SAC
+  let sacEditando = null;
+  function limparSac() {
+    sacEditando = null;
+    $('bia-sac-pergunta').value = ''; $('bia-sac-resposta').value = '';
+    $('bia-sac-titulo').textContent = 'Nova resposta do SAC';
+    $('bia-sac-salvar').textContent = '🌐 Adicionar para todas as lojas'; $('bia-sac-salvar-loja').style.display = ''; $('bia-sac-cancelar').style.display = 'none';
+  }
+  async function carregarSac() {
+    const { data, error } = await sb.from('bia_sac').select('*').eq('excluido', false).order('criado_em', { ascending: false });
+    if (error) return erro(error.message.includes('does not exist') ? 'Rode a atualização do banco da Carol (SQL) para liberar o SAC.' : faltaSql(error));
+    const atualizar = async (id, campos) => {
+      const { error: e } = await sb.from('bia_sac').update({ ...campos, atualizado_em: new Date().toISOString() }).eq('id', id);
+      if (e) return erro(faltaSql(e)); await carregarSac(); cerebroMudou();
+    };
+    $('bia-sac-lista').replaceChildren(...(data.length ? data.map((q) => el('div', { class: 'bia-card', style: q.ativo ? '' : 'opacity:.55' },
+      el('b', {}, q.pergunta), el('div', { style: 'white-space:pre-wrap;margin:6px 0' }, q.resposta),
+      el('div', { class: 'bia-linha', style: 'margin-bottom:6px' }, tagEscopo(q), tagOrigem(q)),
+      el('div', { class: 'bia-linha' },
+        el('button', { class: 'bia-bt mini', onclick: () => {
+          sacEditando = q.id; $('bia-sac-pergunta').value = q.pergunta; $('bia-sac-resposta').value = q.resposta;
+          $('bia-sac-titulo').textContent = 'Editando resposta do SAC'; $('bia-sac-salvar').textContent = 'Salvar alteração'; $('bia-sac-salvar-loja').style.display = 'none';
+          $('bia-sac-cancelar').style.display = ''; $('bia-sac-pergunta').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } }, '✏️ Editar'),
+        el('button', { class: 'bia-bt mini', onclick: () => atualizar(q.id, { ativo: !q.ativo }) }, q.ativo ? '⏸ Pausar' : '▶️ Ativar'),
+        el('button', { class: 'bia-bt mini', onclick: () => atualizar(q.id, { escopo: q.escopo === 'loja' ? 'todas' : 'loja' }) }, q.escopo === 'loja' ? '🌐 Liberar para todas' : '📍 Deixar só para a Carol'),
+        el('button', { class: 'bia-bt nao mini', onclick: () => {
+          if (confirm(q.escopo === 'loja' ? 'Apagar esta resposta do SAC?' : 'Apagar esta resposta do SAC em TODAS as lojas?')) atualizar(q.id, { excluido: true, ativo: false });
+        } }, '🗑')))) :
+      [vazio('Nenhuma resposta cadastrada. Comece pelas dúvidas que os clientes mais mandam no pós-venda.')]));
+  }
+  $('bia-sac-cancelar').onclick = limparSac;
+  $('bia-sac-salvar').onclick = () => salvarSac('todas');
+  $('bia-sac-salvar-loja').onclick = () => salvarSac('loja');
+  async function salvarSac(escopo) {
+    const pergunta = $('bia-sac-pergunta').value.trim(), resposta = $('bia-sac-resposta').value.trim();
+    if (!pergunta || !resposta) { $('bia-sac-status').textContent = 'Preencha a pergunta e a resposta.'; return; }
+    const { error } = sacEditando
+      ? await sb.from('bia_sac').update({ pergunta, resposta, atualizado_em: new Date().toISOString() }).eq('id', sacEditando)
+      : await sb.from('bia_sac').insert({ id: crypto.randomUUID(), pergunta, resposta, ativo: true, escopo, loja_origem: LOJA_PAINEL });
+    if (error) return erro(faltaSql(error));
+    $('bia-sac-status').textContent = 'Salvo ✓ A Carol já usa na próxima mensagem.';
+    limparSac(); await carregarSac(); cerebroMudou();
+  }
+
+  // ------------------------------------------------------------------ tabelas (preços, troca, assistência, horários)
+  const DIAS_TAB = [['segunda', 'Segunda'], ['terca', 'Terça'], ['quarta', 'Quarta'], ['quinta', 'Quinta'], ['sexta', 'Sexta'],
+    ['sabado', 'Sábado'], ['domingo', 'Domingo'], ['feriado', 'Feriados']];
+  const curto = (m) => String(m || '').replace(/^iPhone\s*/i, '');
+  const numero = (v) => {
+    const t = String(v ?? '').trim().replace(/^R\$\s*/i, '');
+    if (!t) return NaN;
+    return Number(/,\d{1,2}$/.test(t) ? t.replace(/\./g, '').replace(',', '.') : t.replace(/[.,](?=\d{3}\b)/g, ''));
+  };
+  let tabelas = null, linhasTab = [];
+  const escolha = () => $('bia-tab-escolha').value;
+
+  async function carregarTabelas() {
+    $('bia-tab-status').textContent = '';
+    $('bia-tab-grade').replaceChildren(el('div', { class: 'bia-sub' }, 'Carregando…'));
+    try { tabelas = await chamarServidor('tabelas'); } catch (e) { $('bia-tab-grade').replaceChildren(vazio('Não consegui carregar as tabelas: ' + e.message)); return; }
+    const tipos = Object.entries(tabelas.assistencia.valor.reparos);
+    const atual = $('bia-tab-assist').value;
+    $('bia-tab-assist').replaceChildren(...tipos.map(([k, r]) => el('option', { value: k }, r.descricao)));
+    if (atual) $('bia-tab-assist').value = atual;
+    montarLinhas();
+  }
+
+  function montarLinhas() {
+    const e = escolha();
+    $('bia-tab-assist').style.display = e === 'assistencia' ? '' : 'none';
+    const listaTab = ['lacrados', 'seminovos', 'troca', 'assistencia'].includes(e);
+    $('bia-tab-busca').style.display = listaTab ? '' : 'none';
+    $('bia-tab-add').style.display = listaTab ? '' : 'none';
+    $('bia-tab-botoes').style.display = e === 'taxas' ? 'none' : '';
+    if (e === 'taxas') {
+      $('bia-tab-info').textContent = '';
+      $('bia-tab-grade').replaceChildren(el('div', { class: 'bia-card', style: 'margin:0' },
+        el('b', {}, 'A Carol usa as mesmas taxas do simulador.'),
+        el('p', { class: 'bia-sub' }, 'Para mudar, vá na aba 📱 Simulador e clique no ⚙ do rodapé. A Carol passa a usar as taxas novas em até 5 minutos.')));
+      return;
+    }
+    const chave = { lacrados: 'catalogo', seminovos: 'catalogo', troca: 'upgrade', assistencia: 'assistencia', horarios: 'horarios' }[e];
+    const t = tabelas[chave];
+    const dica = { lacrados: ' Cor: só preencha quando o preço muda por cor (uma linha para cada cor).', seminovos: ' Cor: só preencha quando o preço muda por cor (uma linha para cada cor).',
+      troca: ' Valor pago com o aparelho perfeito; os defeitos descontam pela tabela de assistência. Modelo fora da lista = não aceito na troca.',
+      assistencia: ' Escolha o tipo de reparo acima. Modelo sem valor = a Carol chama a equipe.' }[e] || '';
+    $('bia-tab-info').textContent = (t.editada ? `Editada em ${quando(t.atualizado_em)}${t.atualizado_por ? ' (' + t.atualizado_por + ')' : ''}.` : 'Tabela de fábrica (ainda não editada aqui).') + dica;
+    $('bia-tab-padrao').style.display = t.editada ? '' : 'none';
+    if (e === 'lacrados' || e === 'seminovos') {
+      linhasTab = t.valor[e].flatMap((i) => (i.cores ? Object.entries(i.cores).map(([cor, preco]) => ({ modelo: curto(i.modelo), gb: i.gb, cor, preco }))
+        : [{ modelo: curto(i.modelo), gb: i.gb, cor: '', preco: i.preco }]));
+    } else if (e === 'troca') {
+      linhasTab = Object.entries(t.valor.valores).flatMap(([m, porGb]) => Object.entries(porGb).map(([gb, valor]) => ({ modelo: curto(m), gb, valor })));
+    } else if (e === 'assistencia') {
+      const tipo = $('bia-tab-assist').value || Object.keys(t.valor.reparos)[0];
+      linhasTab = Object.entries(t.valor.reparos[tipo].valores).map(([m, valor]) => ({ modelo: curto(m), valor }));
+    } else {
+      linhasTab = DIAS_TAB.map(([k, rot]) => ({ dia: k, rot, abre: t.valor[k]?.[0] || '09:00', fecha: t.valor[k]?.[1] || '18:00', fechado: !t.valor[k] }));
+    }
+    desenharGrade();
+  }
+
+  function desenharGrade() {
+    const e = escolha();
+    const campo = (l, k, attrs = {}) => {
+      const i = el('input', { type: 'text', value: l[k] ?? '', ...attrs });
+      i.oninput = () => { l[k] = i.value; };
+      return i;
+    };
+    const apagar = (l) => el('button', { class: 'x', title: 'Remover linha', onclick: () => { linhasTab.splice(linhasTab.indexOf(l), 1); desenharGrade(); } }, '✕');
+    let cab, linha, classe;
+    if (e === 'lacrados' || e === 'seminovos') {
+      classe = 'g-catalogo'; cab = ['Modelo', 'GB', 'Cor', 'Preço à vista', ''];
+      linha = (l) => [campo(l, 'modelo', { placeholder: '17 Pro Max' }), campo(l, 'gb', { inputmode: 'numeric', placeholder: '256' }),
+        campo(l, 'cor', { placeholder: 'todas' }), campo(l, 'preco', { inputmode: 'decimal', placeholder: '0' }), apagar(l)];
+    } else if (e === 'troca') {
+      classe = 'g-troca'; cab = ['Modelo do cliente', 'GB', 'Pagamos (perfeito)', ''];
+      linha = (l) => [campo(l, 'modelo', { placeholder: '13 Pro Max' }), campo(l, 'gb', { inputmode: 'numeric' }), campo(l, 'valor', { inputmode: 'decimal' }), apagar(l)];
+    } else if (e === 'assistencia') {
+      classe = 'g-assist'; cab = ['Modelo', 'Desconto (custo do reparo)', ''];
+      linha = (l) => [campo(l, 'modelo', { placeholder: '13 Pro Max' }), campo(l, 'valor', { inputmode: 'decimal' }), apagar(l)];
+    } else {
+      classe = 'g-horario'; cab = ['Dia', 'Abre', 'Fecha', 'Fechado'];
+      linha = (l) => {
+        const abre = campo(l, 'abre', { type: 'time' }), fecha = campo(l, 'fecha', { type: 'time' });
+        const fechado = el('input', { type: 'checkbox' }); fechado.checked = l.fechado;
+        const ajustar = () => { abre.disabled = fecha.disabled = fechado.checked; };
+        fechado.onchange = () => { l.fechado = fechado.checked; ajustar(); }; ajustar();
+        return [el('b', {}, l.rot), abre, fecha, el('label', { class: 'bia-linha' }, fechado, 'fechado')];
+      };
+    }
+    const busca = $('bia-tab-busca').value.trim().toLowerCase();
+    $('bia-tab-grade').replaceChildren(
+      el('div', { class: 'bia-gl cab ' + classe }, cab.map((c) => el('span', {}, c))),
+      el('div', { class: 'bia-grid-corpo' }, linhasTab.map((l) => {
+        const d = el('div', { class: 'bia-gl ' + classe }, linha(l));
+        if (busca && l.modelo != null && !String(l.modelo).toLowerCase().includes(busca) && String(l.modelo).trim()) d.style.display = 'none';
+        return d;
+      })));
+  }
+
+  // Monta a tabela no formato da Carol; o servidor confere tudo de novo antes de gravar.
+  function tabelaDasLinhas() {
+    const e = escolha();
+    const preenchidas = linhasTab.filter((l) => Object.entries(l).some(([k, v]) => !['rot', 'dia', 'fechado'].includes(k) && String(v ?? '').trim()));
+    if (e === 'lacrados' || e === 'seminovos') {
+      const grupos = new Map();
+      for (const l of preenchidas) {
+        const k = `${String(l.modelo).trim().toLowerCase()}|${Number(l.gb)}`;
+        if (!grupos.has(k)) grupos.set(k, { modelo: String(l.modelo).trim(), gb: Number(l.gb), linhas: [] });
+        grupos.get(k).linhas.push(l);
+      }
+      const itens = [...grupos.values()].map((g) => {
+        const comCor = g.linhas.filter((l) => String(l.cor || '').trim());
+        if (!comCor.length) {
+          if (g.linhas.length > 1) throw new Error(`${g.modelo} ${g.gb}GB aparece duas vezes. Se o preço muda por cor, preencha a cor em cada linha.`);
+          return { modelo: g.modelo, gb: g.gb, preco: numero(g.linhas[0].preco) };
+        }
+        if (comCor.length !== g.linhas.length) throw new Error(`${g.modelo} ${g.gb}GB: preencha a cor em todas as linhas desse modelo.`);
+        return { modelo: g.modelo, gb: g.gb, cores: Object.fromEntries(comCor.map((l) => [String(l.cor).trim(), numero(l.preco)])) };
+      });
+      return { chave: 'catalogo', valor: { ...tabelas.catalogo.valor, [e]: itens } };
+    }
+    if (e === 'troca') {
+      const valores = {};
+      for (const l of preenchidas) (valores[String(l.modelo).trim()] ||= {})[String(Number(l.gb))] = numero(l.valor);
+      return { chave: 'upgrade', valor: { valores } };
+    }
+    if (e === 'assistencia') {
+      const valor = structuredClone(tabelas.assistencia.valor);
+      const tipo = $('bia-tab-assist').value;
+      valor.reparos[tipo].valores = Object.fromEntries(preenchidas.map((l) => [String(l.modelo).trim(), numero(l.valor)]));
+      return { chave: 'assistencia', valor };
+    }
+    return { chave: 'horarios', valor: Object.fromEntries(linhasTab.map((l) => [l.dia, l.fechado ? null : [l.abre, l.fecha]])) };
+  }
+
+  $('bia-tab-escolha').onchange = () => { $('bia-tab-busca').value = ''; $('bia-tab-status').textContent = ''; montarLinhas(); };
+  $('bia-tab-assist').onchange = () => { $('bia-tab-status').textContent = ''; montarLinhas(); };
+  $('bia-tab-busca').oninput = desenharGrade;
+  $('bia-tab-add').onclick = () => {
+    const e = escolha();
+    linhasTab.unshift(e === 'lacrados' || e === 'seminovos' ? { modelo: '', gb: '', cor: '', preco: '' } : e === 'troca' ? { modelo: '', gb: '', valor: '' } : { modelo: '', valor: '' });
+    $('bia-tab-busca').value = ''; desenharGrade();
+    $('bia-tab-grade').querySelector('.bia-grid-corpo input')?.focus();
+  };
+  $('bia-tab-salvar').onclick = async () => {
+    $('bia-tab-status').textContent = 'Conferindo e salvando…';
+    try {
+      const { chave, valor } = tabelaDasLinhas();
+      await chamarServidor('salvar_tabela', { chave, valor });
+      await carregarTabelas();
+      $('bia-tab-status').textContent = 'Salvo ✓ A Carol passa a usar em até 1 minuto.';
+    } catch (e) { $('bia-tab-status').textContent = '⚠️ ' + e.message; }
+  };
+  $('bia-tab-padrao').onclick = async () => {
+    const e = escolha();
+    const chave = { lacrados: 'catalogo', seminovos: 'catalogo', troca: 'upgrade', assistencia: 'assistencia', horarios: 'horarios' }[e];
+    const aviso = chave === 'catalogo' ? 'Voltar os preços de lacrados E seminovos para a tabela de fábrica?' : 'Voltar esta tabela para a de fábrica?';
+    if (!confirm(aviso)) return;
+    try { await chamarServidor('restaurar_tabela', { chave }); await carregarTabelas(); $('bia-tab-status').textContent = 'Tabela de fábrica restaurada ✓'; }
+    catch (err) { $('bia-tab-status').textContent = '⚠️ ' + err.message; }
+  };
+
+  // ------------------------------------------------------------------ horário da Carol
+  // Mesmo formato do servidor: dias.segunda = { todo: true } ou { ate: '09:00', desde: '20:30' }.
+  const DIAS_BIA = [['segunda', 'Segunda'], ['terca', 'Terça'], ['quarta', 'Quarta'], ['quinta', 'Quinta'], ['sexta', 'Sexta'], ['sabado', 'Sábado'], ['domingo', 'Domingo']];
+  let horarioEdit = null;
+  function biaAtendeAgora(h) {
+    if (!h || !h.dias) return true;
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date()).map((x) => [x.type, x.value]));
+    const dia = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'][['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(p.weekday)];
+    const r = h.dias[dia]; if (!r) return false; if (r.todo) return true;
+    const m = Number(p.hour) * 60 + Number(p.minute);
+    const min = (x) => (/^\d{1,2}:\d{2}$/.test(x || '') ? Number(x.split(':')[0]) * 60 + Number(x.split(':')[1]) : null);
+    return (min(r.ate) != null && m < min(r.ate)) || (min(r.desde) != null && m >= min(r.desde));
+  }
+  function desenharHorarioBia() {
+    const h = horarioEdit;
+    document.querySelectorAll('input[name=bia-hmodo]').forEach((r) => { r.checked = r.value === (h.modo || 'sempre'); });
+    $('bia-hcontinuar').checked = h.continuar !== false;
+    const ativo = h.modo === 'horarios';
+    $('bia-hgrade').style.opacity = ativo ? '1' : '.45';
+    $('bia-hgrade').replaceChildren(
+      el('div', { class: 'bia-gl cab g-hbia' }, el('span', {}, 'Dia'), el('span', {}, 'O dia todo'), el('span', {}, 'Madrugada até'), el('span', {}, 'À noite a partir de')),
+      ...DIAS_BIA.map(([k, rot]) => {
+        const r = (h.dias[k] ||= { todo: false, ate: '', desde: '' });
+        const todo = el('input', { type: 'checkbox' }); todo.checked = !!r.todo;
+        const ate = el('input', { type: 'time', value: r.ate || '' }), desde = el('input', { type: 'time', value: r.desde || '' });
+        const ajustar = () => { ate.disabled = desde.disabled = todo.checked || !ativo; todo.disabled = !ativo; };
+        todo.onchange = () => { r.todo = todo.checked; ajustar(); };
+        ate.oninput = () => { r.ate = ate.value; }; desde.oninput = () => { r.desde = desde.value; };
+        ajustar();
+        return el('div', { class: 'bia-gl g-hbia' }, el('b', {}, rot), el('label', { class: 'bia-linha' }, todo), ate, desde);
+      }));
+  }
+  function carregarHorarioBia() {
+    const h = config?.horario_bia;
+    horarioEdit = { modo: h?.dias ? 'horarios' : 'sempre', continuar: h?.continuar !== false, dias: structuredClone(h?.dias || {}) };
+    desenharHorarioBia();
+  }
+  document.querySelectorAll('input[name=bia-hmodo]').forEach((r) => { r.onchange = () => { horarioEdit.modo = r.value; desenharHorarioBia(); }; });
+  $('bia-hcontinuar').onchange = () => { horarioEdit.continuar = $('bia-hcontinuar').checked; };
+  $('bia-hsugerir').onclick = async () => {
+    $('bia-hstatus').textContent = 'Lendo o horário da loja…';
+    try {
+      const loja = (await chamarServidor('tabelas')).horarios.valor;
+      horarioEdit.modo = 'horarios';
+      for (const [k] of DIAS_BIA) horarioEdit.dias[k] = loja[k] ? { todo: false, ate: loja[k][0], desde: loja[k][1] } : { todo: true, ate: '', desde: '' };
+      desenharHorarioBia();
+      $('bia-hstatus').textContent = 'Preenchido com o contrário do horário da loja. Confira e clique em Salvar.';
+    } catch (e) { $('bia-hstatus').textContent = '⚠️ ' + e.message; }
+  };
+  $('bia-hsalvar').onclick = async () => {
+    let valor = null;
+    if (horarioEdit.modo === 'horarios') {
+      const dias = {};
+      for (const [k, rot] of DIAS_BIA) {
+        const r = horarioEdit.dias[k] || {};
+        if (r.todo) { dias[k] = { todo: true }; continue; }
+        if (!r.ate && !r.desde) { dias[k] = null; continue; }
+        if (r.ate && r.desde && r.ate > r.desde) { $('bia-hstatus').textContent = `⚠️ ${rot}: "Da 0h até" tem que ser antes de "A partir de".`; return; }
+        dias[k] = { ...(r.ate ? { ate: r.ate } : {}), ...(r.desde ? { desde: r.desde } : {}) };
+      }
+      if (Object.values(dias).every((d) => !d)) { $('bia-hstatus').textContent = '⚠️ Marque pelo menos um horário, ou escolha 24 horas.'; return; }
+      valor = { continuar: horarioEdit.continuar, dias };
+    }
+    const { error } = await sb.from('bia_config').update({ horario_bia: valor, atualizado_em: new Date().toISOString() }).eq('id', 1);
+    if (error) { $('bia-hstatus').textContent = error.message.includes('horario_bia') ? '⚠️ Rode a atualização do banco (SQL) para liberar o horário.' : '⚠️ ' + error.message; return; }
+    $('bia-hstatus').textContent = 'Salvo ✓ Vale a partir da próxima mensagem.';
+    await carregarConfig();
+  };
+
+  // ------------------------------------------------------------------ reforço (equipe ocupada)
+  $('bia-reforco-ligar').onclick = async () => {
+    const ativo = config?.reforco_ate && new Date(config.reforco_ate) > new Date();
+    const ate = ativo ? null : new Date(Date.now() + 60 * 60000).toISOString();
+    const { error } = await sb.from('bia_config').update({ reforco_ate: ate, atualizado_em: new Date().toISOString() }).eq('id', 1);
+    if (error) return erro(error.message.includes('reforco_ate') ? 'Rode a atualização do banco (SQL) para liberar o "Carol assume agora".' : error);
+    carregarConfig();
+  };
+
+  // ------------------------------------------------------------------ follow-up
+  async function carregarFollowup() {
+    let f;
+    try { f = await chamarServidor('followup'); } catch (e) { $('bia-fu-fila').replaceChildren(vazio('Não consegui carregar: ' + e.message)); return; }
+    const [h1, h2] = f.horas;
+    $('bia-fu-regra').textContent = (f.followup_ativo && f.ativo ? '✅ Ligado. ' : '⏸ Desligado' + (f.ativo ? '. ' : ' (a Carol está desligada). ')) +
+      `Quando um cliente quente ou morno para de responder a Carol, ela manda uma mensagem curta depois de ${h1}h e a última depois de ${h2}h, sempre dentro das 24 horas que o Instagram permite e só das 9h às 21h. ` +
+      'Clientes com a equipe, agendados ou frios não recebem.';
+    $('bia-fu-ativo').checked = !!f.followup_ativo; $('bia-fu-1').value = h1; $('bia-fu-2').value = h2;
+    const num = (rot, v) => el('div', { class: 'bia-card' }, el('b', {}, v), el('span', { class: 'bia-sub' }, rot));
+    const n = f.numeros, pct = (x) => (n.enviadas ? ` (${Math.round((x / n.enviadas) * 100)}%)` : '');
+    $('bia-fu-numeros').replaceChildren(num('mensagens enviadas (7 dias)', n.enviadas), num('clientes responderam' + pct(n.responderam), n.responderam), num('agendaram depois' + pct(n.agendaram), n.agendaram));
+    const hora = (iso) => new Date(iso).toLocaleString('pt-BR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+    const item = (x, ...detalhes) => el('div', { class: 'bia-card bia-item', onclick: () => abrirConversa(x.id) },
+      el('div', { class: 'bia-linha' }, el('b', { style: 'flex:1' }, x.nome), tagTemp({ temperatura: x.temperatura })), ...detalhes);
+    $('bia-fu-pessoal').replaceChildren(...(f.pessoalmente.length ? f.pessoalmente.map((x) => item(x,
+      el('div', { class: 'bia-sub' }, [x.interesse, x.resumo].filter(Boolean).join(' · ')),
+      el('div', { class: 'bia-sub' }, 'Última mensagem do cliente: ' + quando(x.ultima_msg_cliente_em))))
+      : [el('p', { class: 'bia-sub' }, 'Ninguém para retomar pessoalmente agora.')]));
+    $('bia-fu-fila').replaceChildren(...(f.fila.length ? f.fila.map((x) => item(x,
+      el('div', { class: 'bia-sub' }, `${x.etapa}ª mensagem ${new Date(x.previsto) > new Date() ? 'por volta de ' + hora(x.previsto) : 'na próxima rodada (de hora em hora)'} · janela do Instagram fecha ${hora(x.janela_fecha)}`),
+      x.interesse ? el('div', { class: 'bia-sub' }, '🎯 ' + x.interesse) : null))
+      : [el('p', { class: 'bia-sub' }, 'Nenhum cliente esperando retomada.')]));
+    $('bia-fu-enviadas').replaceChildren(...(f.enviadas.length ? f.enviadas.map((x) => item(x,
+      el('div', { style: 'margin:4px 0' }, '“' + x.texto + '”'),
+      el('div', { class: 'bia-linha' }, el('span', { class: 'bia-sub' }, `${x.etapa}ª mensagem · ${quando(x.em)}`),
+        x.agendou ? el('span', { class: 'bia-tag', style: 'background:#dcfce7;color:#166534' }, '📅 Agendou')
+          : x.respondeu ? el('span', { class: 'bia-tag', style: 'background:#dbeafe;color:#1e40af' }, '💬 Respondeu')
+          : el('span', { class: 'bia-tag' }, '⏸ Sem resposta'))))
+      : [el('p', { class: 'bia-sub' }, 'Nenhuma retomada nos últimos 7 dias.')]));
+  }
+  $('bia-fu-salvar').onclick = async () => {
+    const h1 = Math.min(20, Math.max(1, Math.round(Number($('bia-fu-1').value) || 3)));
+    const h2 = Math.min(22, Math.max(h1 + 1, Math.round(Number($('bia-fu-2').value) || 20)));
+    const { error } = await sb.from('bia_config').update({ followup_ativo: $('bia-fu-ativo').checked, followup_1_h: h1, followup_2_h: h2, atualizado_em: new Date().toISOString() }).eq('id', 1);
+    $('bia-fu-status').textContent = error ? 'Erro: ' + (error.message.includes('followup_1_h') ? 'rode o SQL de atualização no Supabase.' : error.message) : 'Salvo ✓';
+    if (!error) carregarFollowup();
+  };
+
+  // ------------------------------------------------------------------ colar preços
+  // A vendedora cola a lista como recebeu; o servidor mostra o que entendeu e só grava ao confirmar.
+  const EXEMPLOS = {
+    lacrados: 'Exemplo:\n17 Pro Max 256GB Azul R$ 7.049\n17 Pro Max 256GB Laranja R$ 6.849\niPhone 16 128GB - 4.449\n\nTambém serve:\n17 PRO MAX 512GB\nAzul 8.399\nBranco 8.399',
+    seminovos: 'Exemplo:\niPhone 13 128GB 2.199\n14 Pro Max 256 - R$ 3.999\n15 128 bateria 89% 2.899',
+    troca: 'Exemplo (quanto a loja paga pelo aparelho perfeito):\n13 Pro Max 128GB 1.450 256GB 1.600\niPhone 11 64GB 450\n12 128 900',
+    assistencia: 'Exemplo (quanto custa o conserto, por modelo):\n17 Pro Max 1.000\niPhone 15 590\n13 Pro R$ 440',
+  };
+  let colarTipo = 'lacrados', reparosCarregados = false;
+  async function prepararColar() {
+    $('bia-colar-texto').placeholder = EXEMPLOS[colarTipo];
+    if (!reparosCarregados && colarTipo === 'assistencia') {
+      try {
+        const t = await chamarServidor('tabelas');
+        $('bia-colar-reparo').replaceChildren(...Object.entries(t.assistencia.valor.reparos).map(([k, r]) => el('option', { value: k }, r.descricao)));
+        reparosCarregados = true;
+      } catch (e) { $('bia-colar-status').textContent = 'Erro: ' + e.message; }
+    }
+    $('bia-colar-reparo').style.display = colarTipo === 'assistencia' ? '' : 'none';
+  }
+  document.querySelectorAll('#bia-colar-tipos button').forEach((b) => { b.onclick = () => {
+    colarTipo = b.dataset.tipo;
+    document.querySelectorAll('#bia-colar-tipos button').forEach((x) => x.classList.toggle('ativa', x === b));
+    $('bia-colar-previa').replaceChildren(); $('bia-colar-status').textContent = '';
+    prepararColar();
+  }; });
+  async function colar(salvar) {
+    const pedido = { tipo: colarTipo, texto: $('bia-colar-texto').value, reparo: $('bia-colar-reparo').value,
+      modo: document.querySelector('input[name=bia-colar-modo]:checked').value, salvar };
+    if (!pedido.texto.trim()) { $('bia-colar-status').textContent = 'Cole a lista primeiro.'; return; }
+    $('bia-colar-status').textContent = salvar ? 'Salvando…' : 'Conferindo…';
+    let r;
+    try {
+      const { data } = await sb.auth.getSession();
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/rotinas`, { method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session?.access_token}`, apikey: SUPABASE_KEY },
+        body: JSON.stringify({ acao: 'colar_tabela', ...pedido }) });
+      r = await resp.json();
+    } catch (e) { $('bia-colar-status').textContent = 'Erro: ' + e.message; return; }
+    $('bia-colar-status').textContent = '';
+    const ignoradas = r.ignoradas || [], mudancas = r.mudancas || [];
+    const conta = (t) => mudancas.filter((m) => m.tipo === t).length;
+    const ROTULO = { mudou: '✏️ Muda', novo: '➕ Novo', saiu: '➖ Sai', igual: '= Igual' };
+    const blocos = [];
+    if (r.salvo) blocos.push(el('div', { class: 'bia-card', style: 'border-color:#86efac;background:#f0fdf4' }, el('b', {}, '✅ Salvo! A Carol já está usando os valores novos.')));
+    else if (!r.ok) blocos.push(el('div', { class: 'bia-card', style: 'border-color:#fecaca;background:#fef2f2' }, el('b', {}, '❌ ' + (r.erro || 'Não deu certo.'))));
+    if (mudancas.length) {
+      const visiveis = mudancas.filter((m) => m.tipo !== 'igual').sort((a, b) => ['mudou', 'novo', 'saiu'].indexOf(a.tipo) - ['mudou', 'novo', 'saiu'].indexOf(b.tipo));
+      blocos.push(el('div', { class: 'bia-card' },
+        el('div', { class: 'bia-linha', style: 'margin-bottom:8px' }, el('b', { style: 'flex:1' }, r.salvo ? 'O que mudou' : '4. Confira antes de salvar'),
+          el('span', { class: 'bia-tag', style: 'background:#fef3c7' }, `${conta('mudou')} ${conta('mudou') === 1 ? 'muda' : 'mudam'}`), el('span', { class: 'bia-tag', style: 'background:#dcfce7' }, `${conta('novo')} ${conta('novo') === 1 ? 'novo' : 'novos'}`),
+          el('span', { class: 'bia-tag', style: 'background:#fee2e2' }, `${conta('saiu')} ${conta('saiu') === 1 ? 'sai' : 'saem'}`), el('span', { class: 'bia-tag' }, `${conta('igual')} ${conta('igual') === 1 ? 'igual' : 'iguais'}`)),
+        visiveis.length ? el('div', { class: 'mud', style: 'font-weight:800;font-size:12px;color:var(--muted)' }, el('span', {}, 'Modelo'), el('span', {}, 'Antes'), el('span', {}, 'Depois')) : el('p', { class: 'bia-sub' }, 'Nenhum valor muda: a lista colada é igual à tabela atual.'),
+        ...visiveis.map((m) => el('div', { class: 'mud ' + m.tipo }, el('span', {}, ROTULO[m.tipo] + ' ', el('b', {}, m.nome)), el('s', {}, m.antes || '—'), el('b', {}, m.depois || '(sai da tabela)')))));
+    }
+    if (ignoradas.length) blocos.push(el('div', { class: 'bia-card', style: 'border-color:#fdba74' },
+      el('b', {}, `⚠️ ${ignoradas.length} linha(s) que não entendi (ficam de fora)`),
+      ...ignoradas.map((i) => el('div', { class: 'bia-sub', style: 'margin-top:4px' }, `Linha ${i.linha}: "${i.texto}" → ${i.motivo}`))));
+    if (r.ok && r.previa) blocos.push(el('div', { class: 'bia-linha' },
+      el('button', { class: 'bia-bt pri', onclick: () => colar(true) }, '✅ Está certo, salvar'),
+      el('button', { class: 'bia-bt', onclick: () => { $('bia-colar-previa').replaceChildren(); $('bia-colar-texto').focus(); } }, 'Corrigir a lista')));
+    if (r.salvo) $('bia-colar-texto').value = '';
+    $('bia-colar-previa').replaceChildren(...blocos);
+    if (salvar && r.salvo) $('bia-colar-previa').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  $('bia-colar-conferir').onclick = () => colar(false);
+
+  // ------------------------------------------------------------------ modo gerência
+  // A equipe vê só Avisos, Conversas e Agendamentos; as configurações ficam em "Gerência".
+  function modoGerencia(ligar) {
+    $('tab-bia').classList.toggle('gerencia', ligar);
+    $('bia-gerencia-bt').textContent = ligar ? '✔ Sair da gerência' : '🔧 Gerência';
+    LS.set('rr-bia-gerencia', ligar ? '1' : '');
+    if (!ligar && !['alertas', 'conversas', 'agenda', 'followup', 'colar'].includes(secao)) mostrarSecao('alertas');
+  }
+  $('bia-gerencia-bt').onclick = () => {
+    const ligar = !$('tab-bia').classList.contains('gerencia');
+    modoGerencia(ligar);
+    if (ligar) mostrarSecao('ajustes');
+  };
+  modoGerencia(LS.get('rr-bia-gerencia', '') === '1');
+
+  // ------------------------------------------------------------------ ajustes e custo
+  async function carregarAjustes() {
+    await carregarConfig();
+    const v = config?.ultima_verificacao_em ? (Date.now() - new Date(config.ultima_verificacao_em)) / 60000 : null;
+    $('bia-verif').textContent = v != null && v < 5 ? `✅ A conferência a cada minuto está funcionando (última há ${Math.max(0, Math.round(v))} min).`
+      : '⚠️ A conferência a cada minuto ainda não está rodando: rode o SQL de atualização no Supabase. Até lá, ela confere de hora em hora.';
+    $('bia-cfg-auto').checked = !!config?.aprovar_automatico;
+    $('bia-cfg-pausa').value = config?.pausa_horas ?? 12;
+    $('bia-cfg-assumir').value = config?.assumir_apos_min ?? 0;
+    carregarHorarioBia();
+    carregarUso();
+  }
+  $('bia-salvar-cfg').onclick = async () => {
+    const { error } = await sb.from('bia_config').update({
+      aprovar_automatico: $('bia-cfg-auto').checked,
+      pausa_horas: Math.min(72, Math.max(1, Number($('bia-cfg-pausa').value) || 12)),
+      assumir_apos_min: Math.min(240, Math.max(0, Math.round(Number($('bia-cfg-assumir').value) || 0))), atualizado_em: new Date().toISOString(),
+    }).eq('id', 1);
+    $('bia-status-cfg').textContent = error ? 'Erro: ' + error.message : 'Salvo ✓';
+  };
+  for (const [id, padrao] of [['bia-preco-e', '0.30'], ['bia-preco-s', '2.50'], ['bia-dolar', '5.50']]) {
+    $(id).value = LS.get(id, padrao);
+    $(id).onchange = () => { LS.set(id, $(id).value); carregarUso(); };
+  }
+  async function carregarUso() {
+    const desde = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+    const [{ data, error }, { count }] = await Promise.all([
+      sb.from('bia_uso').select('*').gte('dia', desde).order('dia', { ascending: false }),
+      sb.from('ig_conversas').select('id', { count: 'exact', head: true }).gte('criado_em', desde),
+    ]);
+    if (error) return erro(error);
+    const n = (id) => Number(String($(id).value).replace(',', '.')) || 0;
+    const custo = (u) => ((u.entrada / 1e6) * n('bia-preco-e') + (u.saida / 1e6) * n('bia-preco-s')) * n('bia-dolar');
+    const total = data.reduce((s, u) => s + custo(u), 0);
+    $('bia-uso').replaceChildren(
+      el('div', {}, el('b', { style: 'font-size:18px' }, `≈ R$ ${total.toFixed(2)}`), ` em 30 dias · ${count ?? 0} conversas novas` + (count ? ` · ≈ R$ ${(total / count).toFixed(2)} por conversa` : '')),
+      ...data.slice(0, 10).map((u) => el('div', { class: 'bia-sub' }, `${dataBR(u.dia)}: ${u.chamadas} chamadas · R$ ${custo(u).toFixed(2)}`)));
+  }
+
+  // Ao entrar na aba, esconde o aviso flutuante e atualiza a seção aberta.
+  // Ao ir para outra aba, mostra o aviso na hora se houver alertas.
+  document.querySelectorAll('.tab-nav .tab-btn').forEach((b) => b.addEventListener('click', () => {
+    const naBia = b.id === 'bia-tab-btn';
+    $('bia-flutuante').classList.toggle('on', !naBia && logado && alertas.length > 0);
+    if (naBia && logado) mostrarSecao(secao);
+  }));
+  iniciar();
+})();
+</script>
+<!-- /BIA:SCRIPT -->
 </body>
 </html>
