@@ -1715,6 +1715,8 @@
   // =====================================================================
   // [contagem] CONTAGEM CEGA
   // =====================================================================
+  // Liga quando os leitores chegarem: aí o texto do grupo só sai depois da contagem da loja.
+  const CONTAGEM_OBRIGATORIA=false;
   let _ctId=null,_ctLocal='loja',_ctUltimos=[],_ctOcupado=false,_ctHoje=[];
   function ctMostrar(qual){['ct-inicio','ct-contando','ct-resultado'].forEach(id=>{document.getElementById(id).style.display=id===qual?'block':'none'})}
   async function contagemStatusHoje(){
@@ -1804,7 +1806,7 @@
     }
     if(!_apCache.length)await carregarAparelhos(false);
     await contagemStatusHoje();
-    if(!_ctHoje.some(c=>c.local==='loja')){
+    if(CONTAGEM_OBRIGATORIA&&!_ctHoje.some(c=>c.local==='loja')){
       _fechamentoTexto='';
       prev.textContent='Faça a contagem da loja (passo 1) para liberar o texto do grupo.';
       return;
