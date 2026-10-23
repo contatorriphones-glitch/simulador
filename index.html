@@ -2016,6 +2016,25 @@
   // COMISSÃO — lógica da aba (replica o visual do app do dono — ComissaoFechamento.tsx)
   // =====================================================================
   const COMISSAO_API = 'https://fechamento-rr-prime-cell--robertmoraiss10.replit.app/api/config';
+  // [seguranca] Token que o servidor devolve quando a senha da comissão está certa.
+  // Vai em todas as chamadas da Comissão; expira em 12h e aí pede a senha de novo.
+  const LS_COMISSAO_TOKEN='comissao_token';
+  function comissaoToken(){ try{ return localStorage.getItem(LS_COMISSAO_TOKEN)||''; }catch(e){ return ''; } }
+  function comissaoTokenValido(){
+    const t=comissaoToken(); if(!t) return false;
+    if(t==='legado') return true;
+    const exp=Number((t.split('.')[1])||0);
+    return exp>Date.now();
+  }
+  async function comissaoFetch(url,opts){
+    opts=opts||{};
+    const headers=Object.assign({},opts.headers||{});
+    const t=comissaoToken();
+    if(t && t!=='legado') headers['Authorization']='Bearer '+t;
+    const r=await fetch(url,Object.assign({},opts,{headers}));
+    if(r.status===401){ comissaoSair(); const el=document.getElementById('comissao-gate-erro'); if(el){ el.textContent='Sessão da comissão expirou. Digite a senha de novo.'; el.style.display='block'; } }
+    return r;
+  }
   const COMISSAO_STATUS_CFG = {
     pendente: { label: 'Pendente', color: '#d97706', bg: '#fef3c7' },
     pago: { label: 'Pago', color: '#059669', bg: '#d1fae5' },
@@ -2116,7 +2135,7 @@
     }
     const endpoint = tipo==='semanal' ? 'comissao-semanal' : 'metas-mensal';
     try{
-      const r = await fetch(`${COMISSAO_API}/${endpoint}/${id}/pagamento`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const r = await comissaoFetch(`${COMISSAO_API}/${endpoint}/${id}/pagamento`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const j = await r.json();
       if(!r.ok || j.error) throw new Error(j.error||'Erro ao salvar pagamento.');
       delete _comissaoPagtoState[k];
@@ -2137,7 +2156,7 @@
       const r = await fetch(`${COMISSAO_API}/comissao-senha/verificar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({senha})});
       const j = await r.json();
       if(j && j.ok){
-        try{ localStorage.setItem('comissao_unlocked','1'); }catch(e){}
+        try{ localStorage.setItem(LS_COMISSAO_TOKEN, j.token || 'legado'); localStorage.removeItem('comissao_unlocked'); }catch(e){}
         comissaoAbrirConteudo();
       } else {
         erroEl.textContent = 'Senha incorreta.'; erroEl.style.display='block';
@@ -2149,14 +2168,14 @@
     }
   }
   function comissaoSair(){
-    try{ localStorage.removeItem('comissao_unlocked'); }catch(e){}
+    try{ localStorage.removeItem('comissao_unlocked'); localStorage.removeItem(LS_COMISSAO_TOKEN); }catch(e){}
     document.getElementById('comissao-conteudo').style.display='none';
     document.getElementById('comissao-gate').style.display='block';
     document.getElementById('comissao-senha-input').value='';
   }
   function comissaoCheckDesbloqueado(){
     let ok=false;
-    try{ ok = localStorage.getItem('comissao_unlocked')==='1'; }catch(e){}
+    ok = comissaoTokenValido();
     if(ok) comissaoAbrirConteudo();
   }
   function comissaoAbrirConteudo(){
@@ -2252,7 +2271,7 @@
     _comissaoCarregandoLista = true;
     comissaoRenderListaColabs();
     try{
-      const r = await fetch(`${COMISSAO_API}/comissao-semanal?semanaInicio=${semanaInicio}`);
+      const r = await comissaoFetch(`${COMISSAO_API}/comissao-semanal?semanaInicio=${semanaInicio}`);
       const j = await r.json();
       _comissaoLinhas = j.data || [];
     }catch(e){
@@ -2272,7 +2291,7 @@
     corpo.innerHTML = `<div style="font-size:13px;font-weight:800;color:#6b7fa8">Atualizando...</div>`;
     if(!inicio || !fim) return;
     try{
-      const r = await fetch(`${COMISSAO_API}/comissao-semanal/live?dataInicio=${inicio}&dataFim=${fim}`);
+      const r = await comissaoFetch(`${COMISSAO_API}/comissao-semanal/live?dataInicio=${inicio}&dataFim=${fim}`);
       const j = await r.json();
       if(!r.ok || j.error) throw new Error(j.error||'Erro');
       const batida = !!j.batida;
@@ -2298,7 +2317,7 @@
     if(!semanaInicio || !semanaFim) return;
     btn.disabled = true; btn.textContent = 'Gerando... (pode levar alguns segundos)';
     try{
-      const r = await fetch(`${COMISSAO_API}/comissao-semanal/gerar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({semanaInicio,semanaFim})});
+      const r = await comissaoFetch(`${COMISSAO_API}/comissao-semanal/gerar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({semanaInicio,semanaFim})});
       const j = await r.json();
       if(!r.ok || j.error) throw new Error(j.error||'Erro ao gerar fechamento.');
       await comissaoCarregarSemana();
@@ -2315,7 +2334,7 @@
   let _comissaoHistorico = [];
   async function comissaoCarregarHistorico(){
     try{
-      const r = await fetch(`${COMISSAO_API}/comissao-semanal/historico`);
+      const r = await comissaoFetch(`${COMISSAO_API}/comissao-semanal/historico`);
       const j = await r.json();
       _comissaoHistorico = j.data || [];
       comissaoRenderHistorico();
@@ -2401,8 +2420,8 @@
     comissaoRenderListaMetas();
     try{
       const [r1,r2] = await Promise.all([
-        fetch(`${COMISSAO_API}/metas-mensal?mes=${mes}`).then(r=>r.json()),
-        fetch(`${COMISSAO_API}/metas`).then(r=>r.json()),
+        comissaoFetch(`${COMISSAO_API}/metas-mensal?mes=${mes}`).then(r=>r.json()),
+        comissaoFetch(`${COMISSAO_API}/metas`).then(r=>r.json()),
       ]);
       _comissaoLinhasMetas = r1.data || [];
       _comissaoMetasCfgCache = r2.data || null;
@@ -2420,7 +2439,7 @@
     if(!mes) return;
     btn.disabled = true; btn.textContent = 'Gerando... (pode levar alguns segundos)';
     try{
-      const r = await fetch(`${COMISSAO_API}/metas-mensal/gerar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mes})});
+      const r = await comissaoFetch(`${COMISSAO_API}/metas-mensal/gerar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mes})});
       const j = await r.json();
       if(!r.ok || j.error) throw new Error(j.error||'Erro ao gerar metas.');
       await comissaoCarregarMetas();
@@ -2446,7 +2465,7 @@
   async function comissaoCarregarConfigColabs(){
     const cont = document.getElementById('comissao-cfg-colabs');
     try{
-      const r = await fetch(`${COMISSAO_API}/colaboradoras`);
+      const r = await comissaoFetch(`${COMISSAO_API}/colaboradoras`);
       const j = await r.json();
       const colabs = j.data || [];
       cont.innerHTML = colabs.map(c=>`
@@ -2464,7 +2483,7 @@
   }
   async function comissaoSalvarClassificacao(id, classificacao){
     try{
-      await fetch(`${COMISSAO_API}/colaboradoras/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({classificacao})});
+      await comissaoFetch(`${COMISSAO_API}/colaboradoras/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({classificacao})});
       await comissaoCarregarConfigColabs();
     }catch(e){
       alert('Erro ao salvar classificação: '+e.message);
@@ -2485,7 +2504,7 @@
   async function comissaoCarregarConfigMetas(){
     const cont = document.getElementById('comissao-cfg-metas');
     try{
-      const r = await fetch(`${COMISSAO_API}/metas`);
+      const r = await comissaoFetch(`${COMISSAO_API}/metas`);
       const j = await r.json();
       const m = j.data || {};
       cont.innerHTML = COMISSAO_METAS_CAMPOS.map(function(par){
@@ -2506,7 +2525,7 @@
       body[par[0]] = Number(document.getElementById('comissao-meta-'+par[0]).value) || 0;
     }
     try{
-      const r = await fetch(`${COMISSAO_API}/metas`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const r = await comissaoFetch(`${COMISSAO_API}/metas`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const j = await r.json();
       if(!r.ok || j.error) throw new Error(j.error||'Erro');
       comissaoMensagem('Metas salvas!');
@@ -2517,7 +2536,7 @@
   async function comissaoCarregarConfigTabela(){
     const cont = document.getElementById('comissao-cfg-tabela-atual');
     try{
-      const r = await fetch(`${COMISSAO_API}/tabela-precos-referencia`);
+      const r = await comissaoFetch(`${COMISSAO_API}/tabela-precos-referencia`);
       const j = await r.json();
       const linhas = j.data || [];
       if(linhas.length===0){ cont.innerHTML=''; return; }
@@ -2536,7 +2555,7 @@
     }).filter(l=>l.modelo && l.gb && Number.isFinite(l.preco_referencia));
     if(linhas.length===0){ comissaoMensagem('Nenhuma linha válida encontrada.'); return; }
     try{
-      const r = await fetch(`${COMISSAO_API}/tabela-precos-referencia`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({linhas})});
+      const r = await comissaoFetch(`${COMISSAO_API}/tabela-precos-referencia`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({linhas})});
       const j = await r.json();
       if(!r.ok || j.error) throw new Error(j.error||'Erro');
       document.getElementById('comissao-cfg-tabela-texto').value = '';
@@ -2550,7 +2569,7 @@
     const senha = document.getElementById('comissao-cfg-nova-senha').value;
     if(!senha) return;
     try{
-      const r = await fetch(`${COMISSAO_API}/comissao-senha`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({senha})});
+      const r = await comissaoFetch(`${COMISSAO_API}/comissao-senha`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({senha})});
       const j = await r.json();
       if(!r.ok || j.error) throw new Error(j.error||'Erro');
       document.getElementById('comissao-cfg-nova-senha').value = '';
