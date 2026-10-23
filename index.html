@@ -576,6 +576,33 @@
       <main class="grid" style="margin-top:20px;grid-template-columns:1fr">
         <section class="card">
           <h2 class="title">📅 Fechamento do Dia</h2>
+          <!-- [contagem] Contagem cega: bipar tudo antes de liberar a lista do grupo -->
+          <div id="ct-box" style="border:2px solid var(--brand);border-radius:16px;padding:16px;margin:12px 0 18px;background:#fff">
+            <div id="ct-inicio">
+              <p class="fieldset-title" style="margin:0 0 6px">1. Contagem cega</p>
+              <p class="muted" style="margin:0 0 12px">Bipe todos os aparelhos que estão fisicamente aqui. A lista do sistema só aparece depois.</p>
+              <div class="seg" role="group" style="margin-bottom:12px">
+                <label><input type="radio" name="ct-local" value="loja" checked> 📦 Loja</label>
+                <label><input type="radio" name="ct-local" value="r1"> 🏬 Sala R1</label>
+              </div>
+              <button type="button" class="btn" style="width:100%" onclick="contagemIniciar()">Começar contagem</button>
+              <div id="ct-status-hoje" class="muted" style="margin-top:10px"></div>
+            </div>
+            <div id="ct-contando" style="display:none">
+              <p class="fieldset-title" style="margin:0 0 6px" id="ct-titulo">Contando</p>
+              <div style="background:var(--ink);color:#fff;border-radius:14px;padding:18px;text-align:center;margin-bottom:12px">
+                <div id="ct-numero" style="font-size:52px;font-weight:800;line-height:1">0</div>
+                <div style="font-size:14px;opacity:.85">aparelhos bipados</div>
+              </div>
+              <label for="ct-input">Bipe aqui (ou digite o IMEI e aperte Enter)</label>
+              <input id="ct-input" type="text" inputmode="numeric" autocomplete="off" placeholder="Aguardando leitura..." onkeydown="if(event.key==='Enter'){event.preventDefault();contagemBipar()}">
+              <div id="ct-msg" class="input-hint" style="margin-top:8px"></div>
+              <div id="ct-ultimos" style="margin-top:10px"></div>
+              <button type="button" class="btn" style="width:100%;margin-top:14px" onclick="contagemFinalizar()">Terminei de contar</button>
+            </div>
+            <div id="ct-resultado" style="display:none"></div>
+          </div>
+          <p class="fieldset-title" style="margin:0 0 6px">2. Texto para o grupo</p>
           <p class="section-copy">Movimentações de hoje e o estoque disponível na loja, prontos para colar no WhatsApp.</p>
           <div class="equipe-chip-slot"></div>
           <label for="fechamento-usuario" style="display:none">Quem está fechando</label>
@@ -1684,6 +1711,75 @@
     }).join('');
   }
 
+
+  // =====================================================================
+  // [contagem] CONTAGEM CEGA
+  // =====================================================================
+  let _ctId=null,_ctLocal='loja',_ctUltimos=[],_ctOcupado=false,_ctHoje=[];
+  function ctMostrar(qual){['ct-inicio','ct-contando','ct-resultado'].forEach(id=>{document.getElementById(id).style.display=id===qual?'block':'none'})}
+  async function contagemStatusHoje(){
+    const el=document.getElementById('ct-status-hoje');
+    if(!equipeSessao()){el.textContent='';_ctHoje=[];return}
+    try{
+      const r=await equipeFetch('/aparelhos/contagem/hoje');const j=await r.json();_ctHoje=(j&&j.contagens)||[];
+      el.innerHTML=_ctHoje.length?_ctHoje.map(c=>`${c.local==='r1'?'🏬 R1':'📦 Loja'} contada por ${esc(c.usuario)} às ${new Date(c.em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}: ${c.faltando||c.sobrando?`<b style="color:var(--danger)">${c.faltando} faltando, ${c.sobrando} sobrando</b>`:'<b style="color:#1d6b3a">bateu</b>'}`).join('<br>'):'Nenhuma contagem hoje ainda.';
+    }catch(e){el.textContent=''}
+  }
+  async function contagemIniciar(){
+    if(!equipeSessao()){equipeAbrirModal('Entre com seu PIN para contar.');return}
+    _ctLocal=(document.querySelector('input[name="ct-local"]:checked')||{}).value||'loja';
+    try{
+      const r=await equipeFetch('/aparelhos/contagem/iniciar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({local:_ctLocal})});
+      const j=await r.json();if(!r.ok){alert(j.error||'Erro ao iniciar.');return}
+      _ctId=j.id;_ctUltimos=[];
+      document.getElementById('ct-numero').textContent=j.bipados||0;
+      document.getElementById('ct-titulo').textContent=(_ctLocal==='r1'?'🏬 Sala R1':'📦 Loja')+(j.retomada?' · continuando a contagem aberta':'');
+      document.getElementById('ct-ultimos').innerHTML='';document.getElementById('ct-msg').textContent='';
+      ctMostrar('ct-contando');document.getElementById('ct-input').focus();
+    }catch(e){}
+  }
+  async function contagemBipar(){
+    const inp=document.getElementById('ct-input');const imei=inp.value.replace(/\D/g,'');inp.value='';inp.focus();
+    const msg=document.getElementById('ct-msg');
+    if(!imei)return;
+    if(!imeiValidoLocal(imei)){msg.innerHTML='<span style="color:var(--danger);font-weight:700">Leitura inválida.</span> Bipe de novo.';msg.classList.add('show');return}
+    if(_ctUltimos.some(u=>u.imei===imei)){msg.innerHTML='Esse já foi bipado. A repetição foi ignorada.';msg.classList.add('show');return}
+    try{
+      const r=await equipeFetch('/aparelhos/contagem/'+_ctId+'/bipar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({imei})});
+      const j=await r.json();
+      if(!r.ok){msg.innerHTML='<span style="color:var(--danger);font-weight:700">'+esc(j.error||'Erro')+'</span>';msg.classList.add('show');return}
+      document.getElementById('ct-numero').textContent=j.bipados;
+      _ctUltimos.unshift({imei,nome:j.aparelho});_ctUltimos=_ctUltimos.slice(0,200);
+      msg.innerHTML=j.aparelho?'✓ '+esc(j.aparelho):'✓ Bipado (IMEI sem cadastro: vai aparecer no resultado)';msg.classList.add('show');
+      document.getElementById('ct-ultimos').innerHTML=_ctUltimos.slice(0,4).map(u=>`<div style="display:flex;justify-content:space-between;gap:8px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-top:6px;font-size:13px"><span style="font-weight:700">${esc(u.nome||'Sem cadastro')}</span><span style="font-family:ui-monospace,monospace;color:var(--muted)">…${esc(u.imei.slice(-6))}</span></div>`).join('');
+    }catch(e){}
+  }
+  async function contagemFinalizar(){
+    if(_ctOcupado)return;
+    if(!confirm('Terminou de bipar TODOS os aparelhos (vitrine, gaveta e armário)?'))return;
+    _ctOcupado=true;
+    try{
+      const r=await equipeFetch('/aparelhos/contagem/'+_ctId+'/finalizar',{method:'POST'});const j=await r.json();
+      if(!r.ok){alert(j.error||'Erro ao finalizar.');return}
+      const lista=(arr,cor)=>arr.map(a=>`<div style="border:1px solid ${cor};border-radius:10px;padding:10px 12px;margin-top:6px"><div style="font-weight:800">${esc(a.nome||'Sem cadastro')}</div><div style="font-family:ui-monospace,monospace;font-size:13px;color:var(--muted)">${esc(a.imei)}</div>${a.ultima?`<div class="muted" style="font-size:12.5px">Última ação: ${esc(a.ultima.evento)} por ${esc(a.ultima.usuario||'—')}, ${new Date(a.ultima.em).toLocaleDateString('pt-BR')}</div>`:''}${a.situacao?`<div class="muted" style="font-size:12.5px">No sistema: ${esc(a.situacao)}</div>`:''}</div>`).join('');
+      const res=document.getElementById('ct-resultado');
+      res.innerHTML=j.bateu
+        ?`<div style="background:#e6f4ea;border-radius:14px;padding:16px"><div style="font-size:20px;font-weight:800;color:#1d6b3a">✅ Bateu: ${j.bipados} de ${j.esperados}</div><div class="muted" style="margin-top:4px">Agora gere o texto do grupo abaixo.</div></div><button type="button" class="btn ghost" style="width:100%;margin-top:10px" onclick="ctMostrar('ct-inicio')">Nova contagem</button>`
+        :`<div style="background:#fdeeea;border-radius:14px;padding:16px"><div style="font-size:20px;font-weight:800;color:#a3341f">${j.faltando.length?`Faltam ${j.faltando.length}`:''}${j.faltando.length&&j.sobrando.length?' · ':''}${j.sobrando.length?`Sobram ${j.sobrando.length}`:''}</div><div style="margin-top:4px">Bipados ${j.bipados} · Sistema esperava ${j.esperados}. O Robert já foi avisado.</div></div>
+          ${j.faltando.length?`<p class="fieldset-title" style="margin:14px 0 0;color:#a3341f">No sistema, mas não bipados</p>${lista(j.faltando,'#f2c4b8')}`:''}
+          ${j.sobrando.length?`<p class="fieldset-title" style="margin:14px 0 0;color:#8a6514">Bipados, mas não estão neste estoque no sistema</p>${lista(j.sobrando,'#ecd9a3')}`:''}
+          <label for="ct-explicacao" style="margin-top:14px">O que aconteceu?</label>
+          <textarea id="ct-explicacao" rows="2" style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-family:inherit;font-size:14px"></textarea>
+          <div class="actions" style="margin-top:10px"><button type="button" class="btn" onclick="contagemExplicar('${j.local}')">Enviar explicação</button><button type="button" class="btn ghost" onclick="contagemIniciar()">Recontar</button></div>`;
+      ctMostrar('ct-resultado');_ctId=null;
+      await contagemStatusHoje();gerarFechamentoDia();
+    }catch(e){}finally{_ctOcupado=false}
+  }
+  async function contagemExplicar(){
+    const texto=(document.getElementById('ct-explicacao')||{}).value||'';
+    const ultima=_ctHoje[0];if(!ultima||!texto.trim())return;
+    try{const r=await equipeFetch('/aparelhos/contagem/'+ultima.id+'/explicar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto})});if(r.ok){alert('Explicação enviada ao Robert.');}}catch(e){}
+  }
   // =====================================================================
   // FECHAMENTO DO DIA
   // =====================================================================
@@ -1707,6 +1803,12 @@
       return;
     }
     if(!_apCache.length)await carregarAparelhos(false);
+    await contagemStatusHoje();
+    if(!_ctHoje.some(c=>c.local==='loja')){
+      _fechamentoTexto='';
+      prev.textContent='Faça a contagem da loja (passo 1) para liberar o texto do grupo.';
+      return;
+    }
     prev.textContent='Carregando...';
     const{inicio,fim}=inicioFimHojeISO();
     let data=null,error=null;
