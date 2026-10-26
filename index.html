@@ -495,6 +495,12 @@
               <label><input type="radio" name="at-tipo" value="seminovo" checked> 📱 Seminovo Premium</label>
               <label><input type="radio" name="at-tipo" value="lacrado"> 📦 Lacrado</label>
             </div>
+            <p class="fieldset-title">Parcelamento na mensagem</p>
+            <div class="seg" role="group" aria-label="Parcelamento na mensagem" style="margin-bottom:14px">
+              <label><input type="radio" name="at-parc" value="12" checked onchange="atualizarAtalhosParc()"> 12x com valor</label>
+              <label><input type="radio" name="at-parc" value="18" onchange="atualizarAtalhosParc()"> 18x com valor</label>
+              <label><input type="radio" name="at-parc" value="18-sem" onchange="atualizarAtalhosParc()"> Até 18x sem valor</label>
+            </div>
             <label for="at-tabela">Cole a tabela de preços aqui</label>
             <textarea id="at-tabela" rows="10" style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-size:13px;font-family:inherit;color:var(--ink);outline:none;resize:vertical;transition:border .15s,box-shadow .15s" placeholder="Cole aqui a tabela completa de preços..."></textarea>
             <div class="actions" style="margin-top:12px">
@@ -2062,6 +2068,29 @@
     return valor * (1 + TAXA_12X / 100) / 12;
   }
 
+  // Parcelamento escolhido no Gerador: '12', '18' ou '18-sem' (até 18x sem mostrar valor)
+  function getAtalhoParc() {
+    var el = document.querySelector('input[name="at-parc"]:checked');
+    return el ? el.value : '12';
+  }
+
+  // Texto de parcelamento da mensagem, conforme a opção escolhida.
+  // 12x mantém a taxa fixa de sempre; 18x usa a taxa de 18x da tabela de taxas.
+  function textoParcelamento(preco) {
+    var modo = getAtalhoParc();
+    if (modo === '18-sem') return ' A vista ou em até 18x no cartão de crédito (com um pequeno acréscimo da maquininha).';
+    if (modo === '18') {
+      var t18 = getTaxas()['18'];
+      if (typeof t18 !== 'number') t18 = taxasPadrao['18'];
+      return ' A vista ou 18x de R$' + fmtValor(preco * (1 + t18 / 100) / 18) + ' no cartão de crédito.';
+    }
+    return ' A vista ou 12x de R$' + fmtValor(calc12xValor(preco)) + ' no cartão de crédito.';
+  }
+
+  function atualizarAtalhosParc() {
+    if (_atalhoItens.length) renderAtalhosGerados(_atalhoItens, _atalhoTipo);
+  }
+
   function fmtValor(v) {
     return v.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
   }
@@ -2228,22 +2257,19 @@
 
   function gerarMensagemItem(item, tipo) {
     var sufixo = tipo === 'seminovo' ? 'Seminovo Premium' : 'Lacrado';
-    var fim = 'no cartão de crédito.';
 
     if (item.cores && item.cores.length > 1) {
       var nomeCleanM = item.nome.replace(/\bseminov[oa]\b/gi,'').replace(/\blacrado\b/gi,'').replace(/\s+/g,' ').trim();
       var header = nomeCleanM + (item.gb ? ' ' + item.gb : '') + ' ' + sufixo;
       var linhas = item.cores.map(function(c) {
         if (!c.preco) return (c.emoji + ' ' + c.nome).trim();
-        var p12 = calc12xValor(c.preco);
-        return (c.emoji + ' ' + c.nome + ' R$' + fmtValor(c.preco) + ' A vista ou 12x de R$' + fmtValor(p12) + ' ' + fim).trim();
+        return (c.emoji + ' ' + c.nome + ' R$' + fmtValor(c.preco) + textoParcelamento(c.preco)).trim();
       });
       return header + '\n' + linhas.join('\n');
     } else {
       if (!item.preco) return item.nome + (item.gb ? ' ' + item.gb : '') + ' — preço não identificado';
-      var p12 = calc12xValor(item.preco);
       var nomeClean = item.nome.replace(/\bseminov[oa]\b/gi,'').replace(/\blacrado\b/gi,'').replace(/\s+/g,' ').trim();
-      return nomeClean + (item.gb ? ' ' + item.gb : '') + ' ' + sufixo + ' R$' + fmtValor(item.preco) + ' A vista ou 12x de R$' + fmtValor(p12) + ' ' + fim;
+      return nomeClean + (item.gb ? ' ' + item.gb : '') + ' ' + sufixo + ' R$' + fmtValor(item.preco) + textoParcelamento(item.preco);
     }
   }
 
