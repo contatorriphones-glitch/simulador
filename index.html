@@ -1099,7 +1099,7 @@
     "D":3.00,"1":5.00,"2":7.50,"3":8.50,"4":9.50,"5":10.00,
     "6":10.50,"7":11.50,"8":12.50,"9":13.00,"10":14.50,
     "11":15.50,"12":16.00,"13":16.00,"14":17.00,"15":17.50,
-    "16":17.50,"17":18.00,"18":18.00
+    "16":17.50,"17":18.00,"18":19.30
   };
   const PARCELAS_HL = new Set([3, 6, 12, 18]);
 
@@ -2060,12 +2060,14 @@
   // =====================================================================
   // GERADOR DE ATALHOS
   // =====================================================================
-  var TAXA_12X = 16.50;
   var _atalhoItens = [];
   var _atalhoTipo = 'seminovo';
 
-  function calc12xValor(valor) {
-    return valor * (1 + TAXA_12X / 100) / 12;
+  // Valor da parcela em N vezes, usando a taxa da tabela de taxas (Administrador de Taxas)
+  function calcParcelaValor(valor, n) {
+    var t = getTaxas()[String(n)];
+    if (typeof t !== 'number') t = taxasPadrao[String(n)];
+    return valor * (1 + t / 100) / n;
   }
 
   // Parcelamento escolhido no Gerador: '12', '18' ou '18-sem' (até 18x sem mostrar valor)
@@ -2075,16 +2077,13 @@
   }
 
   // Texto de parcelamento da mensagem, conforme a opção escolhida.
-  // 12x mantém a taxa fixa de sempre; 18x usa a taxa de 18x da tabela de taxas.
   function textoParcelamento(preco) {
     var modo = getAtalhoParc();
     if (modo === '18-sem') return ' A vista ou em até 18x no cartão de crédito (com um pequeno acréscimo da maquininha).';
     if (modo === '18') {
-      var t18 = getTaxas()['18'];
-      if (typeof t18 !== 'number') t18 = taxasPadrao['18'];
-      return ' A vista ou 18x de R$' + fmtValor(preco * (1 + t18 / 100) / 18) + ' no cartão de crédito.';
+      return ' A vista ou 18x de R$' + fmtValor(calcParcelaValor(preco, 18)) + ' no cartão de crédito.';
     }
-    return ' A vista ou 12x de R$' + fmtValor(calc12xValor(preco)) + ' no cartão de crédito.';
+    return ' A vista ou 12x de R$' + fmtValor(calcParcelaValor(preco, 12)) + ' no cartão de crédito.';
   }
 
   function atualizarAtalhosParc() {
