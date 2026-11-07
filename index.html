@@ -710,6 +710,7 @@
             <select id="bia-filtro" style="padding:9px;border-radius:12px;border:1px solid var(--line)">
               <option value="todas">Todas</option><option value="quente">🔥 Quentes</option><option value="morno">🌤️ Mornos</option>
               <option value="frio">❄️ Frios</option><option value="equipe">👩‍💼 Com a equipe</option>
+              <option value="whatsapp">🟢 Só WhatsApp</option><option value="instagram">📸 Só Instagram</option>
             </select>
             <input id="bia-busca" type="text" placeholder="Buscar nome ou @" style="flex:1;min-width:140px">
           </div>
@@ -872,6 +873,7 @@
       </div>
       <div class="bia-card">
         <b>4. Quanto a Carol está custando</b>
+        <div class="bia-linha" style="margin-top:8px">De <input type="date" id="bia-uso-de"> até <input type="date" id="bia-uso-ate"> <button class="bia-bt mini" id="bia-uso-atualizar">↻ Atualizar</button></div>
         <div id="bia-uso" style="margin-top:8px"></div>
         <details style="margin-top:8px"><summary class="bia-sub" style="cursor:pointer">Preço do Gemini usado na conta</summary>
           <div class="bia-linha bia-sub" style="margin:8px 0">US$ por milhão de tokens: entrada <input id="bia-preco-e" type="text" style="width:70px"> saída <input id="bia-preco-s" type="text" style="width:70px"> dólar (R$) <input id="bia-dolar" type="text" style="width:70px"></div>
@@ -3102,7 +3104,8 @@
   function renderConversas() {
     const f = $('bia-filtro').value, q = $('bia-busca').value.trim().toLowerCase();
     const comAlerta = new Set(alertas.map((a) => a.conversa_id));
-    const lista = conversas.filter((c) => (f === 'todas' || c.lead?.temperatura === f || (f === 'equipe' && c.status === 'equipe')) &&
+    const lista = conversas.filter((c) => (f === 'todas' || c.lead?.temperatura === f || (f === 'equipe' && c.status === 'equipe') ||
+      (f === 'whatsapp' && ehWhats(c)) || (f === 'instagram' && !ehWhats(c))) &&
       (!q || `${c.nome || ''} ${c.usuario || ''}`.toLowerCase().includes(q)));
     $('bia-lista-conversas').replaceChildren(...(lista.length ? lista.map((c) => el('div', { class: 'bia-card bia-item' + (c.id === aberta ? ' aberta' : ''), onclick: () => abrirConversa(c.id) },
       el('div', { class: 'bia-linha' }, el('b', { style: 'flex:1' }, nome(c)),
@@ -3200,6 +3203,39 @@
       dates: `${f(y, Number(m), Number(d), Number(h), Number(mi))}/${f(fim.getFullYear(), fim.getMonth() + 1, fim.getDate(), fim.getHours(), fim.getMinutes())}` };
     return 'https://calendar.google.com/calendar/render?' + Object.entries(q).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
   }
+  // Relatório: agendamentos feitos no período, por canal (WhatsApp x Instagram) e o que aconteceu.
+  const hojeISO = () => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+  const inicioMes = () => hojeISO().slice(0, 8) + '01';
+  let periodoAgenda = { de: inicioMes(), ate: hojeISO() };
+  async function relatorioAgenda() {
+    const box = el('div', { class: 'bia-card' }, el('b', {}, '📊 Agendamentos por canal'));
+    const de = el('input', { type: 'date', value: periodoAgenda.de }), ate = el('input', { type: 'date', value: periodoAgenda.ate });
+    const res = el('div', { style: 'margin-top:8px' }, 'Carregando…');
+    const atualizar = async () => {
+      periodoAgenda = { de: de.value, ate: ate.value };
+      // criado_em em UTC: o dia de Brasília vai das 03:00 de um dia às 03:00 do outro.
+      const ini = new Date(de.value + 'T03:00:00Z').toISOString(), fim = new Date(new Date(ate.value + 'T03:00:00Z').getTime() + 864e5).toISOString();
+      const { data, error } = await sb.from('ig_agendamentos').select('conversa_id,resultado,dados').gte('criado_em', ini).lt('criado_em', fim).limit(5000);
+      if (error) { res.textContent = 'Erro: ' + error.message; return; }
+      const canal = (a) => (String(a.conversa_id || '').startsWith('wa:') || a.dados?.origem === 'whatsapp') ? 'whatsapp' : 'instagram';
+      const linhas = ['whatsapp', 'instagram'].map((c) => {
+        const l = data.filter((a) => canal(a) === c);
+        const conta = (r) => l.filter((a) => a.resultado === r).length;
+        return { c, total: l.length, compareceu: conta('compareceu') + conta('comprou'), comprou: conta('comprou'), nao_veio: conta('nao_veio') };
+      });
+      const total = data.length || 1;
+      res.replaceChildren(...linhas.map((x) => el('div', { class: 'bia-linha', style: 'padding:6px 0;border-bottom:1px solid var(--line)' },
+        el('b', { style: 'flex:1' }, x.c === 'whatsapp' ? '🟢 WhatsApp' : '📸 Instagram'),
+        el('span', {}, `${x.total} agendamentos (${Math.round((x.total / total) * 100)}%)`),
+        el('span', { class: 'bia-sub' }, ` · vieram ${x.compareceu} · compraram ${x.comprou} · não vieram ${x.nao_veio}`))),
+        el('div', { class: 'bia-sub', style: 'margin-top:6px' }, `Total no período: ${data.length}. "Vieram/compraram" contam o que foi marcado nos agendamentos.`));
+    };
+    de.onchange = atualizar; ate.onchange = atualizar;
+    box.append(el('div', { class: 'bia-linha', style: 'margin-top:6px' }, 'De ', de, ' até ', ate), res);
+    atualizar();
+    return box;
+  }
+
   async function carregarAgenda() {
     const desde = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
     const { data, error } = await sb.from('ig_agendamentos').select('*').gte('data', desde).order('data').order('horario');
@@ -3211,6 +3247,7 @@
       carregarAgenda();
     };
     $('bia-agenda').replaceChildren(
+      await relatorioAgenda(),
       el('p', { class: 'bia-sub' }, 'Marque o que aconteceu em cada visita: é assim que a Carol aprende quais conversas viram venda.'),
       ...(data.length ? data.map((a) => el('div', { class: 'bia-card' },
         el('div', { class: 'bia-linha' }, el('b', { style: 'flex:1' }, `📅 ${dataBR(a.data)} às ${a.horario}`), a.resultado ? el('span', { class: 'bia-tag' }, a.resultado.replace('_', ' ')) : null),
@@ -3985,19 +4022,27 @@
     $(id).value = LS.get(id, padrao);
     $(id).onchange = () => { LS.set(id, $(id).value); carregarUso(); };
   }
+  // Gasto no período escolhido (padrão: últimos 30 dias). Atualiza sozinho a cada minuto com a seção aberta.
+  if (!$('bia-uso-de').value) { $('bia-uso-ate').value = hojeISO(); $('bia-uso-de').value = new Date(Date.now() - 29 * 864e5 - 3 * 3600e3).toISOString().slice(0, 10); }
+  $('bia-uso-de').onchange = () => carregarUso();
+  $('bia-uso-ate').onchange = () => carregarUso();
+  $('bia-uso-atualizar').onclick = () => carregarUso();
+  setInterval(() => { if (logado && secao === 'ajustes' && !document.hidden) carregarUso(); }, 60000);
   async function carregarUso() {
-    const desde = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+    const desde = $('bia-uso-de').value, ate = $('bia-uso-ate').value || hojeISO();
     const [{ data, error }, { count }] = await Promise.all([
-      sb.from('bia_uso').select('*').gte('dia', desde).order('dia', { ascending: false }),
-      sb.from('ig_conversas').select('id', { count: 'exact', head: true }).gte('criado_em', desde),
+      sb.from('bia_uso').select('*').gte('dia', desde).lte('dia', ate).order('dia', { ascending: false }),
+      sb.from('ig_conversas').select('id', { count: 'exact', head: true }).gte('criado_em', desde + 'T03:00:00Z').lt('criado_em', new Date(new Date(ate + 'T03:00:00Z').getTime() + 864e5).toISOString()),
     ]);
     if (error) return erro(error);
     const n = (id) => Number(String($(id).value).replace(',', '.')) || 0;
     const custo = (u) => ((u.entrada / 1e6) * n('bia-preco-e') + (u.saida / 1e6) * n('bia-preco-s')) * n('bia-dolar');
     const total = data.reduce((s, u) => s + custo(u), 0);
     $('bia-uso').replaceChildren(
-      el('div', {}, el('b', { style: 'font-size:18px' }, `≈ R$ ${total.toFixed(2)}`), ` em 30 dias · ${count ?? 0} conversas novas` + (count ? ` · ≈ R$ ${(total / count).toFixed(2)} por conversa` : '')),
-      ...data.slice(0, 10).map((u) => el('div', { class: 'bia-sub' }, `${dataBR(u.dia)}: ${u.chamadas} chamadas · R$ ${custo(u).toFixed(2)}`)));
+      el('div', {}, el('b', { style: 'font-size:18px' }, `≈ R$ ${total.toFixed(2)}`), ` de ${dataBR(desde)} a ${dataBR(ate)} · ${count ?? 0} conversas novas` + (count ? ` · ≈ R$ ${(total / count).toFixed(2)} por conversa` : '')),
+      el('div', { class: 'bia-sub' }, `${data.reduce((s, u) => s + u.chamadas, 0)} chamadas · ${(data.reduce((s, u) => s + Number(u.entrada), 0) / 1e6).toFixed(2)} mi tokens de entrada · ${(data.reduce((s, u) => s + Number(u.saida), 0) / 1e6).toFixed(2)} mi de saída · atualizado às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`),
+      ...data.slice(0, 31).map((u) => el('div', { class: 'bia-sub' }, `${dataBR(u.dia)}: ${u.chamadas} chamadas · R$ ${custo(u).toFixed(2)}`)),
+      el('div', { class: 'bia-sub', style: 'margin-top:6px' }, 'É uma estimativa pelos tokens desta loja com o preço abaixo. Se outra loja usa a mesma chave do Gemini, a fatura do Google soma as duas.'));
   }
 
   // Ao entrar na aba, esconde o aviso flutuante e atualiza a seção aberta.
