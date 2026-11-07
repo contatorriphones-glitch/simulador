@@ -2946,7 +2946,8 @@
   const LS = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
   const quando = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '');
   const dataBR = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : '');
-  const nome = (c) => (c?.nome || (c?.usuario ? '@' + c.usuario : 'Cliente'));
+  const ehWhats = (c) => String(c?.id || '').startsWith('wa:');
+  const nome = (c) => (c?.nome || (c?.usuario ? '@' + c.usuario : ehWhats(c) ? '+' + c.id.slice(3) : 'Cliente'));
   const TEMP = { quente: '🔥 Quente', morno: '🌤️ Morno', frio: '❄️ Frio' };
   const EMOJI = { ajuda: '🙋', quente: '🔥', agendamento: '📅', erro: '⚠️', resumo: '📊' };
   const tagTemp = (l) => (l?.temperatura ? el('span', { class: 'bia-tag t-' + l.temperatura }, TEMP[l.temperatura] + (l.intencao != null ? ` · ${l.intencao}%` : '')) : null);
@@ -3032,8 +3033,18 @@
       });
     } catch {}
   }
+  // Economia de dados: a cada 15 s só confere se mudou (quantidade + último aviso); a lista
+  // completa só é baixada quando mudou. Com a aba do navegador escondida, nem confere.
+  let assinaturaAlertas = '';
   async function atualizarAlertas(primeira = false) {
     if (!logado) return;
+    if (primeira !== true && document.hidden) return;
+    const { data: topo, count, error: e1 } = await sb.from('bia_alertas').select('id', { count: 'exact' }).eq('resolvido', false).order('id', { ascending: false }).limit(1);
+    if (!e1) {
+      const assinatura = `${count}:${topo?.[0]?.id || 0}`;
+      if (primeira !== true && assinatura === assinaturaAlertas) return;
+      assinaturaAlertas = assinatura;
+    }
     const { data, error } = await sb.from('bia_alertas').select('*, ig_conversas(nome, usuario)').eq('resolvido', false).order('criado_em', { ascending: false }).limit(200);
     if (error) return;
     alertas = data;
@@ -3094,7 +3105,8 @@
     const lista = conversas.filter((c) => (f === 'todas' || c.lead?.temperatura === f || (f === 'equipe' && c.status === 'equipe')) &&
       (!q || `${c.nome || ''} ${c.usuario || ''}`.toLowerCase().includes(q)));
     $('bia-lista-conversas').replaceChildren(...(lista.length ? lista.map((c) => el('div', { class: 'bia-card bia-item' + (c.id === aberta ? ' aberta' : ''), onclick: () => abrirConversa(c.id) },
-      el('div', { class: 'bia-linha' }, el('b', { style: 'flex:1' }, nome(c)), tagTemp(c.lead),
+      el('div', { class: 'bia-linha' }, el('b', { style: 'flex:1' }, nome(c)),
+        ehWhats(c) ? el('span', { class: 'bia-tag', style: 'background:#dcfce7;color:#166534' }, '🟢 WhatsApp') : null, tagTemp(c.lead),
         c.status === 'equipe' ? el('span', { class: 'bia-tag t-equipe' }, '👩‍💼 Equipe') : null,
         comAlerta.has(c.id) ? el('span', { class: 'bia-tag t-alerta' }, '🔔') : null,
         c.resultado ? el('span', { class: 'bia-tag' }, c.resultado.replace('_', ' ')) : null),
@@ -3150,9 +3162,29 @@
           el('button', { class: 'bia-bt ok mini', onclick: () => atualizar({ resultado: 'comprou' }) }, '💰 Comprou'),
           el('button', { class: 'bia-bt nao mini', onclick: () => atualizar({ resultado: 'perdido' }) }, 'Perdido'),
           c.usuario ? el('a', { href: 'https://instagram.com/' + c.usuario, target: '_blank', rel: 'noopener', style: 'color:var(--brand);font-weight:700' }, 'Abrir perfil') : null),
-        el('p', { class: 'bia-sub', style: 'margin:8px 0 0' }, 'Para responder o cliente, use o Direct do Instagram: a Carol percebe e sai da conversa sozinha.')),
-      el('div', { class: 'bia-card' }, chat));
+        el('p', { class: 'bia-sub', style: 'margin:8px 0 0' }, ehWhats(c)
+          ? 'Conversa do WhatsApp: responda pela caixa abaixo da conversa. A Carol sai da conversa sozinha quando a equipe responde.'
+          : 'Para responder o cliente, use o Direct do Instagram: a Carol percebe e sai da conversa sozinha.')),
+      el('div', { class: 'bia-card' }, chat, ehWhats(c) ? caixaResposta(id) : null));
     if (rolarFim) chat.scrollTop = chat.scrollHeight;
+  }
+
+  // Resposta da equipe numa conversa do WhatsApp (o número da loja fica só na API, sem app no celular).
+  function caixaResposta(id) {
+    const texto = el('textarea', { rows: 3, placeholder: 'Escreva a resposta para o cliente…', style: 'width:100%;box-sizing:border-box;margin-top:10px;padding:10px;border-radius:10px;border:1px solid var(--line, #ddd);font:inherit' });
+    const botao = el('button', { class: 'bia-bt pri', style: 'margin-top:6px', onclick: async () => {
+      const t = texto.value.trim();
+      if (!t) return;
+      botao.disabled = true; botao.textContent = 'Enviando…';
+      try {
+        const r = await chamarServidor('responder', { id, texto: t });
+        if (!r.ok) throw new Error(r.erro || 'não deu');
+        texto.value = '';
+        await abrirConversa(id); carregarConversas();
+      } catch (e) { alert('Não enviei: ' + e.message); botao.disabled = false; botao.textContent = '📤 Enviar pelo WhatsApp'; }
+    } }, '📤 Enviar pelo WhatsApp');
+    texto.onkeydown = (ev) => { if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) botao.click(); };
+    return el('div', {}, texto, botao);
   }
 
   // ------------------------------------------------------------------ agendamentos
