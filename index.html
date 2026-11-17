@@ -3162,7 +3162,7 @@
               carregarConversas(); abrirConversa(id);
             } }, '🤖 Devolver para a Carol')
             : el('button', { class: 'bia-bt mini', onclick: () => atualizar({ status: 'equipe', pausada_ate: new Date(Date.now() + (config?.pausa_horas || 12) * 3600e3).toISOString() }) }, '👩‍💼 Assumir (pausar a Carol)'),
-          el('button', { class: 'bia-bt ok mini', onclick: () => atualizar({ resultado: 'comprou' }) }, '💰 Comprou'),
+          el('button', { class: 'bia-bt ok mini', onclick: async () => { await atualizar({ resultado: 'comprou' }); pedirAvaliacao({ conversa_id: id }); } }, '💰 Comprou'),
           el('button', { class: 'bia-bt nao mini', onclick: () => atualizar({ resultado: 'perdido' }) }, 'Perdido'),
           c.usuario ? el('a', { href: 'https://instagram.com/' + c.usuario, target: '_blank', rel: 'noopener', style: 'color:var(--brand);font-weight:700' }, 'Abrir perfil') : null),
         el('p', { class: 'bia-sub', style: 'margin:8px 0 0' }, ehWhats(c)
@@ -3244,6 +3244,7 @@
       const { error: e } = await sb.from('ig_agendamentos').update({ resultado }).eq('id', a.id);
       if (e) return erro(e);
       if (a.conversa_id && resultado !== 'remarcou') await sb.from('ig_conversas').update({ resultado }).eq('id', a.conversa_id);
+      if (resultado === 'comprou') pedirAvaliacao({ id: a.id });
       carregarAgenda();
     };
     $('bia-agenda').replaceChildren(
@@ -3574,6 +3575,14 @@
         el('b', {}, '❌ O que não está funcionando'), el('ul', {}, (a.nao_funciona || []).map((t) => el('li', {}, t)))));
   }
   // Chama o servidor da Carol com o login da equipe.
+  // Marcou "Comprou": a atendente agradece e pede a avaliação no Google (uma vez por cliente).
+  async function pedirAvaliacao(alvo) {
+    try {
+      const r = await chamarServidor('avaliacao', alvo);
+      if (r.enviada) alert('⭐ Pedido de avaliação no Google enviado ao cliente.');
+      else if (r.alerta) alert('⭐ A conversa passou de 24h: deixei o texto da avaliação pronto nos Alertas para mandar pelo celular.');
+    } catch (e) { alert('Não consegui pedir a avaliação no Google: ' + e.message); }
+  }
   async function chamarServidor(acao, extra = {}) {
     const { data } = await sb.auth.getSession();
     const r = await fetch(`${SUPABASE_URL}/functions/v1/rotinas`, {
