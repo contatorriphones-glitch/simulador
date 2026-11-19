@@ -1061,8 +1061,8 @@
           <button type="button" class="btn ghost" style="margin-top:10px;width:100%" onclick="copiarLinkSistema()">📋 Copiar link do sistema</button>
         </div>
         <label id="etq-auto-wrap" style="display:none;flex:1 1 100%;align-items:center;gap:8px;font-size:14px;font-weight:700"><input type="checkbox" id="etq-auto" style="width:22px;height:22px" onchange="try{localStorage.setItem('rrprimecell_etq_auto',this.checked?'1':'')}catch(e){}"> Imprimir sozinho as próximas etiquetas</label>
-        <button type="button" class="btn ghost" style="flex:1 1 140px" onclick="baixarEtiqueta()">⬇️ Salvar imagem</button>
-        <button type="button" class="btn ghost" style="flex:1 1 140px" onclick="compartilharEtiqueta()">↗️ Compartilhar</button>
+        <button type="button" id="etq-btn-galeria" class="btn" style="flex:1 1 100%;padding:16px;font-size:17px" onclick="salvarNaGaleria()">📥 Salvar na galeria</button>
+        <div id="etq-dica" style="flex:1 1 100%;font-size:13px;color:var(--muted);line-height:1.45">Na tela que abrir, toque em <b>Salvar Imagem</b>. Depois, no app <b>NIIMBOT</b>: etiqueta 50×30 → inserir imagem → escolha a última foto → imprimir.</div>
       </div>
       <div id="etq-status" style="font-size:13px;color:var(--muted);margin-top:8px"></div>
     </div>
@@ -3234,6 +3234,14 @@
       catch(e){if(e&&e.name!=='AbortError')st.textContent='Não deu para compartilhar. Use "Salvar imagem" e abra no app NIIMBOT.'}
     }else baixarEtiqueta();
   }
+  // iPhone: o botão "Salvar Imagem" da folha de compartilhar grava direto na galeria (Fotos)
+  async function salvarNaGaleria(){
+    const st=document.getElementById('etq-status'),f=await _etqArquivo();
+    if(navigator.canShare&&navigator.canShare({files:[f]})){
+      try{await navigator.share({files:[f]});st.textContent='✓ Pronto. Abra o app NIIMBOT e insira a última foto.'}
+      catch(e){if(e&&e.name!=='AbortError')baixarEtiqueta()}
+    }else baixarEtiqueta();
+  }
   async function baixarEtiqueta(){
     const f=await _etqArquivo(),u=URL.createObjectURL(f),a=document.createElement('a');
     a.href=u;a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);
@@ -3246,7 +3254,8 @@
   function etqAtualizarBotoes(){
     const temBt=!!(navigator.bluetooth);
     document.getElementById('etq-btn-bt').style.display=temBt?'':'none';
-    document.getElementById('etq-sem-bt').style.display=temBt?'none':'block';
+    document.getElementById('etq-sem-bt').style.display='none';
+    document.getElementById('etq-btn-galeria').className=temBt?'btn ghost':'btn';
     const ligada=!!(_niim&&_niim.isConnected());
     document.getElementById('etq-auto-wrap').style.display=ligada?'flex':'none';
     try{document.getElementById('etq-auto').checked=localStorage.getItem('rrprimecell_etq_auto')==='1'}catch(e){}
