@@ -1847,6 +1847,7 @@
       const idx=_apCache.findIndex(a=>a.id===id);
       if(idx>-1)_apCache[idx]=registro;
       mostrarApFeedback('success','✓ Registro atualizado com sucesso!');
+      if(destinoAnterior!==destino&&destino!=='vendido')abrirEtiqueta(registro);
     }else{
       _apCache.unshift(registro);
       mostrarApFeedback('success','✓ Aparelho cadastrado com sucesso!');
@@ -3113,6 +3114,13 @@
     try{await carregarScript('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js');desenharEtiqueta(item)}
     catch(e){document.getElementById('etq-status').textContent='Não consegui gerar o QR Code. Verifique a internet.'}
   }
+  function localEtiqueta(item){
+    if(item.tipo==='cliente')return item.destino==='assistencia'?('CLIENTE · ASSIST. '+(item.assistenciaNome||'').toUpperCase()).trim():'CLIENTE';
+    const d=item.destino||'';
+    if(d==='estoque_r1')return 'R1';
+    if(d==='assistencia')return ('ASSIST. '+(item.assistenciaNome||'').toUpperCase()).trim();
+    return ({'':'LOJA',garantia:'GARANTIA',outro_lojista:'OUTRO LOJISTA',troca:'TROCA',vendido:'VENDIDO'})[d]||d.toUpperCase();
+  }
   function abrirEtiquetaPorId(id){const it=getAparelhos().find(a=>a.id===id);if(it)abrirEtiqueta(it)}
   function fecharEtiqueta(){const m=document.getElementById('etq-modal');m.classList.remove('open');m.setAttribute('aria-hidden','true')}
   function desenharEtiqueta(item){
@@ -3133,10 +3141,16 @@
     linha(nome,44,'800 26px system-ui,-apple-system,Arial');
     linha([item.gb,item.cor].filter(Boolean).join(' · '),76,'700 21px system-ui,-apple-system,Arial');
     if(item.bateria)linha('Bateria '+item.bateria+'%',104,'600 18px system-ui,-apple-system,Arial');
-    linha('IMEI final',138,'600 15px system-ui,-apple-system,Arial');
-    linha(imei.slice(-6),172,'900 34px ui-monospace,Menlo,monospace');
-    x.font='600 15px ui-monospace,Menlo,monospace';x.fillText(imei,q0,H-12);
-    x.font='700 13px system-ui,-apple-system,Arial';const marca='RR PRIME CELL';x.fillText(marca,W-10-x.measureText(marca).width,H-12);
+    linha('IMEI final',128,'600 15px system-ui,-apple-system,Arial');
+    linha(imei.slice(-6),160,'900 32px ui-monospace,Menlo,monospace');
+    x.font='600 14px ui-monospace,Menlo,monospace';x.fillText(imei,q0,H-12);
+    // Local do aparelho em destaque (caixa preta, letra branca) no canto inferior direito
+    const local=localEtiqueta(item);
+    let tl=22;x.font=`900 ${tl}px system-ui,-apple-system,Arial`;
+    while(tl>12&&x.measureText(local).width>larg-12){tl--;x.font=`900 ${tl}px system-ui,-apple-system,Arial`}
+    const lw=Math.min(larg,x.measureText(local).width+16),lh=tl+12,lx=W-10-lw,ly=H-8-lh;
+    x.fillStyle='#000';x.fillRect(lx,ly,lw,lh);x.fillStyle='#fff';x.textBaseline='middle';x.fillText(local,lx+8,ly+lh/2+1);
+    x.fillStyle='#000';x.textBaseline='alphabetic';
   }
   function _etqArquivo(){
     return new Promise(ok=>document.getElementById('etq-canvas').toBlob(b=>ok(new File([b],`etiqueta-${(_etqItem&&_etqItem.imei)||'aparelho'}.png`,{type:'image/png'})),'image/png'));
