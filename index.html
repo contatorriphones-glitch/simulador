@@ -526,7 +526,7 @@
     <div class="tab-pane" id="tab-aparelhos">
       <main class="grid" style="margin-top:20px">
         <section class="card" id="cg-card">
-          <h2 class="title">Cadastrar aparelho</h2>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 class="title" style="margin:0">Cadastrar aparelho</h2><button type="button" id="cg-cancelar" class="admin-close" style="display:none;font-size:20px;padding:4px 12px;line-height:1" aria-label="Cancelar" onclick="if(confirm('Cancelar este cadastro e voltar ao início?'))cgIniciar()">✕</button></div>
           <div id="cg-passos" style="display:flex;gap:4px;margin:4px 0 14px"></div>
           <div id="cg-tela"></div>
           <div id="cg-feedback" class="feedback" aria-live="polite"></div>
@@ -1022,22 +1022,22 @@
   <!-- Histórico do Aparelho Modal -->
   <!-- BIPAR (câmera) -->
   <div id="scan-modal" class="admin-modal" aria-hidden="true" style="z-index:60">
-    <div class="admin-panel" role="dialog" aria-modal="true" style="padding:16px">
-      <div class="admin-header">
+    <div class="admin-panel" role="dialog" aria-modal="true" style="padding:16px;position:relative">
+      <div class="admin-header" style="padding-right:56px">
         <div><h2 class="admin-title" id="scan-titulo">Bipar IMEI</h2>
         <p style="margin:6px 0 0;color:var(--muted);font-size:13px" id="scan-dica">Aponte para o código de barras do IMEI (tela do *#06#, caixa ou etiqueta).</p></div>
-        <button type="button" class="admin-close" onclick="fecharScanner()">✕ Fechar</button>
+        <button type="button" class="admin-close" onclick="fecharScanner()" aria-label="Sair" style="position:absolute;top:12px;right:12px;font-size:22px;padding:6px 14px;line-height:1">✕</button>
       </div>
       <div style="position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:4/3">
         <video id="scan-video" playsinline muted autoplay style="width:100%;height:100%;object-fit:cover"></video>
-        <div style="position:absolute;left:8%;right:8%;top:38%;bottom:38%;border:3px solid rgba(255,255,255,.85);border-radius:10px;box-shadow:0 0 0 999px rgba(0,0,0,.25)"></div>
+        <div style="position:absolute;left:6%;right:6%;top:12%;bottom:12%;border:3px solid rgba(255,255,255,.85);border-radius:10px;box-shadow:0 0 0 999px rgba(0,0,0,.25)"></div>
       </div>
       <div id="scan-status" style="margin-top:10px;font-size:14px;font-weight:700;color:var(--muted)">Abrindo a câmera…</div>
       <button type="button" class="btn" style="width:100%;margin-top:10px" onclick="document.getElementById('scan-foto').click()">📸 Tirar foto do código (mais garantido)</button>
       <input id="scan-foto" type="file" accept="image/*" capture="environment" style="display:none" onchange="scanFoto(this)">
       <div style="display:flex;gap:8px;margin-top:10px">
-        <input id="scan-manual" type="text" inputmode="numeric" placeholder="Ou digite o IMEI" style="flex:1">
-        <button type="button" class="btn ghost" onclick="scanManual()">OK</button>
+        <input id="scan-manual" type="text" inputmode="numeric" placeholder="Ou digite o IMEI" style="flex:1 1 auto;min-width:0;width:auto">
+        <button type="button" class="btn ghost" style="flex:0 0 auto;width:auto" onclick="scanManual()">OK</button>
       </div>
     </div>
   </div>
@@ -3047,7 +3047,7 @@
   // Leitor de código de barras (zxing-cpp em WebAssembly): lê bem Code128 fino na tela do iPhone e em caixas
   const ZXW_URL='https://cdn.jsdelivr.net/npm/zxing-wasm@2.2.4/dist/iife/reader/index.js';
   const SCAN_FORMATOS=['Code128','QRCode','Code39','EAN-13','DataMatrix'];
-  let _scanStream=null,_scanTimer=null,_scanModo='cadastro',_scanUltimo={imei:'',em:0},_scanOcupado=false;
+  let _scanStream=null,_scanTimer=null,_scanModo='cadastro',_scanUltimo={imei:'',em:0},_scanOcupado=false,_scanSozinho=null;
 
   // IMEI de um código lido: só aceita códigos que SÃO o IMEI (15 dígitos com dígito de conferência).
   // Ignora EID (32 dígitos) e MEID (14), que também aparecem na tela do *#06#.
@@ -3060,11 +3060,13 @@
     return null;
   }
   // De vários códigos lidos de uma vez, fica com o IMEI de cima (IMEI 1)
-  function escolherImei(resultados){
+  // IMEIs lidos, do mais alto para o mais baixo (no *#06# o de cima é sempre o IMEI 1)
+  function imeisOrdenados(resultados){
     const ok=(resultados||[]).map(r=>({imei:imeiDeCodigo(r.text),y:r.position&&r.position.topLeft?r.position.topLeft.y:0})).filter(r=>r.imei);
     ok.sort((a,b)=>a.y-b.y);
-    return ok.length?ok[0].imei:null;
+    return [...new Set(ok.map(r=>r.imei))];
   }
+  function escolherImei(resultados){return imeisOrdenados(resultados)[0]||null}
   async function lerCodigos(fonte){
     await carregarScript(ZXW_URL);
     return ZXingWASM.readBarcodes(fonte,{formats:SCAN_FORMATOS,tryHarder:true,maxNumberOfSymbols:6});
@@ -3076,7 +3078,7 @@
     document.getElementById('scan-titulo').textContent=_scanModo==='conferencia'?'Bipar aparelhos':'Bipar IMEI';
     document.getElementById('scan-dica').textContent=_scanModo==='conferencia'
       ?'Vá passando a câmera em cada etiqueta ou caixa. A cada leitura o celular apita.'
-      :'Enquadre o código de barras do IMEI (tela do *#06#, caixa ou etiqueta). Se não ler em 3 segundos, use "Tirar foto".';
+      :'Enquadre os códigos do IMEI e do IMEI2 juntos (tela do *#06#). O sistema pega sempre o IMEI 1, o de cima. Toque no ✕ para sair.';
     document.getElementById('scan-manual').value='';
     const m=document.getElementById('scan-modal');m.classList.add('open');m.setAttribute('aria-hidden','false');
     st.textContent='Abrindo a câmera…';st.style.color='var(--muted)';
@@ -3084,7 +3086,7 @@
       carregarScript(ZXW_URL).catch(()=>{});
       _scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
       video.srcObject=_scanStream;await video.play().catch(()=>{});
-      st.textContent='Câmera pronta. Aproxime até o código ficar nítido dentro do quadro.';
+      st.textContent=_scanModo==='conferencia'?'Câmera pronta. Aproxime até o código ficar nítido.':'Câmera pronta. Enquadre o IMEI e o IMEI2 juntos, nítidos.';
       const cv=document.createElement('canvas'),cx=cv.getContext('2d',{willReadFrequently:true});
       const ciclo=async()=>{
         if(!_scanStream)return;
@@ -3092,10 +3094,20 @@
           _scanOcupado=true;
           try{
             // Lê só a faixa do meio (o quadro branco), em resolução cheia
-            const vw=video.videoWidth,vh=video.videoHeight,cw=Math.round(vw*.9),ch=Math.round(vh*.4);
+            const vw=video.videoWidth,vh=video.videoHeight,cw=Math.round(vw*.9),ch=Math.round(vh*.8);
             cv.width=cw;cv.height=ch;cx.drawImage(video,(vw-cw)/2,(vh-ch)/2,cw,ch,0,0,cw,ch);
             const res=await lerCodigos(cx.getImageData(0,0,cw,ch));
-            if(res.length){const imei=escolherImei(res);if(imei)scanImei(imei);else{st.textContent='Li um código, mas não é o IMEI (pode ser o EID). Aponte para o código do IMEI.';st.style.color='#b45309'}}
+            const imeis=imeisOrdenados(res);
+            if(_scanModo==='conferencia'){if(imeis.length)scanImei(imeis[0]);}
+            else if(imeis.length>=2){_scanSozinho=null;scanImei(imeis[0])}
+            else if(imeis.length===1){
+              // Só um IMEI visível: pode ser o IMEI2. Espera até 2,5 s para o IMEI 1 aparecer junto; se não aparecer, aceita
+              const conhecido=_apCache.some(a=>a.imei===imeis[0]);
+              if(conhecido){_scanSozinho=null;scanImei(imeis[0])}
+              else if(!_scanSozinho||_scanSozinho.imei!==imeis[0]){_scanSozinho={imei:imeis[0],em:Date.now()};st.textContent='Afaste um pouco o celular para aparecerem os dois códigos (IMEI e IMEI2)…';st.style.color='#b45309'}
+              else if(Date.now()-_scanSozinho.em>2500){_scanSozinho=null;scanImei(imeis[0])}
+            }
+            else if(res.length){st.textContent='Li um código, mas não é o IMEI (pode ser o EID). Aponte para o código do IMEI.';st.style.color='#b45309'}
           }catch(e){console.error(e)}
           _scanOcupado=false;
         }
@@ -3108,8 +3120,14 @@
       st.style.color='var(--danger)';
     }
   }
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState!=='visible')return;
+    const aberto=document.getElementById('scan-modal').classList.contains('open');
+    const morta=!_scanStream||_scanStream.getVideoTracks().every(t=>t.readyState==='ended');
+    if(aberto&&morta){const modo=_scanModo;fecharScanner();abrirScanner(modo)}
+  });
   function fecharScanner(){
-    clearTimeout(_scanTimer);_scanTimer=null;
+    clearTimeout(_scanTimer);_scanTimer=null;_scanSozinho=null;
     if(_scanStream){_scanStream.getTracks().forEach(t=>t.stop());_scanStream=null}
     const m=document.getElementById('scan-modal');m.classList.remove('open');m.setAttribute('aria-hidden','true');
   }
@@ -3193,7 +3211,9 @@
     return ({'':'LOJA',garantia:'GARANTIA',outro_lojista:'OUTRO LOJISTA',troca:'TROCA',vendido:'VENDIDO'})[d]||d.toUpperCase();
   }
   function abrirEtiquetaPorId(id){const it=getAparelhos().find(a=>a.id===id);if(it)abrirEtiqueta(it)}
-  function fecharEtiqueta(){const m=document.getElementById('etq-modal');m.classList.remove('open');m.setAttribute('aria-hidden','true')}
+  let _cgProximo=false; // depois de salvar um cadastro, ao fechar a etiqueta a câmera abre de novo para o próximo
+  function fecharEtiqueta(){const m=document.getElementById('etq-modal');m.classList.remove('open');m.setAttribute('aria-hidden','true');
+    if(_cgProximo){_cgProximo=false;setTimeout(()=>abrirScanner('guiado'),250)}}
   function desenharEtiqueta(item){
     const c=document.getElementById('etq-canvas'),x=c.getContext('2d'),W=400,H=240;
     x.fillStyle='#fff';x.fillRect(0,0,W,H);x.fillStyle='#000';
@@ -3257,7 +3277,7 @@
   async function salvarNaGaleria(){
     const st=document.getElementById('etq-status'),f=await _etqArquivo();
     if(navigator.canShare&&navigator.canShare({files:[f]})){
-      try{await navigator.share({files:[f]});st.textContent='✓ Pronto. Abra o app NIIMBOT e insira a última foto.'}
+      try{await navigator.share({files:[f]});st.textContent='✓ Pronto. Abra o app NIIMBOT e insira a última foto.';if(_cgProximo)setTimeout(fecharEtiqueta,600)}
       catch(e){if(e&&e.name!=='AbortError')baixarEtiqueta()}
     }else baixarEtiqueta();
   }
@@ -3404,6 +3424,7 @@
   function cgTogglePeca(p){if(p==='Nenhuma')cg.pecas=['Nenhuma'];else{cg.pecas=cg.pecas.filter(x=>x!=='Nenhuma');cg.pecas=cg.pecas.includes(p)?cg.pecas.filter(x=>x!==p):[...cg.pecas,p]}cgRender()}
 
   function cgRender(){
+    document.getElementById('cg-cancelar').style.display=cg.passo>0?'':'none';
     document.getElementById('cg-passos').innerHTML=CG_PASSOS.map((n,i)=>`<div style="flex:1;text-align:center;font-size:11px;font-weight:800;color:${i<=cg.passo?'var(--brand,#1a3fa8)':'var(--muted)'}"><div style="height:5px;border-radius:4px;margin-bottom:4px;background:${i<cg.passo?'#16a34a':i===cg.passo?'var(--brand,#1a3fa8)':'var(--line)'}"></div>${n}</div>`).join('');
     const t=document.getElementById('cg-tela'),c=cg;let h='';
     const nav=(voltar,continuar,txt)=>`<div style="display:flex;gap:8px;margin-top:20px">${voltar?`<button type="button" class="btn ghost" style="flex:0 0 auto;width:auto" onclick="cgVoltar()">← Voltar</button>`:''}${continuar?`<button type="button" class="btn" style="flex:1" onclick="cgContinuar()">${txt||'Continuar →'}</button>`:''}</div>`;
@@ -3498,7 +3519,7 @@
     cg.passo=0;cg.ativo=item;cgRender();
     document.getElementById('cg-tela').innerHTML=`<div class="feedback info" style="display:block">Este aparelho <b>já está no estoque</b>: ${esc([item.nome,item.gb,item.cor].filter(Boolean).join(' · '))} — ${esc(localEtiqueta(item))}.</div>
       ${cgGrupo('Mudar para',[['','📦 Loja'],['estoque_r1','🏬 R1'],['assistencia','🔧 Assistência'],['garantia','🛡️ Garantia'],['outro_lojista','🤝 Outro lojista'],['vendido','✅ Vendido']].filter(([v])=>v!==(item.destino||'')).map(([v,l])=>cgChip(l,false,`cgMover('${v}')`)).join(''),false)}
-      <div style="display:flex;gap:8px;margin-top:16px"><button type="button" class="btn ghost" style="flex:1" onclick="abrirEtiqueta(cg.ativo)">🏷️ Reimprimir etiqueta</button><button type="button" class="btn ghost" style="flex:1" onclick="cgIniciar()">Bipar outro</button></div>`;
+      <div style="display:flex;gap:8px;margin-top:16px"><button type="button" class="btn ghost" style="flex:1" onclick="abrirEtiqueta(cg.ativo)">🏷️ Reimprimir etiqueta</button><button type="button" class="btn ghost" style="flex:1" onclick="cgIniciar();abrirScanner('guiado')">📷 Bipar outro</button></div>`;
   }
   async function cgMover(destino){
     const item=cg.ativo;let nome='';
@@ -3518,7 +3539,7 @@
     const idx=_apCache.findIndex(a=>a.id===item.id);if(idx>-1)_apCache[idx]=novo;
     salvarUsuarioAtual(usuario);renderAparelhos();
     cgFeedback('success',`✓ Movido para ${localEtiqueta(novo)}.`);
-    if(destino!=='vendido')abrirEtiqueta(novo);
+    if(destino!=='vendido'){_cgProximo=true;abrirEtiqueta(novo)}else setTimeout(()=>abrirScanner('guiado'),600);
     cgIniciar();
   }
 
@@ -3603,6 +3624,7 @@
     }
     salvarUsuarioAtual(c.cadastrador);
     _apCache.unshift(registro);renderAparelhos();_confRegistrarCadastro(registro);
+    _cgProximo=true;
     abrirEtiqueta(registro);
     cgIniciar();
     cgFeedback('success',`✓ ${registro.nome} ${registro.gb} cadastrado (${localEtiqueta(registro)}). Imprima a etiqueta e bipe o próximo.`);
