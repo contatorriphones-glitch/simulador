@@ -3209,11 +3209,30 @@
       while(s&&x.measureText(s).width>larg)s=s.slice(0,-1);x.fillText(s,tx,y)};
     const nome=String(item.nome||'').replace(/^iphone\s*/i,'iPhone ');
     x.textBaseline='alphabetic';
-    linha(nome,44,'800 26px system-ui,-apple-system,Arial');
-    linha([item.gb,item.cor].filter(Boolean).join(' · '),76,'700 21px system-ui,-apple-system,Arial');
-    if(item.bateria)linha('Bateria '+item.bateria+'%',104,'600 18px system-ui,-apple-system,Arial');
-    linha('IMEI final',128,'600 15px system-ui,-apple-system,Arial');
-    linha(imei.slice(-6),160,'900 32px ui-monospace,Menlo,monospace');
+    // Avisos só aparecem quando existem: garantia Apple ativa e mensagem de peça não genuína
+    const avisos=[];
+    if(item.garantiaApple)avisos.push('GARANTIA APPLE');
+    const peca=String(item.avisoPeca||'').trim();
+    if(peca){const m=peca.match(/^pe[çc]a n[ãa]o genu[íi]na:\s*(.+)$/i);avisos.push(m?'NÃO GENUÍNA: '+m[1].toUpperCase():peca.toUpperCase())}
+    let y=avisos.length?38:44;
+    linha(nome,y,'800 26px system-ui,-apple-system,Arial');
+    y+=avisos.length?28:32;linha([item.gb,item.cor].filter(Boolean).join(' · '),y,'700 21px system-ui,-apple-system,Arial');
+    if(item.bateria){y+=avisos.length?24:28;linha('Bateria '+item.bateria+'%',y,'600 18px system-ui,-apple-system,Arial')}
+    if(avisos.length){
+      y+=34;x.font='600 13px system-ui,-apple-system,Arial';x.fillText('IMEI',tx,y);
+      const ix=tx+x.measureText('IMEI ').width;x.font='900 28px ui-monospace,Menlo,monospace';x.fillText(imei.slice(-6),ix,y);
+      // cada aviso numa caixa com borda, para chamar atenção
+      avisos.slice(0,2).forEach(a=>{
+        y+=6;let tf=15;x.font=`800 ${tf}px system-ui,-apple-system,Arial`;
+        while(tf>10&&x.measureText(a).width>larg-10){tf--;x.font=`800 ${tf}px system-ui,-apple-system,Arial`}
+        let t=a;while(t&&x.measureText(t).width>larg-10)t=t.slice(0,-1);
+        const bh=tf+8;x.lineWidth=2;x.strokeRect(tx+1,y,Math.min(larg-2,x.measureText(t).width+10),bh);
+        x.textBaseline='middle';x.fillText(t,tx+6,y+bh/2+1);x.textBaseline='alphabetic';y+=bh;
+      });
+    }else{
+      linha('IMEI final',y+24,'600 15px system-ui,-apple-system,Arial');
+      linha(imei.slice(-6),y+56,'900 32px ui-monospace,Menlo,monospace');
+    }
     x.font='600 14px ui-monospace,Menlo,monospace';x.fillText(imei,q0,H-12);
     // Local do aparelho em destaque (caixa preta, letra branca) no canto inferior direito
     const local=localEtiqueta(item);
