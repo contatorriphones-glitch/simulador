@@ -1060,6 +1060,7 @@
           3. Feche o app NIIMBOT e imprima pelo botão 🖨️ Imprimir.
           <button type="button" class="btn ghost" style="margin-top:10px;width:100%" onclick="copiarLinkSistema()">📋 Copiar link do sistema</button>
         </div>
+        <label id="etq-auto-wrap" style="display:none;flex:1 1 100%;align-items:center;gap:8px;font-size:14px;font-weight:700"><input type="checkbox" id="etq-auto" style="width:22px;height:22px" onchange="try{localStorage.setItem('rrprimecell_etq_auto',this.checked?'1':'')}catch(e){}"> Imprimir sozinho as próximas etiquetas</label>
         <button type="button" class="btn ghost" style="flex:1 1 140px" onclick="baixarEtiqueta()">⬇️ Salvar imagem</button>
         <button type="button" class="btn ghost" style="flex:1 1 140px" onclick="compartilharEtiqueta()">↗️ Compartilhar</button>
       </div>
@@ -3179,7 +3180,9 @@
     _etqItem=item;
     const m=document.getElementById('etq-modal');m.classList.add('open');m.setAttribute('aria-hidden','false');
     document.getElementById('etq-status').textContent='';etqAtualizarBotoes();
-    try{await carregarScript('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js');desenharEtiqueta(item)}
+    try{await carregarScript('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js');desenharEtiqueta(item);
+      let auto=false;try{auto=localStorage.getItem('rrprimecell_etq_auto')==='1'}catch(e){}
+      if(auto&&_niim&&_niim.isConnected()){await imprimirBluetooth();if(document.getElementById('etq-status').textContent.startsWith('✓'))setTimeout(fecharEtiqueta,1200)}}
     catch(e){document.getElementById('etq-status').textContent='Não consegui gerar o QR Code. Verifique a internet.'}
   }
   function localEtiqueta(item){
@@ -3244,6 +3247,9 @@
     const temBt=!!(navigator.bluetooth);
     document.getElementById('etq-btn-bt').style.display=temBt?'':'none';
     document.getElementById('etq-sem-bt').style.display=temBt?'none':'block';
+    const ligada=!!(_niim&&_niim.isConnected());
+    document.getElementById('etq-auto-wrap').style.display=ligada?'flex':'none';
+    try{document.getElementById('etq-auto').checked=localStorage.getItem('rrprimecell_etq_auto')==='1'}catch(e){}
     if(temBt)document.getElementById('etq-btn-bt').textContent=_niim&&_niim.isConnected()?'🖨️ Imprimir':'🖨️ Conectar impressora e imprimir';
   }
   function copiarLinkSistema(){
