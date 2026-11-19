@@ -87,6 +87,7 @@
     .feedback{margin-top:12px;font-size:12px;border-radius:12px;padding:9px 11px;display:none}
     .feedback.success{color:#1a7f37;background:#dafbe1;border:1px solid #a8d9b4}
     .feedback.error{color:#b91c1c;background:#fef2f2;border:1px solid #fca5a5}
+    .feedback.info{color:#1e40af;background:#eff6ff;border:1px solid #bfdbfe}
     /* ── Segmented Control ── */
     .seg{display:flex;gap:5px;background:rgba(26,63,196,.07);border:1px solid var(--line);border-radius:14px;padding:5px;flex-wrap:wrap}
     .seg label{
@@ -527,6 +528,10 @@
         <section class="card">
           <h2 class="title">Cadastrar / Editar Aparelho</h2>
           <p class="section-copy">Registre a entrada de um aparelho. Se o IMEI já existir, você pode ver o histórico ou registrar uma nova passagem.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px">
+            <button type="button" class="btn" style="flex:1 1 200px" onclick="abrirScanner('cadastro')">📷 Bipar IMEI e cadastrar</button>
+            <button type="button" class="btn ghost" style="flex:1 1 200px" onclick="abrirConferencia()">📋 Conferir estoque (bipar tudo)</button>
+          </div>
 
           <div class="fieldset">
             <p class="fieldset-title">Categoria <span style="color:var(--danger)">*</span></p>
@@ -563,6 +568,9 @@
               </div>
             </div>
             <div id="ap-imei-hint" class="input-hint"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+              <button type="button" class="btn ghost" style="flex:1 1 180px;padding:10px" onclick="abrirScanner('cadastro')">📷 Bipar IMEI (*#06# ou caixa)</button>
+            </div>
             <div class="row">
               <div>
                 <label for="ap-bateria">Saúde da bateria (%)</label>
@@ -1004,6 +1012,77 @@
   </div><!-- /tab container -->
 
   <!-- Histórico do Aparelho Modal -->
+  <!-- BIPAR (câmera) -->
+  <div id="scan-modal" class="admin-modal" aria-hidden="true" style="z-index:60">
+    <div class="admin-panel" role="dialog" aria-modal="true" style="padding:16px">
+      <div class="admin-header">
+        <div><h2 class="admin-title" id="scan-titulo">Bipar IMEI</h2>
+        <p style="margin:6px 0 0;color:var(--muted);font-size:13px" id="scan-dica">Aponte para o código de barras do IMEI (tela do *#06#, caixa ou etiqueta).</p></div>
+        <button type="button" class="admin-close" onclick="fecharScanner()">✕ Fechar</button>
+      </div>
+      <div style="position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:4/3">
+        <video id="scan-video" playsinline muted autoplay style="width:100%;height:100%;object-fit:cover"></video>
+        <div style="position:absolute;left:8%;right:8%;top:38%;bottom:38%;border:3px solid rgba(255,255,255,.85);border-radius:10px;box-shadow:0 0 0 999px rgba(0,0,0,.25)"></div>
+      </div>
+      <div id="scan-status" style="margin-top:10px;font-size:14px;font-weight:700;color:var(--muted)">Abrindo a câmera…</div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <input id="scan-manual" type="text" inputmode="numeric" placeholder="Ou digite o IMEI" style="flex:1">
+        <button type="button" class="btn ghost" onclick="scanManual()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ETIQUETA -->
+  <div id="etq-modal" class="admin-modal" aria-hidden="true" style="z-index:70">
+    <div class="admin-panel" role="dialog" aria-modal="true" style="padding:16px">
+      <div class="admin-header">
+        <div><h2 class="admin-title">🏷️ Etiqueta</h2>
+        <p style="margin:6px 0 0;color:var(--muted);font-size:13px">Toque em <b>Enviar para a impressora</b> e escolha o app <b>NIIMBOT</b>. Etiqueta 50×30 mm.</p></div>
+        <button type="button" class="admin-close" onclick="fecharEtiqueta()">✕ Fechar</button>
+      </div>
+      <canvas id="etq-canvas" width="400" height="240" style="width:100%;max-width:400px;border:1px dashed var(--line);border-radius:8px;display:block;margin:0 auto;background:#fff"></canvas>
+      <div class="admin-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn" style="flex:1 1 200px" onclick="compartilharEtiqueta()">🖨️ Enviar para a impressora</button>
+        <button type="button" class="btn ghost" style="flex:1 1 140px" onclick="baixarEtiqueta()">⬇️ Salvar imagem</button>
+      </div>
+      <div id="etq-status" style="font-size:13px;color:var(--muted);margin-top:8px"></div>
+    </div>
+  </div>
+
+  <!-- CONFERÊNCIA -->
+  <div id="conf-modal" class="admin-modal" aria-hidden="true">
+    <div class="admin-panel" role="dialog" aria-modal="true" style="padding:16px">
+      <div class="admin-header">
+        <div><h2 class="admin-title">📋 Conferir estoque</h2>
+        <p style="margin:6px 0 0;color:var(--muted);font-size:13px">Bipe todos os aparelhos que estão fisicamente no local. No fim, aparece só o que falta.</p></div>
+        <button type="button" class="admin-close" onclick="fecharConferencia()">✕ Fechar</button>
+      </div>
+      <div id="conf-inicio">
+        <label for="conf-local">Local que está sendo conferido</label>
+        <select id="conf-local"><option value="estoque_r1">🏬 Estoque R1</option><option value="loja">📦 Estoque Loja</option></select>
+        <label for="conf-usuario">Quem está conferindo</label>
+        <select id="conf-usuario"><option value="">Selecione…</option><option>Joana</option><option>Gaby</option><option>Michelle</option><option>Pamella</option><option>Robert</option></select>
+        <div class="admin-actions"><button type="button" class="btn" style="width:100%" onclick="iniciarConferencia()">Começar a bipar</button></div>
+      </div>
+      <div id="conf-andamento" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="font-size:22px;font-weight:800;white-space:nowrap" id="conf-contador">0 de 0</div>
+          <button type="button" class="btn" style="width:auto;flex:0 0 auto" onclick="abrirScanner('conferencia')">📷 Bipar</button>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin:0 0 8px;cursor:pointer;font-size:13px;font-weight:700;color:var(--muted)">
+          <input id="conf-etiqueta" type="checkbox" style="width:auto"> 🏷️ Abrir a etiqueta de cada aparelho bipado (para etiquetar o estoque)
+        </label>
+        <div id="conf-ultimo" style="font-size:13px;margin-bottom:8px"></div>
+        <div id="conf-listas"></div>
+        <div class="admin-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn ghost" style="flex:1 1 160px" onclick="copiarResultadoConferencia()">📋 Copiar resultado</button>
+          <button type="button" class="btn" style="flex:1 1 160px" onclick="finalizarConferencia()">✓ Finalizar conferência</button>
+        </div>
+        <div id="conf-feedback" style="font-size:13px;margin-top:8px"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="ap-hist-modal" class="admin-modal" aria-hidden="true">
     <div class="admin-panel" role="dialog" aria-modal="true">
       <div class="admin-header">
@@ -1716,6 +1795,7 @@
 
     if(!nome){mostrarApFeedback('error','Informe o nome do aparelho.');return}
     if(!imei){mostrarApFeedback('error','Informe o IMEI do aparelho.');return}
+    if(!imeiValido(imei)&&!confirm(`O IMEI "${imei}" parece inválido (todo IMEI tem 15 números e um dígito de conferência).\n\nO certo é bipar o *#06# ou a caixa. Salvar assim mesmo?`))return;
     if(!cadastrador){mostrarApFeedback('error','Selecione quem está fazendo esta ação.');return}
     if(destino==='assistencia'&&!assistenciaNome){mostrarApFeedback('error','Informe para qual assistência o aparelho foi enviado.');return}
     if(destino&&!dataSaida){mostrarApFeedback('error','Informe a data de saída.');return}
@@ -1770,6 +1850,8 @@
     }else{
       _apCache.unshift(registro);
       mostrarApFeedback('success','✓ Aparelho cadastrado com sucesso!');
+      if(registro.tipo!=='cliente')abrirEtiqueta(registro);
+      _confRegistrarCadastro(registro);
     }
     _apEditandoId=null;
     _apEditandoSnapshot=null;
@@ -1907,7 +1989,7 @@
       const linhaModelo=[item.nome||'Sem nome',item.gb].filter(Boolean).join(' · ');
       const corInfo=detectarCor(item.cor);
       const corHtml=item.cor?(corInfo?`<span title="${esc(item.cor)}" style="margin-left:4px">${corInfo.emoji}</span>`:`<span style="font-size:12px;color:var(--muted);margin-left:4px">${esc(item.cor)}</span>`):'';
-      return`<div class="ap-card ${info.cls}"><div class="ap-card-top"><div><div class="ap-card-nome">${esc(linhaModelo)}${corHtml}</div><div class="ap-card-imei">IMEI: ${esc(item.imei||'—')}</div></div><span class="ap-badge">${info.label}${diasTxt}</span></div><div class="ap-card-meta">${montarMetaHtml(item)}</div><div class="ap-card-actions"><button type="button" onclick="editarAparelho('${item.id}')">✏️ Editar</button>${histBtn}<button type="button" onclick="deletarAparelho('${item.id}')" style="color:var(--danger);border-color:#fca5a5">🗑️ Excluir</button></div></div>`;
+      return`<div class="ap-card ${info.cls}"><div class="ap-card-top"><div><div class="ap-card-nome">${esc(linhaModelo)}${corHtml}</div><div class="ap-card-imei">IMEI: ${esc(item.imei||'—')}</div></div><span class="ap-badge">${info.label}${diasTxt}</span></div><div class="ap-card-meta">${montarMetaHtml(item)}</div><div class="ap-card-actions"><button type="button" onclick="editarAparelho('${item.id}')">✏️ Editar</button><button type="button" onclick="abrirEtiquetaPorId('${item.id}')">🏷️ Etiqueta</button>${histBtn}<button type="button" onclick="deletarAparelho('${item.id}')" style="color:var(--danger);border-color:#fca5a5">🗑️ Excluir</button></div></div>`;
     }).join('');
   }
 
@@ -2912,6 +2994,266 @@
       alert('Erro ao trocar senha: '+e.message);
     }
   }
+  // =====================================================================
+  // BIPE DE IMEI (câmera), ETIQUETA (Niimbot) E CONFERÊNCIA DE ESTOQUE
+  // =====================================================================
+  function imeiValido(imei){
+    if(!/^\d{15}$/.test(imei||''))return false;
+    let soma=0;
+    for(let i=0;i<15;i++){let d=+imei[14-i];if(i%2===1){d*=2;if(d>9)d-=9}soma+=d}
+    return soma%10===0;
+  }
+  // Acha um IMEI válido dentro do que a câmera leu (o código pode trazer outros números junto)
+  function extrairImei(texto){
+    const t=String(texto||'');
+    const blocos=t.match(/\d{15,}/g)||[];
+    for(const b of blocos){for(let i=0;i+15<=b.length;i++){const c=b.slice(i,i+15);if(imeiValido(c))return c}}
+    return null;
+  }
+
+  const _libs={};
+  function carregarScript(url){
+    if(_libs[url])return _libs[url];
+    _libs[url]=new Promise((ok,erro)=>{const s=document.createElement('script');s.src=url;s.onload=ok;s.onerror=()=>{delete _libs[url];erro(new Error('Falha ao carregar '+url))};document.head.appendChild(s)});
+    return _libs[url];
+  }
+
+  function bip(){
+    try{const ctx=bip.ctx||(bip.ctx=new (window.AudioContext||window.webkitAudioContext)());const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=1650;g.gain.value=.18;o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+.12)}catch(e){}
+    try{navigator.vibrate&&navigator.vibrate(80)}catch(e){}
+  }
+
+  let _scanReader=null,_scanModo='cadastro',_scanUltimo={imei:'',em:0};
+  async function abrirScanner(modo){
+    _scanModo=modo||'cadastro';
+    const st=document.getElementById('scan-status');
+    document.getElementById('scan-titulo').textContent=_scanModo==='conferencia'?'Bipar aparelhos':'Bipar IMEI';
+    document.getElementById('scan-dica').textContent=_scanModo==='conferencia'
+      ?'Vá passando a câmera em cada etiqueta ou caixa. A cada leitura o celular apita.'
+      :'Aponte para o código de barras do IMEI (tela do *#06#, caixa ou etiqueta).';
+    document.getElementById('scan-manual').value='';
+    const m=document.getElementById('scan-modal');m.classList.add('open');m.setAttribute('aria-hidden','false');
+    st.textContent='Abrindo a câmera…';st.style.color='var(--muted)';
+    try{
+      await carregarScript('https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js');
+      const hints=new Map();
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.QR_CODE,ZXing.BarcodeFormat.CODE_39,ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.DATA_MATRIX]);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+      _scanReader=new ZXing.BrowserMultiFormatReader(hints,250);
+      await _scanReader.decodeFromConstraints({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}},document.getElementById('scan-video'),(res)=>{if(res)scanLido(res.getText())});
+      st.textContent='Câmera pronta. Aponte para o código.';
+    }catch(e){
+      console.error(e);
+      st.textContent='Não consegui abrir a câmera. Permita o acesso à câmera para este site (Ajustes do Safari) ou digite o IMEI abaixo.';
+      st.style.color='var(--danger)';
+    }
+  }
+  function fecharScanner(){
+    try{_scanReader&&_scanReader.reset()}catch(e){}
+    _scanReader=null;
+    const m=document.getElementById('scan-modal');m.classList.remove('open');m.setAttribute('aria-hidden','true');
+  }
+  function scanManual(){
+    const v=document.getElementById('scan-manual').value.replace(/\D/g,'');
+    if(!v)return;
+    if(!imeiValido(v)&&!confirm(`O IMEI "${v}" parece inválido (dígito de conferência não bate). Usar assim mesmo?`))return;
+    document.getElementById('scan-manual').value='';
+    tratarImeiLido(v);
+  }
+  function scanLido(texto){
+    const imei=extrairImei(texto);
+    const st=document.getElementById('scan-status');
+    if(!imei){st.textContent='Li um código, mas não é um IMEI. Aponte para o código do IMEI.';st.style.color='var(--danger)';return}
+    const agora=Date.now();
+    if(imei===_scanUltimo.imei&&agora-_scanUltimo.em<3000)return;
+    _scanUltimo={imei,em:agora};
+    bip();
+    tratarImeiLido(imei);
+  }
+  function tratarImeiLido(imei){
+    if(_scanModo==='conferencia'){conferirImei(imei);return}
+    fecharScanner();
+    preencherPorImei(imei);
+  }
+
+  // Modelo provável pelos 8 primeiros dígitos do IMEI, aprendido com os cadastros anteriores
+  function modeloPorTac(imei){
+    const tac=String(imei).slice(0,8),cont={};
+    getAparelhos().forEach(a=>{if(a.nome&&String(a.imei||'').replace(/\D/g,'').slice(0,8)===tac){const k=normalizarNomeModelo(a.nome);cont[k]=(cont[k]||0)+1}});
+    const melhor=Object.entries(cont).sort((a,b)=>b[1]-a[1])[0];
+    if(!melhor)return null;
+    const opc=[...document.querySelectorAll('#lista-iphones option')].map(o=>o.value).find(v=>normalizarNomeModelo(v)===melhor[0]);
+    return opc||getAparelhos().find(a=>normalizarNomeModelo(a.nome)===melhor[0]).nome;
+  }
+
+  function preencherPorImei(imei){
+    const el=document.getElementById('ap-imei');
+    el.value=imei;
+    checarImei(imei);
+    const ultimo=getAparelhos().filter(a=>a.imei===imei).sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0))[0];
+    const set=(id,v)=>{const e=document.getElementById(id);if(v&&!e.value)e.value=v};
+    if(ultimo){
+      set('ap-nome',ultimo.nome);set('ap-gb',ultimo.gb);set('ap-cor',ultimo.cor);set('ap-bateria',ultimo.bateria);
+      mostrarApFeedback('info',`IMEI ${imei} já tem cadastro (${[ultimo.nome,ultimo.gb,ultimo.cor].filter(Boolean).join(' · ')}). Confira o histórico abaixo do IMEI.`);
+    }else{
+      const sug=modeloPorTac(imei);
+      if(sug){set('ap-nome',sug);mostrarApFeedback('info',`✓ IMEI lido. Modelo identificado pelo IMEI: ${sug}. Confira e complete GB e cor.`)}
+      else mostrarApFeedback('info','✓ IMEI lido. Preencha modelo, GB e cor.');
+    }
+    const prox=['ap-nome','ap-gb','ap-cor'].map(id=>document.getElementById(id)).find(e=>!e.value);
+    (prox||document.getElementById('ap-bateria')).scrollIntoView({behavior:'smooth',block:'center'});
+  }
+
+  // ---------------------------------------------------------------- Etiqueta 50×30 mm (Niimbot B21, 203 dpi ≈ 8 px/mm)
+  let _etqItem=null;
+  async function abrirEtiqueta(item){
+    _etqItem=item;
+    const m=document.getElementById('etq-modal');m.classList.add('open');m.setAttribute('aria-hidden','false');
+    document.getElementById('etq-status').textContent='';
+    try{await carregarScript('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js');desenharEtiqueta(item)}
+    catch(e){document.getElementById('etq-status').textContent='Não consegui gerar o QR Code. Verifique a internet.'}
+  }
+  function abrirEtiquetaPorId(id){const it=getAparelhos().find(a=>a.id===id);if(it)abrirEtiqueta(it)}
+  function fecharEtiqueta(){const m=document.getElementById('etq-modal');m.classList.remove('open');m.setAttribute('aria-hidden','true')}
+  function desenharEtiqueta(item){
+    const c=document.getElementById('etq-canvas'),x=c.getContext('2d'),W=400,H=240;
+    x.fillStyle='#fff';x.fillRect(0,0,W,H);x.fillStyle='#000';
+    const imei=String(item.imei||'').replace(/\D/g,'');
+    const qr=qrcode(0,'M');qr.addData(imei||'SEM IMEI');qr.make();
+    const n=qr.getModuleCount(),tam=176,cel=Math.floor(tam/n),q0=14,qy=Math.floor((H-cel*n)/2)-10;
+    for(let r=0;r<n;r++)for(let k=0;k<n;k++)if(qr.isDark(r,k))x.fillRect(q0+k*cel,qy+r*cel,cel,cel);
+    const tx=q0+cel*n+14,larg=W-tx-10;
+    // Diminui a fonte até caber; só corta o texto se nem a fonte mínima couber
+    const linha=(t,y,fonte)=>{let s=String(t||''),tam=+fonte.match(/(\d+)px/)[1];const minimo=Math.max(12,Math.round(tam*.62));
+      const f=()=>fonte.replace(/\d+px/,tam+'px');x.font=f();
+      while(tam>minimo&&x.measureText(s).width>larg){tam--;x.font=f()}
+      while(s&&x.measureText(s).width>larg)s=s.slice(0,-1);x.fillText(s,tx,y)};
+    const nome=String(item.nome||'').replace(/^iphone\s*/i,'iPhone ');
+    x.textBaseline='alphabetic';
+    linha(nome,44,'800 26px system-ui,-apple-system,Arial');
+    linha([item.gb,item.cor].filter(Boolean).join(' · '),76,'700 21px system-ui,-apple-system,Arial');
+    if(item.bateria)linha('Bateria '+item.bateria+'%',104,'600 18px system-ui,-apple-system,Arial');
+    linha('IMEI final',138,'600 15px system-ui,-apple-system,Arial');
+    linha(imei.slice(-6),172,'900 34px ui-monospace,Menlo,monospace');
+    x.font='600 15px ui-monospace,Menlo,monospace';x.fillText(imei,q0,H-12);
+    x.font='700 13px system-ui,-apple-system,Arial';const marca='RR PRIME CELL';x.fillText(marca,W-10-x.measureText(marca).width,H-12);
+  }
+  function _etqArquivo(){
+    return new Promise(ok=>document.getElementById('etq-canvas').toBlob(b=>ok(new File([b],`etiqueta-${(_etqItem&&_etqItem.imei)||'aparelho'}.png`,{type:'image/png'})),'image/png'));
+  }
+  async function compartilharEtiqueta(){
+    const st=document.getElementById('etq-status');
+    const f=await _etqArquivo();
+    if(navigator.canShare&&navigator.canShare({files:[f]})){
+      try{await navigator.share({files:[f]});st.textContent='✓ Enviada. No app NIIMBOT, confira o tamanho 50×30 e imprima.'}
+      catch(e){if(e&&e.name!=='AbortError')st.textContent='Não deu para compartilhar. Use "Salvar imagem" e abra no app NIIMBOT.'}
+    }else baixarEtiqueta();
+  }
+  async function baixarEtiqueta(){
+    const f=await _etqArquivo(),u=URL.createObjectURL(f),a=document.createElement('a');
+    a.href=u;a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);
+    document.getElementById('etq-status').textContent='Imagem salva. Abra no app NIIMBOT para imprimir.';
+  }
+
+  // ---------------------------------------------------------------- Conferência (bipar tudo e ver o que falta)
+  const LS_CONF='rrprimecell_conferencia';
+  let _conf=null;
+  function _confSalvarLocal(){try{_conf?localStorage.setItem(LS_CONF,JSON.stringify(_conf)):localStorage.removeItem(LS_CONF)}catch(e){}}
+  function _confEsperados(){return getAparelhos().filter(a=>a.tipo!=='cliente'&&getBucket(a)===_conf.local&&(!a.destino||a.destino==='estoque_r1'))}
+  function abrirConferencia(){
+    try{const s=localStorage.getItem(LS_CONF);if(s&&!_conf)_conf=JSON.parse(s)}catch(e){}
+    const m=document.getElementById('conf-modal');m.classList.add('open');m.setAttribute('aria-hidden','false');
+    document.getElementById('conf-inicio').style.display=_conf?'none':'block';
+    document.getElementById('conf-andamento').style.display=_conf?'block':'none';
+    if(!_conf){const u=obterUsuarioAtual();if(u)document.getElementById('conf-usuario').value=u}
+    else renderConferencia();
+  }
+  function fecharConferencia(){const m=document.getElementById('conf-modal');m.classList.remove('open');m.setAttribute('aria-hidden','true')}
+  function iniciarConferencia(){
+    const local=document.getElementById('conf-local').value,usuario=document.getElementById('conf-usuario').value;
+    if(!usuario){alert('Selecione quem está conferindo.');return}
+    _conf={local,usuario,iniciadaEm:new Date().toISOString(),bipados:{},foraDoLocal:{}};
+    _confSalvarLocal();
+    document.getElementById('conf-inicio').style.display='none';
+    document.getElementById('conf-andamento').style.display='block';
+    renderConferencia();
+    abrirScanner('conferencia');
+  }
+  function conferirImei(imei){
+    if(!_conf)return;
+    const st=document.getElementById('scan-status');
+    const esperado=_confEsperados().find(a=>a.imei===imei);
+    const linha=a=>[a.nome,a.gb,a.cor].filter(Boolean).join(' · ');
+    if(_conf.bipados[imei]){st.textContent='Já bipado: '+imei;st.style.color='var(--muted)';return}
+    _conf.bipados[imei]=new Date().toISOString();
+    if(esperado){
+      st.textContent='✅ '+linha(esperado)+' (…'+imei.slice(-6)+')';st.style.color='#15803d';
+      if(document.getElementById('conf-etiqueta').checked){_confSalvarLocal();renderConferencia();fecharScanner();abrirEtiqueta(esperado);return}
+    }else{
+      const outro=getAparelhos().filter(a=>a.imei===imei).sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0))[0];
+      _conf.foraDoLocal[imei]=outro?{id:outro.id,onde:outro.tipo==='cliente'?'aparelho de cliente':(outro.destino?statusInfo(outro).label:BUCKET_LABEL[getBucket(outro)]),modelo:linha(outro)}:{id:null,onde:'sem cadastro',modelo:''};
+      st.textContent=outro?`⚠️ Está no sistema como "${_conf.foraDoLocal[imei].onde}"`:'➕ Sem cadastro: cadastre depois da conferência';
+      st.style.color='#b45309';
+    }
+    _confSalvarLocal();renderConferencia();
+  }
+  function _confRegistrarCadastro(reg){
+    if(!_conf||!reg||!_conf.foraDoLocal[reg.imei])return;
+    delete _conf.foraDoLocal[reg.imei];_confSalvarLocal();
+  }
+  function cadastrarDaConferencia(imei){
+    fecharConferencia();
+    limparFormAparelho();
+    if(_conf&&_conf.local==='estoque_r1'){document.getElementById('ap-destino').value='estoque_r1';onDestinoChange()}
+    if(_conf)document.getElementById('ap-cadastrador').value=_conf.usuario;
+    preencherPorImei(imei);
+  }
+  function editarDaConferencia(id){fecharConferencia();editarAparelho(id)}
+  function renderConferencia(){
+    if(!_conf)return;
+    const esp=_confEsperados(),b=_conf.bipados;
+    const ok=esp.filter(a=>b[a.imei]),falta=esp.filter(a=>!b[a.imei]),fora=Object.entries(_conf.foraDoLocal);
+    const nomeLocal=BUCKET_LABEL[_conf.local]||_conf.local;
+    document.getElementById('conf-contador').textContent=`${ok.length} de ${esp.length}`;
+    document.getElementById('conf-ultimo').innerHTML=`${esc(nomeLocal)} · ${esc(_conf.usuario)} · desde ${new Date(_conf.iniciadaEm).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+    const item=(a,extra)=>`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:13px"><div><b>${esc([a.nome,a.gb].filter(Boolean).join(' '))}</b> ${esc(a.cor||'')}<div style="color:var(--muted);font-family:ui-monospace,Menlo,monospace">${esc(a.imei||'')}</div></div>${extra||''}</div>`;
+    const btn=(txt,acao)=>`<button type="button" class="btn ghost" style="padding:6px 10px;font-size:12px;white-space:nowrap;width:auto;flex:0 0 auto" onclick="${acao}">${txt}</button>`;
+    let h='';
+    h+=`<p class="fieldset-title" style="margin:12px 0 4px;color:var(--danger)">❌ Faltando bipar (${falta.length})</p>`+(falta.map(a=>item(a)).join('')||'<div style="font-size:13px;color:var(--muted)">Nada faltando 🎉</div>');
+    if(fora.length)h+=`<p class="fieldset-title" style="margin:16px 0 4px;color:#b45309">⚠️ Bipados que não deviam estar aqui (${fora.length})</p>`+fora.map(([imei,f])=>item({nome:f.modelo||'Sem cadastro',imei},`<div style="text-align:right;font-size:12px;color:#b45309">${esc(f.onde)}<br>${f.id?btn('✏️ Abrir',`editarDaConferencia('${f.id}')`):btn('➕ Cadastrar',`cadastrarDaConferencia('${imei}')`)}</div>`)).join('');
+    h+=`<p class="fieldset-title" style="margin:16px 0 4px;color:#15803d">✅ Conferidos (${ok.length})</p>`+ok.map(a=>item(a,btn('🏷️',`abrirEtiquetaPorId('${a.id}')`))).join('');
+    document.getElementById('conf-listas').innerHTML=h;
+  }
+  function _confTexto(){
+    const esp=_confEsperados(),b=_conf.bipados,falta=esp.filter(a=>!b[a.imei]),fora=Object.entries(_conf.foraDoLocal);
+    const l=[`📋 *Conferência — ${BUCKET_LABEL[_conf.local]||_conf.local}*`,`👤 ${_conf.usuario} · ${new Date().toLocaleString('pt-BR')}`,`✅ ${esp.length-falta.length} de ${esp.length} conferidos`,''];
+    if(falta.length){l.push(`❌ Faltando (${falta.length})`);falta.forEach(a=>l.push(`• ${[a.nome,a.gb,a.cor].filter(Boolean).join(' ')} — IMEI ${a.imei}`));l.push('')}
+    if(fora.length){l.push(`⚠️ Fora do esperado (${fora.length})`);fora.forEach(([i,f])=>l.push(`• ${f.modelo||'Sem cadastro'} — IMEI ${i} — ${f.onde}`))}
+    return l.join('\n');
+  }
+  function copiarResultadoConferencia(){
+    if(!_conf)return;
+    const t=_confTexto();
+    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>{document.getElementById('conf-feedback').textContent='✓ Copiado. Pode colar no WhatsApp.'}).catch(()=>prompt('Copie o resultado:',t));
+  }
+  async function finalizarConferencia(){
+    if(!_conf)return;
+    const esp=_confEsperados(),b=_conf.bipados,falta=esp.filter(a=>!b[a.imei]);
+    if(falta.length&&!confirm(`Ainda faltam ${falta.length} aparelho(s). Finalizar assim mesmo? Eles ficam registrados como faltando.`))return;
+    const fb=document.getElementById('conf-feedback');fb.textContent='Salvando…';
+    const reg={local:_conf.local,usuario:_conf.usuario,iniciada_em:_conf.iniciadaEm,finalizada_em:new Date().toISOString(),esperados:esp.length,bipados:Object.keys(b).length,
+      faltando:falta.map(a=>({imei:a.imei,nome:a.nome,gb:a.gb,cor:a.cor})),sobrando:Object.entries(_conf.foraDoLocal).map(([imei,f])=>({imei,...f}))};
+    const{data,error}=await sbClient.from('contagens').insert(reg).select('id').maybeSingle();
+    if(!error&&data){await sbClient.from('contagem_itens').insert(Object.entries(b).map(([imei,em])=>({contagem_id:data.id,imei,bipado_em:em})))}
+    if(error){console.error(error);fb.textContent='Não consegui salvar no banco ('+error.message+'). Use "Copiar resultado" para não perder.';return}
+    const texto=_confTexto();
+    _conf=null;_confSalvarLocal();
+    document.getElementById('conf-andamento').style.display='none';document.getElementById('conf-inicio').style.display='block';
+    fecharConferencia();
+    mostrarApFeedback('success','✓ Conferência salva. O resultado foi copiado para colar no grupo.');
+    try{await navigator.clipboard.writeText(texto)}catch(e){}
+  }
+
   </script>
 <!-- BIA:SCRIPT -->
 <button class="bia-flutuante" id="bia-flutuante" onclick="document.getElementById('bia-tab-btn').click()"></button>
