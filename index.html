@@ -1047,13 +1047,21 @@
     <div class="admin-panel" role="dialog" aria-modal="true" style="padding:16px">
       <div class="admin-header">
         <div><h2 class="admin-title">🏷️ Etiqueta</h2>
-        <p style="margin:6px 0 0;color:var(--muted);font-size:13px">Toque em <b>Enviar para a impressora</b> e escolha o app <b>NIIMBOT</b>. Etiqueta 50×30 mm.</p></div>
+        <p style="margin:6px 0 0;color:var(--muted);font-size:13px">Etiqueta 50×30 mm · impressora Niimbot B21.</p></div>
         <button type="button" class="admin-close" onclick="fecharEtiqueta()">✕ Fechar</button>
       </div>
       <canvas id="etq-canvas" width="400" height="240" style="width:100%;max-width:400px;border:1px dashed var(--line);border-radius:8px;display:block;margin:0 auto;background:#fff"></canvas>
       <div class="admin-actions" style="display:flex;gap:8px;flex-wrap:wrap">
-        <button type="button" class="btn" style="flex:1 1 200px" onclick="compartilharEtiqueta()">🖨️ Enviar para a impressora</button>
+        <button type="button" id="etq-btn-bt" class="btn" style="flex:1 1 100%;padding:16px;font-size:17px" onclick="imprimirBluetooth()">🖨️ Imprimir</button>
+        <div id="etq-sem-bt" style="display:none;flex:1 1 100%;background:#fff7e6;border:1px solid #f5c26b;border-radius:12px;padding:12px;font-size:14px;line-height:1.45">
+          <b>Para imprimir direto, abra o sistema no app Bluefy</b> (o Safari do iPhone não conversa com impressora Bluetooth):<br>
+          1. Instale o <b>Bluefy – Web BLE Browser</b> na App Store (grátis).<br>
+          2. Toque em <b>Copiar link</b> abaixo e cole no Bluefy.<br>
+          3. Feche o app NIIMBOT e imprima pelo botão 🖨️ Imprimir.
+          <button type="button" class="btn ghost" style="margin-top:10px;width:100%" onclick="copiarLinkSistema()">📋 Copiar link do sistema</button>
+        </div>
         <button type="button" class="btn ghost" style="flex:1 1 140px" onclick="baixarEtiqueta()">⬇️ Salvar imagem</button>
+        <button type="button" class="btn ghost" style="flex:1 1 140px" onclick="compartilharEtiqueta()">↗️ Compartilhar</button>
       </div>
       <div id="etq-status" style="font-size:13px;color:var(--muted);margin-top:8px"></div>
     </div>
@@ -3170,7 +3178,7 @@
   async function abrirEtiqueta(item){
     _etqItem=item;
     const m=document.getElementById('etq-modal');m.classList.add('open');m.setAttribute('aria-hidden','false');
-    document.getElementById('etq-status').textContent='';
+    document.getElementById('etq-status').textContent='';etqAtualizarBotoes();
     try{await carregarScript('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js');desenharEtiqueta(item)}
     catch(e){document.getElementById('etq-status').textContent='Não consegui gerar o QR Code. Verifique a internet.'}
   }
@@ -3227,6 +3235,50 @@
     const f=await _etqArquivo(),u=URL.createObjectURL(f),a=document.createElement('a');
     a.href=u;a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);
     document.getElementById('etq-status').textContent='Imagem salva. Abra no app NIIMBOT para imprimir.';
+  }
+
+  // ---------------------------------------------------------------- Impressão direta na Niimbot B21 (Bluetooth, via navegador Bluefy no iPhone)
+  const NIIM_URL='https://cdn.jsdelivr.net/npm/@mmote/niimbluelib@0.48.0/dist/umd/niimbluelib.min.js';
+  let _niim=null,_niimImprimindo=false;
+  function etqAtualizarBotoes(){
+    const temBt=!!(navigator.bluetooth);
+    document.getElementById('etq-btn-bt').style.display=temBt?'':'none';
+    document.getElementById('etq-sem-bt').style.display=temBt?'none':'block';
+    if(temBt)document.getElementById('etq-btn-bt').textContent=_niim&&_niim.isConnected()?'🖨️ Imprimir':'🖨️ Conectar impressora e imprimir';
+  }
+  function copiarLinkSistema(){
+    const u=location.href.split('#')[0];
+    (navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>{document.getElementById('etq-status').textContent='✓ Link copiado. Abra o Bluefy e cole na barra de endereço.'}).catch(()=>prompt('Copie o link:',u));
+  }
+  async function imprimirBluetooth(){
+    const st=document.getElementById('etq-status');
+    if(_niimImprimindo)return;_niimImprimindo=true;
+    try{
+      await carregarScript(NIIM_URL);
+      if(!_niim||!_niim.isConnected()){
+        st.textContent='Escolha a impressora B21 na lista…';
+        _niim=new niimbluelib.NiimbotBluetoothClient();
+        await _niim.connect();
+      }
+      st.textContent='Imprimindo…';
+      const meta=_niim.getModelMetadata();
+      const largura=meta?Math.min(meta.printheadPixels,400):384;
+      // a cabeça da B21 tem 384 pontos (48 mm): a etiqueta é reduzida para caber
+      const origem=document.getElementById('etq-canvas'),cv=document.createElement('canvas');
+      cv.width=largura;cv.height=240;const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);
+      const esc=largura/origem.width,alt=origem.height*esc;cx.drawImage(origem,0,(240-alt)/2,largura,alt);
+      const img=niimbluelib.ImageEncoder.encodeCanvas(cv,0,meta?meta.printDirection:'top');
+      const tarefa=_niim.getPrintTaskType()||'B21_V1';
+      const t=_niim.protocol.newPrintTask(tarefa,{totalPages:1,labelType:1,density:3});
+      try{await t.printInit();await t.printPage(img,1);await t.waitForFinished()}
+      finally{await _niim.protocol.printEnd().catch(()=>{})}
+      st.textContent='✓ Etiqueta impressa.';
+    }catch(e){
+      console.error(e);
+      const m=String(e&&e.message||e);
+      st.textContent=/cancel/i.test(m)?'Nenhuma impressora escolhida.':'Não consegui imprimir: '+m+'. Confira se a impressora está ligada, com etiqueta, e se o app NIIMBOT está fechado.';
+      try{if(_niim)await _niim.disconnect()}catch(_){}_niim=null;
+    }finally{_niimImprimindo=false;etqAtualizarBotoes()}
   }
 
 
