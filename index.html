@@ -3262,9 +3262,12 @@
     try{
       await carregarScript(NIIM_URL);
       if(!_niim||!_niim.isConnected()){
-        st.textContent='Escolha a impressora B21 na lista…';
+        st.textContent='Escolha a impressora na lista (o nome começa com B21)…';
+        // lista todos os aparelhos Bluetooth por perto: a B21 aparece mesmo com nome diferente do esperado
+        const dev=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:['e7810a71-73ae-499d-8c15-faa9aef0c3f2','49535343-fe7d-4ae5-8fa9-9fafd205e455','0000ffe0-0000-1000-8000-00805f9b34fb','0000ff00-0000-1000-8000-00805f9b34fb']});
+        st.textContent='Conectando em '+(dev.name||'impressora')+'…';
         _niim=new niimbluelib.NiimbotBluetoothClient();
-        await _niim.connect();
+        await _niim.connect({authorizedDevice:dev});
       }
       st.textContent='Imprimindo…';
       const meta=_niim.getModelMetadata();
@@ -3282,7 +3285,7 @@
     }catch(e){
       console.error(e);
       const m=String(e&&e.message||e);
-      st.textContent=/cancel/i.test(m)?'Nenhuma impressora escolhida.':'Não consegui imprimir: '+m+'. Confira se a impressora está ligada, com etiqueta, e se o app NIIMBOT está fechado.';
+      st.textContent=/cancel/i.test(m)?'Nenhuma impressora escolhida. Se a B21 não apareceu na lista: desligue e ligue a impressora, feche o app NIIMBOT e tente de novo.':'Não consegui imprimir: '+m+'. Confira se a impressora está ligada, com etiqueta, e se o app NIIMBOT está fechado.';
       try{if(_niim)await _niim.disconnect()}catch(_){}_niim=null;
     }finally{_niimImprimindo=false;etqAtualizarBotoes()}
   }
