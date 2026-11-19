@@ -1030,6 +1030,7 @@
       </div>
       <div style="position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:4/3">
         <video id="scan-video" playsinline muted autoplay style="width:100%;height:100%;object-fit:cover"></video>
+        <button type="button" id="scan-ligar" onclick="abrirScanner(_scanModo)" style="display:none;position:absolute;inset:0;z-index:2;width:100%;background:#111;color:#fff;border:0;font-size:20px;font-weight:800;cursor:pointer">📷 Toque aqui para abrir a câmera</button>
         <div style="position:absolute;left:6%;right:6%;top:12%;bottom:12%;border:3px solid rgba(255,255,255,.85);border-radius:10px;box-shadow:0 0 0 999px rgba(0,0,0,.25)"></div>
       </div>
       <div id="scan-status" style="margin-top:10px;font-size:14px;font-weight:700;color:var(--muted)">Abrindo a câmera…</div>
@@ -1062,6 +1063,7 @@
         </div>
         <label id="etq-auto-wrap" style="display:none;flex:1 1 100%;align-items:center;gap:8px;font-size:14px;font-weight:700"><input type="checkbox" id="etq-auto" style="width:22px;height:22px" onchange="try{localStorage.setItem('rrprimecell_etq_auto',this.checked?'1':'')}catch(e){}"> Imprimir sozinho as próximas etiquetas</label>
         <button type="button" id="etq-btn-galeria" class="btn" style="flex:1 1 100%;padding:16px;font-size:17px" onclick="salvarNaGaleria()">📥 Salvar na galeria</button>
+        <button type="button" id="etq-proximo" class="btn ghost" style="display:none;flex:1 1 100%;padding:14px;font-size:16px" onclick="fecharEtiqueta()">📷 Bipar o próximo aparelho</button>
         <div id="etq-dica" style="flex:1 1 100%;font-size:13px;color:var(--muted);line-height:1.45">Na tela que abrir, toque em <b>Salvar Imagem</b>. Depois, no app <b>NIIMBOT</b>: etiqueta 50×30 → inserir imagem → escolha a última foto → imprimir.</div>
       </div>
       <div id="etq-status" style="font-size:13px;color:var(--muted);margin-top:8px"></div>
@@ -3082,6 +3084,8 @@
     document.getElementById('scan-manual').value='';
     const m=document.getElementById('scan-modal');m.classList.add('open');m.setAttribute('aria-hidden','false');
     st.textContent='Abrindo a câmera…';st.style.color='var(--muted)';
+    document.getElementById('scan-ligar').style.display='none';
+    if(_scanStream){_scanStream.getTracks().forEach(t=>t.stop());_scanStream=null}clearTimeout(_scanTimer);
     try{
       carregarScript(ZXW_URL).catch(()=>{});
       _scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
@@ -3116,7 +3120,8 @@
       ciclo();
     }catch(e){
       console.error(e);
-      st.textContent='Não consegui abrir a câmera ao vivo. Use "Tirar foto do código" ou digite o IMEI.';
+      document.getElementById('scan-ligar').style.display='block';
+      st.textContent='Toque no botão preto para ligar a câmera (ou use "Tirar foto do código").';
       st.style.color='var(--danger)';
     }
   }
@@ -3198,6 +3203,7 @@
     _etqItem=item;
     const m=document.getElementById('etq-modal');m.classList.add('open');m.setAttribute('aria-hidden','false');
     document.getElementById('etq-status').textContent='';etqAtualizarBotoes();
+    document.getElementById('etq-proximo').style.display=_cgProximo?'':'none';
     try{await carregarScript('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js');desenharEtiqueta(item);
       let auto=false;try{auto=localStorage.getItem('rrprimecell_etq_auto')==='1'}catch(e){}
       if(auto&&_niim&&_niim.isConnected()){await imprimirBluetooth();if(document.getElementById('etq-status').textContent.startsWith('✓'))setTimeout(fecharEtiqueta,1200)}}
@@ -3519,7 +3525,7 @@
     cg.passo=0;cg.ativo=item;cgRender();
     document.getElementById('cg-tela').innerHTML=`<div class="feedback info" style="display:block">Este aparelho <b>já está no estoque</b>: ${esc([item.nome,item.gb,item.cor].filter(Boolean).join(' · '))} — ${esc(localEtiqueta(item))}.</div>
       ${cgGrupo('Mudar para',[['','📦 Loja'],['estoque_r1','🏬 R1'],['assistencia','🔧 Assistência'],['garantia','🛡️ Garantia'],['outro_lojista','🤝 Outro lojista'],['vendido','✅ Vendido']].filter(([v])=>v!==(item.destino||'')).map(([v,l])=>cgChip(l,false,`cgMover('${v}')`)).join(''),false)}
-      <div style="display:flex;gap:8px;margin-top:16px"><button type="button" class="btn ghost" style="flex:1" onclick="abrirEtiqueta(cg.ativo)">🏷️ Reimprimir etiqueta</button><button type="button" class="btn ghost" style="flex:1" onclick="cgIniciar();abrirScanner('guiado')">📷 Bipar outro</button></div>`;
+      <div style="display:flex;gap:8px;margin-top:16px"><button type="button" class="btn ghost" style="flex:1" onclick="_cgProximo=true;abrirEtiqueta(cg.ativo)">🏷️ Reimprimir etiqueta</button><button type="button" class="btn ghost" style="flex:1" onclick="cgIniciar();abrirScanner('guiado')">📷 Bipar outro</button></div>`;
   }
   async function cgMover(destino){
     const item=cg.ativo;let nome='';
