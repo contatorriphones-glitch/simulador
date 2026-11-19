@@ -525,13 +525,21 @@
     <!-- TAB APARELHOS -->
     <div class="tab-pane" id="tab-aparelhos">
       <main class="grid" style="margin-top:20px">
-        <section class="card">
+        <section class="card" id="cg-card">
+          <h2 class="title">Cadastrar aparelho</h2>
+          <div id="cg-passos" style="display:flex;gap:4px;margin:4px 0 14px"></div>
+          <div id="cg-tela"></div>
+          <div id="cg-feedback" class="feedback" aria-live="polite"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+            <button type="button" class="btn ghost" style="flex:1 1 180px;padding:10px" onclick="abrirConferencia()">📋 Conferir estoque (bipar tudo)</button>
+            <button type="button" class="btn ghost" style="flex:1 1 180px;padding:10px" onclick="mostrarFormCompleto()">✏️ Formulário completo</button>
+          </div>
+        </section>
+
+        <section class="card" id="ap-form-completo" style="display:none">
           <h2 class="title">Cadastrar / Editar Aparelho</h2>
           <p class="section-copy">Registre a entrada de um aparelho. Se o IMEI já existir, você pode ver o histórico ou registrar uma nova passagem.</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px">
-            <button type="button" class="btn" style="flex:1 1 200px" onclick="abrirScanner('cadastro')">📷 Bipar IMEI e cadastrar</button>
-            <button type="button" class="btn ghost" style="flex:1 1 200px" onclick="abrirConferencia()">📋 Conferir estoque (bipar tudo)</button>
-          </div>
+          <div style="margin:0 0 14px"><button type="button" class="btn ghost" style="width:100%;padding:10px" onclick="fecharFormCompleto()">← Voltar para o cadastro em passos</button></div>
 
           <div class="fieldset">
             <p class="fieldset-title">Categoria <span style="color:var(--danger)">*</span></p>
@@ -1025,6 +1033,8 @@
         <div style="position:absolute;left:8%;right:8%;top:38%;bottom:38%;border:3px solid rgba(255,255,255,.85);border-radius:10px;box-shadow:0 0 0 999px rgba(0,0,0,.25)"></div>
       </div>
       <div id="scan-status" style="margin-top:10px;font-size:14px;font-weight:700;color:var(--muted)">Abrindo a câmera…</div>
+      <button type="button" class="btn" style="width:100%;margin-top:10px" onclick="document.getElementById('scan-foto').click()">📸 Tirar foto do código (mais garantido)</button>
+      <input id="scan-foto" type="file" accept="image/*" capture="environment" style="display:none" onchange="scanFoto(this)">
       <div style="display:flex;gap:8px;margin-top:10px">
         <input id="scan-manual" type="text" inputmode="numeric" placeholder="Ou digite o IMEI" style="flex:1">
         <button type="button" class="btn ghost" onclick="scanManual()">OK</button>
@@ -1886,7 +1896,7 @@
     document.getElementById('ap-imei-hint').classList.remove('show');
     document.getElementById('ap-btn-salvar').textContent='Salvar edição';
     document.getElementById('ap-btn-cancelar-edicao').style.display='block';
-    const primeiroCard=document.querySelector('#tab-aparelhos .card');
+    mostrarFormCompleto(false);const primeiroCard=document.getElementById('ap-form-completo');
     if(primeiroCard)primeiroCard.scrollIntoView({behavior:'smooth',block:'start'});
     mostrarApFeedback('success','Editando registro. Altere os campos e clique em "Salvar edição".');
   }
@@ -1924,7 +1934,7 @@
     document.querySelector(`input[name="ap-tipo"][value="${ult.tipo==='cliente'?'cliente':'loja'}"]`).checked=true;
     onDestinoChange();
     fecharHistoricoAparelho();
-    const primeiroCard=document.querySelector('#tab-aparelhos .card');
+    mostrarFormCompleto(false);const primeiroCard=document.getElementById('ap-form-completo');
     if(primeiroCard)primeiroCard.scrollIntoView({behavior:'smooth',block:'start'});
     mostrarApFeedback('success','Dados preenchidos. Complete a origem e cadastre a nova passagem.');
   }
@@ -2103,6 +2113,7 @@
     document.getElementById('ap-cadastrador').value=obterUsuarioAtual()||'';
     onDestinoChange();
     carregarAparelhos();
+    cgIniciar();
     comissaoCheckDesbloqueado();
     sbClient.channel('aparelhos-changes').on('postgres_changes',{event:'*',schema:'public',table:'aparelhos'},()=>{carregarAparelhos(false)}).subscribe();
     carregarTaxas(false);
@@ -3024,47 +3035,95 @@
     try{navigator.vibrate&&navigator.vibrate(80)}catch(e){}
   }
 
-  let _scanReader=null,_scanModo='cadastro',_scanUltimo={imei:'',em:0};
+  // Leitor de código de barras (zxing-cpp em WebAssembly): lê bem Code128 fino na tela do iPhone e em caixas
+  const ZXW_URL='https://cdn.jsdelivr.net/npm/zxing-wasm@2.2.4/dist/iife/reader/index.js';
+  const SCAN_FORMATOS=['Code128','QRCode','Code39','EAN-13','DataMatrix'];
+  let _scanStream=null,_scanTimer=null,_scanModo='cadastro',_scanUltimo={imei:'',em:0},_scanOcupado=false;
+
+  // IMEI de um código lido: só aceita códigos que SÃO o IMEI (15 dígitos com dígito de conferência).
+  // Ignora EID (32 dígitos) e MEID (14), que também aparecem na tela do *#06#.
+  function imeiDeCodigo(texto){
+    const t=String(texto||'').trim();
+    const m=t.match(/IMEI\D{0,3}(\d{15})/i);
+    if(m&&imeiValido(m[1]))return m[1];
+    const d=t.replace(/[\s-]/g,'');
+    if(/^\d{15}$/.test(d)&&imeiValido(d))return d;
+    return null;
+  }
+  // De vários códigos lidos de uma vez, fica com o IMEI de cima (IMEI 1)
+  function escolherImei(resultados){
+    const ok=(resultados||[]).map(r=>({imei:imeiDeCodigo(r.text),y:r.position&&r.position.topLeft?r.position.topLeft.y:0})).filter(r=>r.imei);
+    ok.sort((a,b)=>a.y-b.y);
+    return ok.length?ok[0].imei:null;
+  }
+  async function lerCodigos(fonte){
+    await carregarScript(ZXW_URL);
+    return ZXingWASM.readBarcodes(fonte,{formats:SCAN_FORMATOS,tryHarder:true,maxNumberOfSymbols:6});
+  }
+
   async function abrirScanner(modo){
     _scanModo=modo||'cadastro';
-    const st=document.getElementById('scan-status');
+    const st=document.getElementById('scan-status'),video=document.getElementById('scan-video');
     document.getElementById('scan-titulo').textContent=_scanModo==='conferencia'?'Bipar aparelhos':'Bipar IMEI';
     document.getElementById('scan-dica').textContent=_scanModo==='conferencia'
       ?'Vá passando a câmera em cada etiqueta ou caixa. A cada leitura o celular apita.'
-      :'Aponte para o código de barras do IMEI (tela do *#06#, caixa ou etiqueta).';
+      :'Enquadre o código de barras do IMEI (tela do *#06#, caixa ou etiqueta). Se não ler em 3 segundos, use "Tirar foto".';
     document.getElementById('scan-manual').value='';
     const m=document.getElementById('scan-modal');m.classList.add('open');m.setAttribute('aria-hidden','false');
     st.textContent='Abrindo a câmera…';st.style.color='var(--muted)';
     try{
-      await carregarScript('https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js');
-      const hints=new Map();
-      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.QR_CODE,ZXing.BarcodeFormat.CODE_39,ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.DATA_MATRIX]);
-      hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
-      _scanReader=new ZXing.BrowserMultiFormatReader(hints,250);
-      await _scanReader.decodeFromConstraints({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}},document.getElementById('scan-video'),(res)=>{if(res)scanLido(res.getText())});
-      st.textContent='Câmera pronta. Aponte para o código.';
+      carregarScript(ZXW_URL).catch(()=>{});
+      _scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
+      video.srcObject=_scanStream;await video.play().catch(()=>{});
+      st.textContent='Câmera pronta. Aproxime até o código ficar nítido dentro do quadro.';
+      const cv=document.createElement('canvas'),cx=cv.getContext('2d',{willReadFrequently:true});
+      const ciclo=async()=>{
+        if(!_scanStream)return;
+        if(!_scanOcupado&&video.videoWidth){
+          _scanOcupado=true;
+          try{
+            // Lê só a faixa do meio (o quadro branco), em resolução cheia
+            const vw=video.videoWidth,vh=video.videoHeight,cw=Math.round(vw*.9),ch=Math.round(vh*.4);
+            cv.width=cw;cv.height=ch;cx.drawImage(video,(vw-cw)/2,(vh-ch)/2,cw,ch,0,0,cw,ch);
+            const res=await lerCodigos(cx.getImageData(0,0,cw,ch));
+            if(res.length){const imei=escolherImei(res);if(imei)scanImei(imei);else{st.textContent='Li um código, mas não é o IMEI (pode ser o EID). Aponte para o código do IMEI.';st.style.color='#b45309'}}
+          }catch(e){console.error(e)}
+          _scanOcupado=false;
+        }
+        _scanTimer=setTimeout(ciclo,180);
+      };
+      ciclo();
     }catch(e){
       console.error(e);
-      st.textContent='Não consegui abrir a câmera. Permita o acesso à câmera para este site (Ajustes do Safari) ou digite o IMEI abaixo.';
+      st.textContent='Não consegui abrir a câmera ao vivo. Use "Tirar foto do código" ou digite o IMEI.';
       st.style.color='var(--danger)';
     }
   }
   function fecharScanner(){
-    try{_scanReader&&_scanReader.reset()}catch(e){}
-    _scanReader=null;
+    clearTimeout(_scanTimer);_scanTimer=null;
+    if(_scanStream){_scanStream.getTracks().forEach(t=>t.stop());_scanStream=null}
     const m=document.getElementById('scan-modal');m.classList.remove('open');m.setAttribute('aria-hidden','true');
+  }
+  async function scanFoto(input){
+    const f=input.files&&input.files[0];input.value='';
+    if(!f)return;
+    const st=document.getElementById('scan-status');st.textContent='Lendo a foto…';st.style.color='var(--muted)';
+    try{
+      const res=await lerCodigos(f);
+      const imei=escolherImei(res);
+      if(imei)scanImei(imei);
+      else{st.textContent=res.length?'Achei códigos na foto, mas nenhum é um IMEI válido. Tire a foto mais perto do código do IMEI.':'Não achei código de barras na foto. Tire mais perto e com o código reto.';st.style.color='var(--danger)'}
+    }catch(e){console.error(e);st.textContent='Não consegui ler a foto. Verifique a internet e tente de novo.';st.style.color='var(--danger)'}
   }
   function scanManual(){
     const v=document.getElementById('scan-manual').value.replace(/\D/g,'');
     if(!v)return;
-    if(!imeiValido(v)&&!confirm(`O IMEI "${v}" parece inválido (dígito de conferência não bate). Usar assim mesmo?`))return;
+    if(!imeiValido(v)){alert(`O IMEI "${v}" está errado: todo IMEI tem 15 números e o último confere os outros. Confira digitando de novo ou bipe o código.`);return}
     document.getElementById('scan-manual').value='';
     tratarImeiLido(v);
   }
-  function scanLido(texto){
-    const imei=extrairImei(texto);
-    const st=document.getElementById('scan-status');
-    if(!imei){st.textContent='Li um código, mas não é um IMEI. Aponte para o código do IMEI.';st.style.color='var(--danger)';return}
+  function scanLido(texto){const imei=imeiDeCodigo(texto);if(imei)scanImei(imei)}
+  function scanImei(imei){
     const agora=Date.now();
     if(imei===_scanUltimo.imei&&agora-_scanUltimo.em<3000)return;
     _scanUltimo={imei,em:agora};
@@ -3074,6 +3133,7 @@
   function tratarImeiLido(imei){
     if(_scanModo==='conferencia'){conferirImei(imei);return}
     fecharScanner();
+    if(_scanModo==='guiado'){cgImeiLido(imei);return}
     preencherPorImei(imei);
   }
 
@@ -3169,6 +3229,296 @@
     document.getElementById('etq-status').textContent='Imagem salva. Abra no app NIIMBOT para imprimir.';
   }
 
+
+  // =====================================================================
+  // CADASTRO EM PASSOS: bipa → confirma o aparelho → condição → origem e valor → local → revisão
+  // =====================================================================
+  // Capacidades e cores oficiais de cada modelo (botões já filtrados: sem digitação, sem erro de escrita)
+  const CG_MODELOS={
+    'iPhone XR':{gb:['64GB','128GB','256GB'],cor:['Preto','Branco','Azul','Amarelo','Coral','Vermelho']},
+    'iPhone 11':{gb:['64GB','128GB','256GB'],cor:['Preto','Branco','Verde','Amarelo','Roxo','Vermelho']},
+    'iPhone 11 Pro':{gb:['64GB','256GB','512GB'],cor:['Cinza Espacial','Prateado','Dourado','Verde Meia-Noite']},
+    'iPhone 11 Pro Max':{gb:['64GB','256GB','512GB'],cor:['Cinza Espacial','Prateado','Dourado','Verde Meia-Noite']},
+    'iPhone SE (2ª geração)':{gb:['64GB','128GB','256GB'],cor:['Preto','Branco','Vermelho']},
+    'iPhone SE (3ª geração)':{gb:['64GB','128GB','256GB'],cor:['Meia-noite','Estelar','Vermelho']},
+    'iPhone 12 mini':{gb:['64GB','128GB','256GB'],cor:['Preto','Branco','Azul','Verde','Roxo','Vermelho']},
+    'iPhone 12':{gb:['64GB','128GB','256GB'],cor:['Preto','Branco','Azul','Verde','Roxo','Vermelho']},
+    'iPhone 12 Pro':{gb:['128GB','256GB','512GB'],cor:['Grafite','Prateado','Dourado','Azul Pacífico']},
+    'iPhone 12 Pro Max':{gb:['128GB','256GB','512GB'],cor:['Grafite','Prateado','Dourado','Azul Pacífico']},
+    'iPhone 13 mini':{gb:['128GB','256GB','512GB'],cor:['Meia-noite','Estelar','Azul','Rosa','Verde','Vermelho']},
+    'iPhone 13':{gb:['128GB','256GB','512GB'],cor:['Meia-noite','Estelar','Azul','Rosa','Verde','Vermelho']},
+    'iPhone 13 Pro':{gb:['128GB','256GB','512GB','1TB'],cor:['Grafite','Prateado','Dourado','Azul Sierra','Verde Alpino']},
+    'iPhone 13 Pro Max':{gb:['128GB','256GB','512GB','1TB'],cor:['Grafite','Prateado','Dourado','Azul Sierra','Verde Alpino']},
+    'iPhone 14':{gb:['128GB','256GB','512GB'],cor:['Meia-noite','Estelar','Azul','Roxo','Amarelo','Vermelho']},
+    'iPhone 14 Plus':{gb:['128GB','256GB','512GB'],cor:['Meia-noite','Estelar','Azul','Roxo','Amarelo','Vermelho']},
+    'iPhone 14 Pro':{gb:['128GB','256GB','512GB','1TB'],cor:['Preto Espacial','Prateado','Dourado','Roxo Profundo']},
+    'iPhone 14 Pro Max':{gb:['128GB','256GB','512GB','1TB'],cor:['Preto Espacial','Prateado','Dourado','Roxo Profundo']},
+    'iPhone 15':{gb:['128GB','256GB','512GB'],cor:['Preto','Azul','Verde','Amarelo','Rosa']},
+    'iPhone 15 Plus':{gb:['128GB','256GB','512GB'],cor:['Preto','Azul','Verde','Amarelo','Rosa']},
+    'iPhone 15 Pro':{gb:['128GB','256GB','512GB','1TB'],cor:['Titânio Natural','Titânio Azul','Titânio Branco','Titânio Preto']},
+    'iPhone 15 Pro Max':{gb:['256GB','512GB','1TB'],cor:['Titânio Natural','Titânio Azul','Titânio Branco','Titânio Preto']},
+    'iPhone 16e':{gb:['128GB','256GB','512GB'],cor:['Preto','Branco']},
+    'iPhone 16':{gb:['128GB','256GB','512GB'],cor:['Preto','Branco','Rosa','Verde-acinzentado','Ultramarino']},
+    'iPhone 16 Plus':{gb:['128GB','256GB','512GB'],cor:['Preto','Branco','Rosa','Verde-acinzentado','Ultramarino']},
+    'iPhone 16 Pro':{gb:['128GB','256GB','512GB','1TB'],cor:['Titânio Deserto','Titânio Natural','Titânio Branco','Titânio Preto']},
+    'iPhone 16 Pro Max':{gb:['256GB','512GB','1TB'],cor:['Titânio Deserto','Titânio Natural','Titânio Branco','Titânio Preto']},
+    'iPhone 17':{gb:['256GB','512GB'],cor:['Preto','Branco','Azul-névoa','Lavanda','Sálvia']},
+    'iPhone Air':{gb:['256GB','512GB','1TB'],cor:['Preto-espacial','Branco-nuvem','Dourado-claro','Azul-céu']},
+    'iPhone 17 Pro':{gb:['256GB','512GB','1TB'],cor:['Laranja-cósmico','Azul-profundo','Prateado']},
+    'iPhone 17 Pro Max':{gb:['256GB','512GB','1TB','2TB'],cor:['Laranja-cósmico','Azul-profundo','Prateado']}
+  };
+  const CG_LISTA_MODELOS=Object.keys(CG_MODELOS);
+  const cgNorm=t=>String(t||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+  function cgModeloCanonico(nome){
+    const n=cgNorm(nome).replace(/^APPLE /,'').replace(/^IPHONE ?/,'').replace('PROMAX','PRO MAX');
+    return CG_LISTA_MODELOS.find(m=>cgNorm(m).replace(/^IPHONE ?/,'')===n)||null;
+  }
+  function cgCorCanonica(modelo,cor){
+    const lista=(CG_MODELOS[modelo]||{}).cor||[],n=cgNorm(cor);
+    if(!n)return '';
+    return lista.find(c=>cgNorm(c)===n)||lista.find(c=>cgNorm(c).includes(n)||n.includes(cgNorm(c)))||'';
+  }
+  function cgDist(a,b){const m=a.length,n=b.length,d=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]);for(let j=1;j<=n;j++)d[0][j]=j;
+    for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return d[m][n]}
+  // Correção de escrita: aproxima o que foi digitado de um nome já conhecido (ex.: LAGACY → LEGACY)
+  function cgCorrigirNome(texto,conhecidos){
+    const t=cgNorm(texto);if(!t)return {valor:'',corrigido:false,novo:false};
+    const exato=conhecidos.find(k=>cgNorm(k)===t);if(exato)return {valor:exato,corrigido:false,novo:false};
+    let melhor=null,dm=99;conhecidos.forEach(k=>{const d=cgDist(t,cgNorm(k));if(d<dm){dm=d;melhor=k}});
+    const lim=t.length<=4?1:t.length<=8?2:3;
+    if(melhor&&dm<=lim)return {valor:melhor,corrigido:true,novo:false,de:texto};
+    return {valor:t,corrigido:false,novo:true};
+  }
+  function cgNomesConhecidos(campo,minimo){
+    const c={};getAparelhos().forEach(a=>{const v=cgNorm(a[campo]);if(v)c[v]=(c[v]||0)+1});
+    return Object.entries(c).filter(([k,n])=>n>=minimo).sort((a,b)=>b[1]-a[1]).map(([k])=>k);
+  }
+  function cgDinheiro(t){const s=String(t||'').replace(/[^\d,.]/g,'');if(!s)return NaN;return s.includes(',')?parseFloat(s.replace(/\./g,'').replace(',','.')):(/^\d+\.\d{1,2}$/.test(s)?parseFloat(s):parseFloat(s.replace(/\./g,'')))}
+  const cgBRL=v=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+
+  let cg=null,cgFornecedores=[];
+  const CG_PASSOS=['Bipar','Aparelho','Condição','Origem','Local','Revisão'];
+  function cgNovo(){cg={passo:0,imei:'',existente:null,tipo:'loja',modelo:'',gb:'',cor:'',estado:'',bateria:'',pecas:[],garantiaApple:null,
+    origem:'',fornecedor:'',valor:'',clienteNome:'',clienteTel:'',defeito:'',destino:'',localNome:'',cadastrador:obterUsuarioAtual()||'',avisos:[]}}
+  async function cgCarregarFornecedores(){
+    try{const{data}=await sbClient.from('app_dados').select('valor').eq('chave','config:fornecedores_aparelhos').maybeSingle();if(data&&Array.isArray(data.valor))cgFornecedores=data.valor}catch(e){}
+  }
+  function cgIniciar(){cgNovo();cgCarregarFornecedores();cgRender()}
+  function mostrarFormCompleto(rolar){document.getElementById('ap-form-completo').style.display='';document.getElementById('cg-card').style.display='none';if(rolar!==false)document.getElementById('ap-form-completo').scrollIntoView({behavior:'smooth',block:'start'})}
+  function fecharFormCompleto(){document.getElementById('ap-form-completo').style.display='none';document.getElementById('cg-card').style.display='';limparFormAparelho()}
+
+  function cgFeedback(tipo,msg){const el=document.getElementById('cg-feedback');if(!msg){el.style.display='none';el.textContent='';return}el.className='feedback '+tipo;el.textContent=msg;el.style.display='block'}
+  const cgChip=(txt,ativo,acao,extra)=>`<button type="button" onclick="${acao}" style="padding:12px 14px;border-radius:12px;border:2px solid ${ativo?'var(--brand,#1a3fa8)':'var(--line)'};background:${ativo?'#eef2ff':'#fff'};font-weight:800;font-size:15px;color:var(--ink);cursor:pointer;width:auto;flex:0 0 auto;margin:0;${extra||''}">${txt}</button>`;
+  const cgGrupo=(titulo,html,obrig)=>`<p class="fieldset-title" style="margin:16px 0 8px">${titulo}${obrig?' <span style="color:var(--danger)">*</span>':''}</p><div style="display:flex;flex-wrap:wrap;gap:8px">${html}</div>`;
+  const cgQ=s=>String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  function cgSet(campo,valor){cg[campo]=valor;cgFeedback();cgRender()}
+  function cgTogglePeca(p){if(p==='Nenhuma')cg.pecas=['Nenhuma'];else{cg.pecas=cg.pecas.filter(x=>x!=='Nenhuma');cg.pecas=cg.pecas.includes(p)?cg.pecas.filter(x=>x!==p):[...cg.pecas,p]}cgRender()}
+
+  function cgRender(){
+    document.getElementById('cg-passos').innerHTML=CG_PASSOS.map((n,i)=>`<div style="flex:1;text-align:center;font-size:11px;font-weight:800;color:${i<=cg.passo?'var(--brand,#1a3fa8)':'var(--muted)'}"><div style="height:5px;border-radius:4px;margin-bottom:4px;background:${i<cg.passo?'#16a34a':i===cg.passo?'var(--brand,#1a3fa8)':'var(--line)'}"></div>${n}</div>`).join('');
+    const t=document.getElementById('cg-tela'),c=cg;let h='';
+    const nav=(voltar,continuar,txt)=>`<div style="display:flex;gap:8px;margin-top:20px">${voltar?`<button type="button" class="btn ghost" style="flex:0 0 auto;width:auto" onclick="cgVoltar()">← Voltar</button>`:''}${continuar?`<button type="button" class="btn" style="flex:1" onclick="cgContinuar()">${txt||'Continuar →'}</button>`:''}</div>`;
+    const resumo=`<div style="background:#f8faff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:14px"><b>${esc([c.modelo,c.gb].filter(Boolean).join(' ')||'Aparelho')}</b> ${esc(c.cor||'')}<div style="font-family:ui-monospace,Menlo,monospace;color:var(--muted);font-size:13px">IMEI ${esc(c.imei)}</div></div>`;
+    if(c.passo===0){
+      h=`<p class="section-copy" style="margin:0 0 12px">Bipe o código de barras do IMEI: tela do <b>*#06#</b>, caixa ou etiqueta. O resto é preenchido sozinho.</p>
+        <button type="button" class="btn" style="width:100%;padding:18px;font-size:18px" onclick="abrirScanner('guiado')">📷 Bipar IMEI</button>
+        <details style="margin-top:12px"><summary style="cursor:pointer;color:var(--muted);font-weight:700;font-size:13px">Não consegue bipar? Digitar o IMEI</summary>
+        <div style="display:flex;gap:8px;margin-top:8px"><input id="cg-imei-dig" type="text" inputmode="numeric" maxlength="15" placeholder="15 números" style="flex:1"><button type="button" class="btn ghost" style="width:auto" onclick="cgImeiDigitado()">OK</button></div></details>`;
+    }else if(c.passo===1){
+      const info=c.existente?`<div class="feedback info" style="display:block;margin:10px 0 0">Este IMEI já passou pela loja (${esc(c.existente.nome||'')}${c.existente.destino?' — último registro: '+esc(statusInfo(c.existente).label):''}). Os dados foram puxados do cadastro anterior.</div>`:'';
+      const mod=CG_MODELOS[c.modelo];
+      h=resumo+info;
+      h+=cgGrupo('Modelo',c.modelo&&!c.trocarModelo?cgChip(esc(c.modelo),true,'')+cgChip('Trocar',false,"cgSet('trocarModelo',true)",'font-weight:600'):CG_LISTA_MODELOS.map(m=>cgChip(esc(m.replace('iPhone ','')),m===c.modelo,`cgEscolherModelo('${cgQ(m)}')`,'padding:10px 12px;font-size:14px')).join(''),true);
+      if(mod){
+        h+=cgGrupo('Armazenamento',mod.gb.map(g=>cgChip(g,g===c.gb,`cgSet('gb','${g}')`)).join(''),true);
+        h+=cgGrupo('Cor',mod.cor.map(k=>cgChip(esc(k),k===c.cor,`cgSet('cor','${cgQ(k)}')`)).join(''),true);
+      }
+      h+=nav(true,true);
+    }else if(c.passo===2){
+      h=resumo;
+      h+=cgGrupo('De quem é o aparelho',cgChip('📦 Estoque da loja',c.tipo==='loja',"cgSet('tipo','loja')")+cgChip('🧑‍🔧 Cliente (conserto)',c.tipo==='cliente',"cgSet('tipo','cliente')"),true);
+      if(c.tipo==='loja')h+=cgGrupo('Estado',cgChip('Lacrado',c.estado==='lacrado',"cgSet('estado','lacrado')")+cgChip('Seminovo',c.estado==='seminovo',"cgSet('estado','seminovo')"),true);
+      if(c.tipo==='cliente'||c.estado==='seminovo'){
+        h+=`<p class="fieldset-title" style="margin:16px 0 8px">Saúde da bateria (%) <span style="color:var(--danger)">*</span></p><input id="cg-bateria" type="number" inputmode="numeric" min="1" max="100" value="${esc(c.bateria)}" oninput="cg.bateria=this.value" placeholder="Ajustes › Bateria › Saúde" style="font-size:18px">`;
+        h+=cgGrupo('Mensagem de peça não genuína (Ajustes › Geral › Sobre)',['Nenhuma','Bateria','Tela','Câmera','Outra peça'].map(p=>cgChip(p,c.pecas.includes(p),`cgTogglePeca('${p}')`)).join(''),true);
+        h+=cgGrupo('Garantia Apple ativa',cgChip('Sim',c.garantiaApple===true,"cgSet('garantiaApple',true)")+cgChip('Não',c.garantiaApple===false,"cgSet('garantiaApple',false)"),true);
+      }
+      h+=nav(true,true);
+    }else if(c.passo===3){
+      h=resumo;
+      if(c.tipo==='cliente'){
+        h+=`<p class="fieldset-title" style="margin:16px 0 8px">Nome do cliente <span style="color:var(--danger)">*</span></p><input id="cg-cli" type="text" value="${esc(c.clienteNome)}" oninput="cg.clienteNome=this.value">
+          <p class="fieldset-title" style="margin:16px 0 8px">Telefone do cliente</p><input id="cg-tel" type="tel" value="${esc(c.clienteTel)}" oninput="cg.clienteTel=this.value">
+          <p class="fieldset-title" style="margin:16px 0 8px">Defeito / serviço <span style="color:var(--danger)">*</span></p><input id="cg-def" type="text" value="${esc(c.defeito)}" oninput="cg.defeito=this.value">`;
+      }else{
+        h+=cgGrupo('De onde veio',cgChip('🏪 Fornecedor',c.origem==='FORNECEDOR',"cgSet('origem','FORNECEDOR')")+cgChip('🔁 Upgrade (troca)',c.origem==='UPGRADE',"cgSet('origem','UPGRADE')")+cgChip('↩️ Voltou (devolução/garantia)',c.origem==='RETORNO',"cgSet('origem','RETORNO')"),true);
+        if(c.origem==='FORNECEDOR'){
+          h+=`<p class="fieldset-title" style="margin:16px 0 8px">Fornecedor <span style="color:var(--danger)">*</span></p><input id="cg-forn" type="text" list="cg-forn-lista" value="${esc(c.fornecedor)}" oninput="cg.fornecedor=this.value" placeholder="Comece a digitar…" autocomplete="off"><datalist id="cg-forn-lista">${cgFornecedores.map(f=>`<option value="${esc(f)}">`).join('')}</datalist>`;
+        }
+        if(c.origem==='UPGRADE'){
+          h+=`<p class="fieldset-title" style="margin:16px 0 8px">Nome do cliente que deu na troca <span style="color:var(--danger)">*</span></p><input id="cg-cli" type="text" value="${esc(c.clienteNome)}" oninput="cg.clienteNome=this.value">`;
+        }
+        if(c.origem==='FORNECEDOR'||c.origem==='UPGRADE'){
+          h+=`<p class="fieldset-title" style="margin:16px 0 8px">${c.origem==='UPGRADE'?'Valor pago na troca':'Valor pago ao fornecedor'} (R$) <span style="color:var(--danger)">*</span></p><input id="cg-valor" type="text" inputmode="decimal" value="${esc(c.valor)}" oninput="cg.valor=this.value" placeholder="Ex.: 2.450,00" style="font-size:18px">`;
+        }
+      }
+      h+=nav(true,true);
+    }else if(c.passo===4){
+      h=resumo;
+      const ops=c.tipo==='cliente'?[['assistencia','🔧 Assistência'],['','🏬 Fica na loja']]:[['','📦 Loja'],['estoque_r1','🏬 R1'],['assistencia','🔧 Assistência'],['garantia','🛡️ Garantia'],['outro_lojista','🤝 Outro lojista']];
+      h+=cgGrupo('Onde o aparelho vai ficar',ops.map(([v,l])=>cgChip(l,c.destino===v&&c.destinoEscolhido,`cgEscolherDestino('${v}')`)).join(''),true);
+      if(c.destinoEscolhido&&(c.destino==='assistencia'||c.destino==='outro_lojista')){
+        const conhecidos=c.destino==='assistencia'?['LEGACY','BRUNO',...cgNomesConhecidos('assistenciaNome',3)]:cgNomesConhecidos('assistenciaNome',2);
+        h+=`<p class="fieldset-title" style="margin:16px 0 8px">${c.destino==='assistencia'?'Qual assistência':'Qual lojista'} <span style="color:var(--danger)">*</span></p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">${[...new Set(conhecidos)].slice(0,6).map(n=>cgChip(esc(n),cgNorm(c.localNome)===n,`cgSet('localNome','${cgQ(n)}')`,'padding:10px 12px;font-size:14px')).join('')}</div>
+          <input id="cg-local" type="text" value="${esc(c.localNome)}" oninput="cg.localNome=this.value" placeholder="Ou digite o nome">`;
+      }
+      const nomes=[...document.querySelectorAll('#ap-cadastrador option')].map(o=>o.value).filter(Boolean);
+      h+=cgGrupo('Quem está cadastrando',nomes.map(n=>cgChip(esc(n),c.cadastrador===n,`cgSet('cadastrador','${cgQ(n)}')`)).join(''),true);
+      h+=nav(true,true,'Revisar →');
+    }else if(c.passo===5){
+      const linhas=[['Aparelho',[c.modelo,c.gb,c.cor].filter(Boolean).join(' · ')],['IMEI',c.imei],['Tipo',c.tipo==='cliente'?'Aparelho de cliente':'Estoque da loja'+(c.estado?' · '+c.estado:'')],
+        ['Bateria',c.bateria?c.bateria+'%':''],['Peças',c.pecas.filter(p=>p!=='Nenhuma').join(', ')||(c.pecas.length?'Sem aviso':'')],['Garantia Apple',c.garantiaApple===true?'Sim':c.garantiaApple===false?'Não':''],
+        ['Origem',c.tipo==='cliente'?'Cliente: '+c.clienteNome+(c.clienteTel?' · '+c.clienteTel:''):({FORNECEDOR:'Fornecedor: '+c.fornecedor,UPGRADE:'Upgrade: '+c.clienteNome,RETORNO:'Voltou para a loja'})[c.origem]],
+        ['Valor',c.valor?cgBRL(cgDinheiro(c.valor)):''],['Defeito',c.defeito],['Local',localEtiqueta({tipo:c.tipo,destino:c.destino,assistenciaNome:c.localNome})],['Cadastrado por',c.cadastrador]].filter(l=>l[1]);
+      h=`<div style="border:1px solid var(--line);border-radius:12px;overflow:hidden">${linhas.map(([k,v],i)=>`<div style="display:flex;justify-content:space-between;gap:12px;padding:10px 12px;font-size:14px;${i?'border-top:1px solid var(--line)':''}"><span style="color:var(--muted)">${k}</span><b style="text-align:right">${esc(v)}</b></div>`).join('')}</div>`;
+      if(c.avisos.length)h+=`<div class="feedback info" style="display:block;margin-top:10px">${c.avisos.map(esc).join('<br>')}</div>`;
+      h+=nav(true,true,'✓ Salvar e imprimir etiqueta');
+    }
+    t.innerHTML=h;
+  }
+  function cgEscolherModelo(m){cg.modelo=m;cg.trocarModelo=false;if(!CG_MODELOS[m].gb.includes(cg.gb))cg.gb='';cg.cor=cgCorCanonica(m,cg.cor);cgRender()}
+  function cgEscolherDestino(v){cg.destino=v;cg.destinoEscolhido=true;if(v!=='assistencia'&&v!=='outro_lojista')cg.localNome='';cgFeedback();cgRender()}
+  function cgVoltar(){if(cg.passo>0){cg.passo--;cgFeedback();cgRender()}}
+  function cgImeiDigitado(){
+    const v=(document.getElementById('cg-imei-dig').value||'').replace(/\D/g,'');
+    if(!imeiValido(v)){cgFeedback('error',`O IMEI "${v}" está errado: todo IMEI tem 15 números e o último confere os outros. Confira no *#06# ou bipe o código.`);return}
+    cgImeiLido(v);
+  }
+  function cgImeiLido(imei){
+    cgNovo();cg.imei=imei;
+    const ult=getAparelhos().filter(a=>a.imei===imei).sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0))[0];
+    if(ult&&(statusInfo(ult).cat==='aguardando'||statusInfo(ult).cat==='assistencia')){cgAtivo(ult);return}
+    if(ult){cg.existente=ult;cg.modelo=cgModeloCanonico(ult.nome)||'';cg.gb=ult.gb||'';cg.cor=cgCorCanonica(cg.modelo,ult.cor);cg.tipo=ult.tipo==='cliente'?'cliente':'loja'}
+    else{const sug=modeloPorTac(imei);cg.modelo=cgModeloCanonico(sug)||''}
+    cg.passo=1;cgFeedback('success',cg.modelo?`✓ IMEI lido. Modelo identificado: ${cg.modelo}. Confira e escolha GB e cor.`:'✓ IMEI lido. Escolha o modelo, o GB e a cor.');cgRender();
+    document.getElementById('cg-card').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  // O aparelho já está no estoque: em vez de cadastrar de novo, oferece mudar o local ou reimprimir
+  function cgAtivo(item){
+    cg.passo=0;cg.ativo=item;cgRender();
+    document.getElementById('cg-tela').innerHTML=`<div class="feedback info" style="display:block">Este aparelho <b>já está no estoque</b>: ${esc([item.nome,item.gb,item.cor].filter(Boolean).join(' · '))} — ${esc(localEtiqueta(item))}.</div>
+      ${cgGrupo('Mudar para',[['','📦 Loja'],['estoque_r1','🏬 R1'],['assistencia','🔧 Assistência'],['garantia','🛡️ Garantia'],['outro_lojista','🤝 Outro lojista'],['vendido','✅ Vendido']].filter(([v])=>v!==(item.destino||'')).map(([v,l])=>cgChip(l,false,`cgMover('${v}')`)).join(''),false)}
+      <div style="display:flex;gap:8px;margin-top:16px"><button type="button" class="btn ghost" style="flex:1" onclick="abrirEtiqueta(cg.ativo)">🏷️ Reimprimir etiqueta</button><button type="button" class="btn ghost" style="flex:1" onclick="cgIniciar()">Bipar outro</button></div>`;
+  }
+  async function cgMover(destino){
+    const item=cg.ativo;let nome='';
+    if(destino==='assistencia'||destino==='outro_lojista'){
+      const dig=prompt(destino==='assistencia'?'Qual assistência?':'Qual lojista?',destino==='assistencia'?'LEGACY':'');if(dig===null)return;
+      const conhecidos=destino==='assistencia'?['LEGACY','BRUNO',...cgNomesConhecidos('assistenciaNome',3)]:cgNomesConhecidos('assistenciaNome',2);
+      const r=cgCorrigirNome(dig,[...new Set(conhecidos)]);nome=r.valor;
+      if(!nome){alert('Informe o nome.');return}
+      if(r.corrigido)alert(`Corrigido: "${r.de}" → "${nome}"`);
+    }
+    const usuario=prompt('Quem está movendo?',obterUsuarioAtual()||'');if(!usuario)return;
+    const agora=new Date().toISOString();
+    const novo={...item,destino,assistenciaNome:nome,dataSaida:(destino&&destino!=='estoque_r1')?hojeISO():'',atualizadoEm:agora,atualizadoPor:usuario};
+    const{error}=await sbClient.from('aparelhos').update(toRow(novo)).eq('id',item.id);
+    if(error){cgFeedback('error','Não consegui salvar. Verifique a internet e tente de novo.');return}
+    sbClient.from('aparelhos_historico').insert({aparelho_id:item.id,imei:item.imei,nome:item.nome,gb:item.gb,cor:item.cor,evento:destino||'aguardando',assistencia_nome:destino==='assistencia'?nome:null,usuario,criado_em:agora}).then(()=>{});
+    const idx=_apCache.findIndex(a=>a.id===item.id);if(idx>-1)_apCache[idx]=novo;
+    salvarUsuarioAtual(usuario);renderAparelhos();
+    cgFeedback('success',`✓ Movido para ${localEtiqueta(novo)}.`);
+    if(destino!=='vendido')abrirEtiqueta(novo);
+    cgIniciar();
+  }
+
+  // Trava: cada passo só avança com tudo preenchido e coerente
+  function cgContinuar(){
+    const c=cg,erro=m=>{cgFeedback('error',m);return false};
+    if(c.passo===1){
+      if(!c.modelo)return erro('Escolha o modelo.');
+      if(!c.gb)return erro('Escolha o armazenamento (GB).');
+      if(!c.cor)return erro('Escolha a cor.');
+    }else if(c.passo===2){
+      if(c.tipo==='loja'&&!c.estado)return erro('Informe se é lacrado ou seminovo.');
+      if(c.tipo==='loja'&&c.estado==='lacrado'){c.bateria='100';c.pecas=['Nenhuma'];c.garantiaApple=true}
+      if(c.tipo==='cliente'||c.estado==='seminovo'){
+        const b=parseInt(c.bateria,10);
+        if(!(b>=1&&b<=100))return erro('Informe a saúde da bateria entre 1 e 100.');
+        if(b<70&&!confirm(`Bateria em ${b}%? Confirme se está certo.`))return false;
+        if(!c.pecas.length)return erro('Informe se aparece mensagem de peça não genuína (ou "Nenhuma").');
+        if(c.garantiaApple===null)return erro('Informe se tem garantia Apple.');
+      }
+    }else if(c.passo===3){
+      c.avisos=c.avisos.filter(a=>!a.startsWith('Fornecedor'));
+      if(c.tipo==='cliente'){
+        c.clienteNome=cgNorm(c.clienteNome);c.defeito=c.defeito.trim();
+        if(c.clienteNome.length<3)return erro('Informe o nome do cliente.');
+        if(!c.defeito)return erro('Informe o defeito ou serviço.');
+        const tel=c.clienteTel.replace(/\D/g,'');if(tel&&(tel.length<10||tel.length>13))return erro('Telefone incompleto. Use DDD + número.');
+      }else{
+        if(!c.origem)return erro('Informe de onde o aparelho veio.');
+        if(c.origem==='FORNECEDOR'){
+          const r=cgCorrigirNome(c.fornecedor,cgFornecedores);
+          if(!r.valor)return erro('Informe o fornecedor.');
+          if(r.corrigido)c.avisos.push(`Fornecedor corrigido: "${r.de}" → "${r.valor}"`);
+          if(r.novo&&!confirm(`"${r.valor}" não está na lista de fornecedores. É um fornecedor novo?`))return false;
+          c.fornecedor=r.valor;
+        }
+        if(c.origem==='UPGRADE'){c.clienteNome=cgNorm(c.clienteNome);if(c.clienteNome.length<3)return erro('Informe o nome do cliente que deu o aparelho na troca.')}
+        if(c.origem==='FORNECEDOR'||c.origem==='UPGRADE'){
+          const v=cgDinheiro(c.valor);
+          if(!(v>0))return erro('Informe o valor pago.');
+          if((v<150||v>15000)&&!confirm(`Valor de ${cgBRL(v)}? Confirme se está certo.`))return false;
+          c.valor=String(v);
+        }else c.valor='';
+      }
+    }else if(c.passo===4){
+      if(!c.destinoEscolhido)return erro('Escolha onde o aparelho vai ficar.');
+      if(c.destino==='assistencia'||c.destino==='outro_lojista'){
+        const conhecidos=c.destino==='assistencia'?['LEGACY','BRUNO',...cgNomesConhecidos('assistenciaNome',3)]:cgNomesConhecidos('assistenciaNome',2);
+        const r=cgCorrigirNome(c.localNome,[...new Set(conhecidos)]);
+        if(!r.valor)return erro(c.destino==='assistencia'?'Informe qual assistência.':'Informe qual lojista.');
+        c.avisos=c.avisos.filter(a=>!a.startsWith('Local'));
+        if(r.corrigido)c.avisos.push(`Local corrigido: "${r.de}" → "${r.valor}"`);
+        c.localNome=r.valor;
+      }
+      if(!c.cadastrador)return erro('Escolha quem está cadastrando.');
+    }else if(c.passo===5){cgSalvar();return}
+    c.passo++;cgFeedback();cgRender();
+    document.getElementById('cg-card').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  async function cgSalvar(){
+    const c=cg,agora=new Date().toISOString();
+    const dup=_apCache.find(a=>a.imei===c.imei&&(statusInfo(a).cat==='aguardando'||statusInfo(a).cat==='assistencia'));
+    if(dup){cgFeedback('error','Este IMEI já está ativo no estoque. Bipe de novo para mudar o local dele.');return}
+    const pecas=c.pecas.filter(p=>p!=='Nenhuma');
+    const obs=c.tipo==='cliente'?`Cliente: ${c.clienteNome}${c.clienteTel?' · '+c.clienteTel:''} · Defeito: ${c.defeito}`:(c.origem==='UPGRADE'?`Upgrade de ${c.clienteNome}`:'');
+    const registro={id:Date.now()+'-'+Math.random().toString(36).slice(2,7),nome:c.modelo,gb:c.gb,cor:c.cor,imei:c.imei,
+      origem:c.tipo==='cliente'?'CLIENTE':c.origem,cadastrador:c.cadastrador,dataEntrada:hojeISO(),destino:c.destino,assistenciaNome:c.localNome,
+      dataSaida:(c.destino&&c.destino!=='estoque_r1')?hojeISO():'',obs,tipo:c.tipo,bateria:c.bateria,avisoPeca:pecas.length?'Peça não genuína: '+pecas.join(', '):'',
+      garantiaApple:!!c.garantiaApple,criadoEm:Date.now(),atualizadoEm:agora,atualizadoPor:c.cadastrador};
+    cgFeedback('info','Salvando…');
+    const{error}=await sbClient.from('aparelhos').insert(toRow(registro));
+    if(error){console.error(error);cgFeedback('error','Erro ao salvar. Verifique a internet e tente de novo (nada foi perdido).');return}
+    sbClient.from('aparelhos_historico').insert({aparelho_id:registro.id,imei:registro.imei,nome:registro.nome,gb:registro.gb,cor:registro.cor,evento:'entrada',assistencia_nome:registro.destino==='assistencia'?registro.assistenciaNome:null,usuario:c.cadastrador,criado_em:agora}).then(({error:e})=>{if(e)console.error('historico:',e)});
+    if(c.valor){
+      const{error:eC}=await sbClient.from('aparelhos_custos').upsert({aparelho_id:registro.id,custo:Number(c.valor),origem_custo:c.origem==='UPGRADE'?'upgrade':'fornecedor',fornecedor:c.origem==='FORNECEDOR'?c.fornecedor:c.clienteNome,registrado_por:c.cadastrador,atualizado_em:agora});
+      if(eC)console.error('custo:',eC);
+      if(c.origem==='FORNECEDOR'&&!cgFornecedores.includes(c.fornecedor)){
+        cgFornecedores=[...cgFornecedores,c.fornecedor].sort();
+        sbClient.from('app_dados').upsert({chave:'config:fornecedores_aparelhos',valor:cgFornecedores,atualizado_em:agora}).then(()=>{});
+      }
+    }
+    salvarUsuarioAtual(c.cadastrador);
+    _apCache.unshift(registro);renderAparelhos();_confRegistrarCadastro(registro);
+    abrirEtiqueta(registro);
+    cgIniciar();
+    cgFeedback('success',`✓ ${registro.nome} ${registro.gb} cadastrado (${localEtiqueta(registro)}). Imprima a etiqueta e bipe o próximo.`);
+  }
+
   // ---------------------------------------------------------------- Conferência (bipar tudo e ver o que falta)
   const LS_CONF='rrprimecell_conferencia';
   let _conf=null;
@@ -3217,10 +3567,8 @@
   }
   function cadastrarDaConferencia(imei){
     fecharConferencia();
-    limparFormAparelho();
-    if(_conf&&_conf.local==='estoque_r1'){document.getElementById('ap-destino').value='estoque_r1';onDestinoChange()}
-    if(_conf)document.getElementById('ap-cadastrador').value=_conf.usuario;
-    preencherPorImei(imei);
+    cgImeiLido(imei);
+    if(_conf){cg.destino=_conf.local==='estoque_r1'?'estoque_r1':'';cg.destinoEscolhido=true;cg.cadastrador=_conf.usuario}
   }
   function editarDaConferencia(id){fecharConferencia();editarAparelho(id)}
   function renderConferencia(){
