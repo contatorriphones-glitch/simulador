@@ -60,17 +60,21 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
   const [edicao, setEdicao] = useState<Record<string, { valor: string; fornecedor: string }>>({});
   const [salvando, setSalvando] = useState("");
   const [aviso, setAviso] = useState("");
+  const [mpStatus, setMpStatus] = useState<Record<string, string>>({});
+  const [enviandoTodos, setEnviandoTodos] = useState(false);
 
   async function carregar() {
     setCarregando(true); setErro("");
     try {
       const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-      const [ap, cu, fo, co] = await Promise.all([
+      const [ap, cu, fo, co, ms] = await Promise.all([
         supabase.from("aparelhos").select("id,nome,gb,cor,imei,destino,tipo,assistencia_nome,data_entrada,origem,criado_em"),
         supabase.from("aparelhos_custos").select("aparelho_id,custo,fornecedor,origem_custo,registrado_por,atualizado_em"),
         supabase.from("app_dados").select("valor").eq("chave", "config:fornecedores_aparelhos").maybeSingle(),
         supabase.from("contagens").select("local,usuario,finalizada_em,esperados,faltando").gte("finalizada_em", hoje.toISOString()).order("finalizada_em", { ascending: false }),
+        supabase.from("aparelhos_mp").select("aparelho_id,status"),
       ]);
+      setMpStatus(Object.fromEntries(((ms.data || []) as { aparelho_id: string; status: string }[]).map(x => [x.aparelho_id, x.status])));
       if (ap.error) throw ap.error;
       const custos = new Map<string, Custo>(((cu.data || []) as Custo[]).map(c => [c.aparelho_id, c]));
       const agora = Date.now();
@@ -142,7 +146,34 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
     }
     setLinhas(ls => ls.map(x => x.id === l.id ? { ...x, custo: v, fornecedor: forn } : x));
     setEdicao(ed => { const n = { ...ed }; delete n[l.id]; return n; });
-    setAviso(norm(e.fornecedor) !== norm(forn) ? `✓ Salvo. Fornecedor corrigido para ${forn}.` : "✓ Salvo.");
+    const base = norm(e.fornecedor) !== norm(forn) ? `✓ Salvo. Fornecedor corrigido para ${forn}.` : "✓ Salvo.";
+    setAviso(base + " Enviando ao Mercado Phone…");
+    setAviso(base + " " + await enviarMP(l.id));
+  }
+  // O servidor cria/atualiza o aparelho no Mercado Phone com custo e fornecedor (a chave do MP fica só no servidor)
+  async function enviarMP(id: string): Promise<string> {
+    try {
+      const { data, error } = await supabase.functions.invoke("mp-estoque", { body: { aparelho_id: id } });
+      if (error) return "⚠️ Não foi para o Mercado Phone (" + error.message + ").";
+      const r = data as { status?: string; acao?: string; erro?: string };
+      setMpStatus(m => ({ ...m, [id]: r.status || "" }));
+      if (r.status === "ok") return r.acao === "criado" ? "✓ Cadastrado no Mercado Phone." : "✓ Atualizado no Mercado Phone.";
+      if (r.status === "erro") return "⚠️ Mercado Phone: " + (r.erro || "erro");
+      return "";
+    } catch (err) { return "⚠️ Não foi para o Mercado Phone (" + String(err) + ")."; }
+  }
+  async function enviarTodosMP() {
+    const ids = linhas.filter(l => l.custo != null && l.fornecedor && mpStatus[l.id] !== "ok").map(l => l.id);
+    if (!ids.length) { setAviso("Nenhum aparelho com custo aguardando envio."); return; }
+    if (!confirm(`Enviar ${ids.length} aparelho(s) com custo para o Mercado Phone?`)) return;
+    setEnviandoTodos(true); let ok = 0, erro = 0;
+    for (let i = 0; i < ids.length; i += 20) {
+      setAviso(`Enviando ao Mercado Phone… ${i}/${ids.length}`);
+      const { data } = await supabase.functions.invoke("mp-estoque", { body: { ids: ids.slice(i, i + 20) } });
+      for (const r of ((data || []) as { aparelho_id: string; status: string }[])) { setMpStatus(m => ({ ...m, [r.aparelho_id]: r.status })); if (r.status === "ok") ok++; else if (r.status === "erro") erro++; }
+    }
+    setEnviandoTodos(false);
+    setAviso(`✓ ${ok} enviado(s) ao Mercado Phone` + (erro ? ` · ⚠️ ${erro} com erro (veja na lista)` : ""));
   }
 
   const statusContagem = (k: string) => {
@@ -207,6 +238,7 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
 
         <div style={card}>
           <p style={titulo}>Aparelhos {filtroLocal ? "· " + LOCAIS[filtroLocal] : ""} ({visiveis.length})</p>
+          <button style={{ ...btn, width: "100%", marginBottom: 10 }} disabled={enviandoTodos} onClick={enviarTodosMP}>{enviandoTodos ? "Enviando…" : "📤 Enviar ao Mercado Phone os que já têm custo"}</button>
           <input style={{ ...input, marginBottom: 10 }} placeholder="Buscar modelo, cor, IMEI ou fornecedor" value={busca} onChange={e => setBusca(e.target.value)} />
           {aviso && <div style={{ fontSize: 14, fontWeight: 700, color: aviso.startsWith("✓") ? "#15803d" : "#dc2626", marginBottom: 8 }}>{aviso}</div>}
           <datalist id="caixa-fornecedores">{fornecedores.map(f => <option key={f} value={f} />)}</datalist>
@@ -215,7 +247,8 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
             return <div key={l.id} style={{ padding: "10px 0", borderTop: "1px solid #eef2ff" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                 <div style={{ fontSize: 14 }}><b>{[l.nome, l.gb].filter(Boolean).join(" ")}</b> {l.cor}
-                  <div style={{ fontSize: 12, color: "#6b7fa8", fontFamily: "ui-monospace,Menlo,monospace" }}>{l.imei} · {LOCAIS[l.local]}{l.local === "assistencia" && l.assistencia_nome ? " " + l.assistencia_nome : ""} · {l.dias}d</div></div>
+                  <div style={{ fontSize: 12, color: "#6b7fa8", fontFamily: "ui-monospace,Menlo,monospace" }}>{l.imei} · {LOCAIS[l.local]}{l.local === "assistencia" && l.assistencia_nome ? " " + l.assistencia_nome : ""} · {l.dias}d</div>
+                  <div style={{ fontSize: 11, fontWeight: 800, marginTop: 2, color: mpStatus[l.id] === "ok" ? "#15803d" : mpStatus[l.id] === "erro" ? "#dc2626" : "#b45309" }}>{mpStatus[l.id] === "ok" ? "✓ No Mercado Phone" : mpStatus[l.id] === "erro" ? "⚠️ Erro ao enviar ao Mercado Phone" : "⏳ Ainda não está no Mercado Phone"}</div></div>
                 {l.custo != null && !ed && <div style={{ textAlign: "right", cursor: "pointer" }} onClick={() => setEdicao(x => ({ ...x, [l.id]: { valor: String(l.custo).replace(".", ","), fornecedor: l.fornecedor } }))}>
                   <b>{fmt(l.custo)}</b><div style={{ fontSize: 12, color: "#6b7fa8" }}>{l.fornecedor || "—"} ✏️</div></div>}
                 {l.custo == null && !ed && <span style={{ fontSize: 12, fontWeight: 800, color: "#b45309", whiteSpace: "nowrap" }}>⚠️ sem custo</span>}
