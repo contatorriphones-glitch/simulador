@@ -3403,7 +3403,9 @@
     'iPhone 17':{gb:['256GB','512GB'],cor:['Preto','Branco','Azul-névoa','Lavanda','Sálvia']},
     'iPhone Air':{gb:['256GB','512GB','1TB'],cor:['Preto-espacial','Branco-nuvem','Dourado-claro','Azul-céu']},
     'iPhone 17 Pro':{gb:['256GB','512GB','1TB'],cor:['Laranja-cósmico','Azul-profundo','Prateado']},
-    'iPhone 17 Pro Max':{gb:['256GB','512GB','1TB','2TB'],cor:['Laranja-cósmico','Azul-profundo','Prateado']}
+    'iPhone 17 Pro Max':{gb:['256GB','512GB','1TB','2TB'],cor:['Laranja-cósmico','Azul-profundo','Prateado']},
+    'iPhone 18 Pro':{gb:['256GB','512GB','1TB'],cor:['Bordô']},
+    'iPhone 18 Pro Max':{gb:['256GB','512GB','1TB','2TB'],cor:['Bordô']}
   };
   const CG_LISTA_MODELOS=Object.keys(CG_MODELOS);
   const cgNorm=t=>String(t||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
@@ -3470,7 +3472,8 @@
       h+=cgGrupo('Modelo',c.modelo&&!c.trocarModelo?cgChip(esc(c.modelo),true,'')+cgChip('Trocar',false,"cgSet('trocarModelo',true)",'font-weight:600'):CG_LISTA_MODELOS.map(m=>cgChip(esc(m.replace('iPhone ','')),m===c.modelo,`cgEscolherModelo('${cgQ(m)}')`,'padding:10px 12px;font-size:14px')).join(''),true);
       if(mod){
         h+=cgGrupo('Armazenamento',mod.gb.map(g=>cgChip(g,g===c.gb,`cgSet('gb','${g}')`)).join(''),true);
-        h+=cgGrupo('Cor',mod.cor.map(k=>cgChip(esc(k),k===c.cor,`cgSet('cor','${cgQ(k)}')`)).join(''),true);
+        const corExtra=c.cor&&!mod.cor.includes(c.cor)?[c.cor]:[];
+        h+=cgGrupo('Cor',[...mod.cor,...corExtra].map(k=>cgChip(esc(k),k===c.cor,`cgSet('cor','${cgQ(k)}')`)).join('')+cgChip('✏️ Outra cor',false,'cgOutraCor()','font-weight:600'),true);
       }
       h+=nav(true,true);
     }else if(c.passo===2){
@@ -3526,6 +3529,12 @@
     }
     t.innerHTML=h;
   }
+  function cgOutraCor(){
+    const t=prompt('Qual a cor? (escreva como aparece em Ajustes › Geral › Sobre)');if(!t)return;
+    const v=t.trim().toLowerCase().replace(/(^|[\s-])(\p{L})/gu,(m,a,b)=>a+b.toUpperCase());
+    const todas=[...new Set(Object.values(CG_MODELOS).flatMap(m=>m.cor))];
+    const r=cgCorrigirNome(v,todas);cgSet('cor',r.corrigido||!r.novo?r.valor:v);
+  }
   function cgEscolherModelo(m){cg.modelo=m;cg.trocarModelo=false;if(!CG_MODELOS[m].gb.includes(cg.gb))cg.gb='';cg.cor=cgCorCanonica(m,cg.cor);cgRender()}
   function cgEscolherDestino(v){cg.destino=v;cg.destinoEscolhido=true;if(v!=='assistencia'&&v!=='outro_lojista')cg.localNome='';cgFeedback();cgRender()}
   function cgVoltar(){if(cg.passo>0){cg.passo--;cgFeedback();cgRender()}}
@@ -3568,6 +3577,7 @@
     const idx=_apCache.findIndex(a=>a.id===item.id);if(idx>-1)_apCache[idx]=novo;
     salvarUsuarioAtual(usuario);renderAparelhos();
     cgFeedback('success',`✓ Movido para ${localEtiqueta(novo)}.`);
+    if(destino!=='vendido'&&novo.tipo!=='cliente')enviarMP(item.id);
     if(destino!=='vendido'){_cgProximo=true;abrirEtiqueta(novo)}else setTimeout(()=>abrirScanner('guiado'),600);
     cgIniciar();
   }
@@ -3656,7 +3666,24 @@
     _cgProximo=true;
     abrirEtiqueta(registro);
     cgIniciar();
-    cgFeedback('success',`✓ ${registro.nome} ${registro.gb} cadastrado (${localEtiqueta(registro)}). Imprima a etiqueta e bipe o próximo.`);
+    const msg=`✓ ${registro.nome} ${registro.gb} cadastrado (${localEtiqueta(registro)}).`;
+    cgFeedback('success',msg+' Enviando ao Mercado Phone…');
+    if(registro.tipo!=='cliente')enviarMP(registro.id,c.estado).then(r=>cgFeedback(r.status==='erro'?'error':'success',msg+' '+textoMP(r)));
+    else cgFeedback('success',msg);
+  }
+  // ---------------------------------------------------------------- Mercado Phone: o servidor cria/atualiza o aparelho lá (a chave fica só no servidor)
+  async function enviarMP(aparelhoId,estado){
+    try{
+      const r=await fetch(SUPABASE_URL+'/functions/v1/mp-estoque',{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPABASE_KEY},body:JSON.stringify({aparelho_id:aparelhoId,estado})});
+      return await r.json();
+    }catch(e){return{status:'erro',erro:'sem internet'}}
+  }
+  function textoMP(r){
+    if(!r)return'';
+    if(r.status==='ok')return r.acao==='criado'?'✓ Também cadastrado no Mercado Phone.':'✓ Atualizado no Mercado Phone.';
+    if(r.status==='sem_custo')return'⏳ Vai para o Mercado Phone quando o custo e o fornecedor forem preenchidos.';
+    if(r.status==='ignorado')return'';
+    return'⚠️ Não foi para o Mercado Phone ('+(r.erro||'erro')+'). O cadastro aqui está salvo; avise o Robert.';
   }
 
   // ---------------------------------------------------------------- Conferência (bipar tudo e ver o que falta)
@@ -3828,6 +3855,7 @@
     if(error)throw error;
     await sbClient.from('aparelhos_historico').insert({aparelho_id:item.id,imei:item.imei,nome:item.nome,gb:item.gb,cor:item.cor,evento:destino||'aguardando',assistencia_nome:destino==='assistencia'?nome:null,usuario:usuario+' (conferência)',criado_em:agora});
     const i=_apCache.findIndex(a=>a.id===item.id);if(i>-1)_apCache[i]=novo;
+    if(destino!=='vendido'&&destino!=='nao_encontrado'&&novo.tipo!=='cliente')enviarMP(item.id);
   }
   async function finalizarConferencia(){
     if(!_conf)return;
