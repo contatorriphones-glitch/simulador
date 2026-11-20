@@ -1089,6 +1089,13 @@
         <select id="conf-usuario"><option value="">Selecione…</option><option>Joana</option><option>Gaby</option><option>Michelle</option><option>Pamella</option><option>Robert</option></select>
         <div class="admin-actions"><button type="button" class="btn" style="width:100%" onclick="iniciarConferencia()">Começar a bipar</button></div>
       </div>
+      <div id="conf-resultado" style="display:none">
+        <div class="feedback success" style="display:block;margin:0 0 10px">✓ Conferência salva.</div>
+        <button type="button" class="btn" style="width:100%;padding:14px;font-size:16px" onclick="copiarConferenciaWhats()">📋 Copiar para WhatsApp</button>
+        <div id="conf-resultado-fb" style="font-size:13px;font-weight:700;color:#15803d;margin-top:8px"></div>
+        <pre id="conf-resultado-texto" style="white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.55;background:var(--card-soft);border:1px solid var(--line);border-radius:14px;padding:12px;margin-top:10px;max-height:50vh;overflow:auto"></pre>
+        <button type="button" class="btn ghost" style="width:100%;margin-top:10px" onclick="fecharResultadoConferencia()">Fechar</button>
+      </div>
       <div id="conf-andamento" style="display:none">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px">
           <div style="font-size:22px;font-weight:800;white-space:nowrap" id="conf-contador">0 de 0</div>
@@ -3675,6 +3682,7 @@
   function abrirConferencia(local){
     try{const s=localStorage.getItem(LS_CONF);if(s&&!_conf)_conf=JSON.parse(s)}catch(e){}
     const m=document.getElementById('conf-modal');m.classList.add('open');m.setAttribute('aria-hidden','false');
+    document.getElementById('conf-resultado').style.display='none';
     document.getElementById('conf-inicio').style.display=_conf?'none':'block';
     document.getElementById('conf-andamento').style.display=_conf?'block':'none';
     if(_conf){renderConferencia();return}
@@ -3749,6 +3757,7 @@
   }
   function confRemoverBipado(imei){if(!_conf)return;delete _conf.bipados[imei];delete _conf.foraDoLocal[imei];delete _conf.resp['s:'+imei];_confSalvarLocal();renderConferencia()}
   function _confPendencias(){
+    if(_conf.final)return{..._conf.final,semResp:0};
     const esp=_confEsperados(),b=_conf.bipados;
     const falta=esp.filter(a=>!b[a.imei]),fora=Object.entries(_conf.foraDoLocal);
     const semResp=falta.filter(a=>!_conf.resp['f:'+a.imei]).length+fora.filter(([i,f])=>!f.id||!_conf.resp['s:'+i]).length;
@@ -3783,14 +3792,28 @@
     fin.textContent=semResp?`Responda ${semResp} pendência(s)`:'✓ Finalizar conferência';
   }
   function _confTexto(c,esp,falta,fora){
-    const nomeLocal=CONF_LOCAIS[c.local]+(c.assist?' · '+c.assist:'');
-    const l=[`📋 *Conferência — ${nomeLocal}*`,`👤 ${c.usuario} · ${new Date().toLocaleString('pt-BR')}`,`✅ ${esp.length-falta.length} de ${esp.length} conferidos`,''];
+    const curto=({loja:'Loja',estoque_r1:'R1',assistencia:'Assistência'})[c.local]+(c.assist?' '+c.assist:'');
+    const icone=CONF_LOCAIS[c.local].split(' ')[0];
+    const agora=new Date();
+    const corTxt=a=>{const ci=detectarCor(a.cor);return ci?ci.emoji+' ':(a.cor?a.cor+' ':'')};
+    const ok=esp.filter(a=>c.bipados[a.imei]).sort((a,b)=>{const ia=indiceModelo(a.nome),ib=indiceModelo(b.nome);if(ia!==ib)return ia-ib;return gbNum(a.gb)-gbNum(b.gb)||(a.nome||'').localeCompare(b.nome||'')});
+    const l=[`${icone} *Fechamento do Estoque ${curto} — RR Prime Cell*`,`📅 ${agora.toLocaleDateString('pt-BR')}`,''];
+    l.push(`✅ ${ok.length} aparelhos conferidos por bipe`);
     const nao=falta.filter(a=>c.resp['f:'+a.imei]?.destino==='nao_encontrado');
-    if(nao.length){l.push(`🚨 *NÃO ENCONTRADOS (${nao.length})*`);nao.forEach(a=>l.push(`• ${_confLinha(a)} — IMEI ${a.imei}`));l.push('')}
+    if(nao.length){l.push('',`🚨 *NÃO ENCONTRADOS (${nao.length})*`);nao.forEach(a=>l.push(`• ${corTxt(a)}${[a.nome,a.gb].filter(Boolean).join(' ')} — IMEI ${a.imei}`))}
     const mov=falta.filter(a=>c.resp['f:'+a.imei]&&c.resp['f:'+a.imei].destino!=='nao_encontrado');
-    if(mov.length){l.push(`🔁 Atualizados na conferência (${mov.length})`);mov.forEach(a=>{const r=c.resp['f:'+a.imei];l.push(`• ${_confLinha(a)} — ${localEtiqueta({tipo:a.tipo,destino:r.destino,assistenciaNome:r.nome})}`)});l.push('')}
-    const trazidos=fora.filter(([i,f])=>c.resp['s:'+i]?.acao==='aqui');
-    if(trazidos.length){l.push(`📍 Estavam em outro lugar no sistema e foram corrigidos (${trazidos.length})`);trazidos.forEach(([i,f])=>l.push(`• ${f.modelo} — era ${f.onde}`));l.push('')}
+    if(mov.length){l.push('',`🔁 *Saíram do ${curto} (${mov.length})*`);mov.forEach(a=>{const r=c.resp['f:'+a.imei];l.push(`• ${corTxt(a)}${[a.nome,a.gb].filter(Boolean).join(' ')} — IMEI ${a.imei} → ${localEtiqueta({tipo:a.tipo,destino:r.destino,assistenciaNome:r.nome})}`)})}
+    const trazidos=fora.filter(([i])=>c.resp['s:'+i]?.acao==='aqui');
+    if(trazidos.length){l.push('',`📍 *Estavam em outro lugar no sistema e foram corrigidos (${trazidos.length})*`);trazidos.forEach(([i,f])=>l.push(`• ${f.modelo} — IMEI ${i} — era ${f.onde}`))}
+    l.push('',`📋 *Estoque ${curto} agora (${ok.length})*`);
+    ok.forEach(a=>{
+      l.push(`• ${corTxt(a)}${[a.nome||'Sem nome',a.gb].filter(Boolean).join(' ')} — IMEI ${a.imei||'—'}${a.tipo==='cliente'?' (CLIENTE)':''}`);
+      if(a.bateria)l.push(`*🔋 Bateria: ${a.bateria}%*`);
+      if(a.avisoPeca)l.push(`*ℹ️ Peça: ${a.avisoPeca}*`);
+      if(a.garantiaApple)l.push(`*🍎 Garantia Apple*`);
+      l.push('');
+    });
+    l.push(`🕐 Conferência finalizada às ${agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} por ${c.usuario}`);
     return l.join('\n');
   }
   function copiarResultadoConferencia(){
@@ -3808,13 +3831,30 @@
   }
   async function finalizarConferencia(){
     if(!_conf)return;
-    const c=_conf,{esp,falta,fora,semResp}=_confPendencias();
-    if(semResp){alert(`Ainda faltam ${semResp} resposta(s). Toda diferença precisa de explicação.`);return}
+    const c=_conf;
     const fb=document.getElementById('conf-feedback'),btnF=document.getElementById('conf-finalizar');
+    if(!c.final){
+      const{esp:e0,falta:f0,fora:o0,semResp}=_confPendencias();
+      if(semResp){alert(`Ainda faltam ${semResp} resposta(s). Toda diferença precisa de explicação.`);return}
+      const falta0=f0.map(a=>({...a})),esp0=e0.map(a=>({...a}));
+      // correções gravadas numa tentativa anterior (antes desta versão) que não estão mais na lista
+      const{data:hist}=await sbClient.from('aparelhos_historico').select('*').eq('usuario',c.usuario+' (conferência)').gte('criado_em',c.iniciadaEm);
+      (hist||[]).forEach(h=>{
+        if(falta0.some(a=>a.imei===h.imei)||o0.some(([i])=>i===h.imei))return;
+        const ap=getAparelhos().find(a=>a.id===h.aparelho_id)||{id:h.aparelho_id,imei:h.imei,nome:h.nome,gb:h.gb,cor:h.cor,tipo:'loja'};
+        if(h.evento===_confDestinoDoLocal(c.local)||(h.evento==='aguardando'&&c.local==='loja'))return;
+        falta0.push({...ap,destino:_confDestinoDoLocal(c.local)});esp0.push({...ap,destino:_confDestinoDoLocal(c.local)});
+        c.resp['f:'+h.imei]={destino:h.evento==='aguardando'?'':h.evento,nome:h.assistencia_nome||'',acao:h.evento,jaGravado:true};
+      });
+      c.final={esp:esp0,falta:falta0,fora:o0};_confSalvarLocal();
+    }
+    const{esp,falta,fora}=c.final;
     btnF.disabled=true;fb.textContent='Salvando…';
     try{
-      for(const a of falta){const r=c.resp['f:'+a.imei];if(r.destino!=='nao_encontrado')await _confMover(a,r.destino,r.nome,c.usuario)}
-      for(const [imei,f] of fora){const r=c.resp['s:'+imei];if(r&&r.acao==='aqui'){const it=getAparelhos().find(a=>a.id===f.id);if(it)await _confMover(it,r.destino,r.nome,c.usuario)}}
+      for(const a of falta){const r=c.resp['f:'+a.imei];if(r.destino==='nao_encontrado'||r.jaGravado)continue;
+        const atual=getAparelhos().find(x=>x.id===a.id);if(atual&&(atual.destino||'')===r.destino)continue; // já movido numa tentativa anterior
+        await _confMover(atual||a,r.destino,r.nome,c.usuario)}
+      for(const [imei,f] of fora){const r=c.resp['s:'+imei];if(r&&r.acao==='aqui'){const it=getAparelhos().find(a=>a.id===f.id);if(it&&(it.destino||'')!==r.destino)await _confMover(it,r.destino,r.nome,c.usuario)}}
     }catch(e){console.error(e);fb.textContent='Erro ao atualizar ('+(e.message||e)+'). Verifique a internet e toque em Finalizar de novo.';btnF.disabled=false;return}
     const texto=_confTexto(c,esp,falta,fora);
     const reg={local:c.local+(c.assist?':'+c.assist:''),usuario:c.usuario,iniciada_em:c.iniciadaEm,finalizada_em:new Date().toISOString(),esperados:esp.length,bipados:Object.keys(c.bipados).length,
@@ -3824,17 +3864,28 @@
     if(error){console.error(error);fb.textContent='Não consegui salvar a conferência ('+error.message+'). Toque em Finalizar de novo.';btnF.disabled=false;return}
     if(data)await sbClient.from('contagem_itens').insert(Object.entries(c.bipados).map(([imei,em])=>({contagem_id:data.id,imei,bipado_em:em})));
     _conf=null;_confSalvarLocal();
-    document.getElementById('conf-andamento').style.display='none';document.getElementById('conf-inicio').style.display='block';
-    fecharConferencia();renderAparelhos();
-    try{await navigator.clipboard.writeText(texto)}catch(e){}
-    mostrarApFeedback('success','✓ Conferência salva.');
+    document.getElementById('conf-andamento').style.display='none';
+    mostrarResultadoConferencia(texto);renderAparelhos();
     if(document.getElementById('tab-fechamento').classList.contains('active'))gerarFechamentoDia();
     else carregarConferenciasHoje();
   }
+  let _confTextoFinal='';
+  function mostrarResultadoConferencia(texto){
+    _confTextoFinal=texto;
+    const m=document.getElementById('conf-modal');m.classList.add('open');m.setAttribute('aria-hidden','false');
+    document.getElementById('conf-inicio').style.display='none';document.getElementById('conf-andamento').style.display='none';
+    document.getElementById('conf-resultado').style.display='block';
+    document.getElementById('conf-resultado-texto').textContent=texto;
+    document.getElementById('conf-resultado-fb').textContent='';
+  }
+  function copiarConferenciaWhats(){
+    (navigator.clipboard?navigator.clipboard.writeText(_confTextoFinal):Promise.reject()).then(()=>{document.getElementById('conf-resultado-fb').textContent='✓ Texto copiado! Já pode colar no WhatsApp.'}).catch(()=>prompt('Copie o texto:',_confTextoFinal));
+  }
+  function fecharResultadoConferencia(){document.getElementById('conf-resultado').style.display='none';document.getElementById('conf-inicio').style.display='block';confLocalMudou();fecharConferencia()}
   // ---------------------------------------------------------------- Situação das conferências de hoje (aba Fechamento do Dia)
   async function carregarConferenciasHoje(){
     const{inicio,fim}=inicioFimHojeISO();
-    const{data,error}=await sbClient.from('contagens').select('local,usuario,finalizada_em,esperados,bipados,faltando').gte('finalizada_em',inicio).lt('finalizada_em',fim).order('finalizada_em',{ascending:false});
+    const{data,error}=await sbClient.from('contagens').select('local,usuario,finalizada_em,esperados,bipados,faltando,explicacao').gte('finalizada_em',inicio).lt('finalizada_em',fim).order('finalizada_em',{ascending:false});
     _confHoje=error?[]:(data||[]);
     const box=document.getElementById('fech-conferencias');if(!box)return _confHoje;
     box.innerHTML=Object.entries(CONF_LOCAIS).map(([k,nome])=>{
@@ -3842,7 +3893,7 @@
       const nao=c?(c.faltando||[]).filter(f=>f.resposta&&f.resposta.destino==='nao_encontrado').length:0;
       const st=c?(nao?`🚨 ${nao} não encontrado(s)`:`✅ ${new Date(c.finalizada_em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${esc(c.usuario)}`):'⏳ Pendente hoje';
       const cor=c?(nao?'var(--danger)':'#15803d'):'#b45309';
-      return `<button type="button" onclick="abrirConferencia('${k}')" style="flex:1 1 150px;text-align:left;padding:12px;border-radius:14px;border:2px solid ${cor};background:#fff;cursor:pointer;width:auto;margin:0"><div style="font-weight:800;font-size:15px;color:var(--ink)">${nome}</div><div style="font-size:12px;font-weight:700;color:${cor};margin-top:4px">${st}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${c?'Toque para conferir de novo':'Toque para bipar'}</div></button>`;
+      return `<button type="button" onclick="abrirConferencia('${k}')" style="flex:1 1 150px;text-align:left;padding:12px;border-radius:14px;border:2px solid ${cor};background:#fff;cursor:pointer;width:auto;margin:0"><div style="font-weight:800;font-size:15px;color:var(--ink)">${nome}</div><div style="font-size:12px;font-weight:700;color:${cor};margin-top:4px">${st}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${c?'Toque para conferir de novo':'Toque para bipar'}</div></button>${c&&c.explicacao?`<button type="button" class="btn ghost" style="flex:0 0 auto;width:auto;margin:0;padding:8px 10px;font-size:12px;align-self:stretch" onclick="mostrarResultadoConferencia(_confHoje.find(x=>(x.local||'').split(':')[0]==='${k}').explicacao)">📋 WhatsApp</button>`:''}`;
     }).join('');
     return _confHoje;
   }
