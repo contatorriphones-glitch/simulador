@@ -915,6 +915,9 @@
             <option value="Michelle">Michelle</option>
             <option value="Pamella">Pamella</option>
           </select>
+          <p class="fieldset-title" style="margin:18px 0 8px">Conferência dos estoques (bipe)</p>
+          <p class="section-copy" style="margin:0 0 10px;font-size:13px">Bipe todos os aparelhos de cada local. O sistema mostra o que falta ou está errado e só fecha com tudo explicado. <b>A Loja é obrigatória</b> para copiar o fechamento.</p>
+          <div id="fech-conferencias" style="display:flex;flex-wrap:wrap;gap:8px">Carregando…</div>
           <div class="actions" style="margin-top:14px">
             <button type="button" class="btn" onclick="gerarFechamentoDia()">🔄 Atualizar fechamento</button>
             <button type="button" class="btn secondary" onclick="copiarFechamentoDia()">📋 Copiar para WhatsApp</button>
@@ -1075,12 +1078,13 @@
     <div class="admin-panel" role="dialog" aria-modal="true" style="padding:16px">
       <div class="admin-header">
         <div><h2 class="admin-title">📋 Conferir estoque</h2>
-        <p style="margin:6px 0 0;color:var(--muted);font-size:13px">Bipe todos os aparelhos que estão fisicamente no local. No fim, aparece só o que falta.</p></div>
+        <p style="margin:6px 0 0;color:var(--muted);font-size:13px">Bipe todos os aparelhos que estão fisicamente no local. Toda diferença precisa de resposta antes de finalizar.</p></div>
         <button type="button" class="admin-close" onclick="fecharConferencia()">✕ Fechar</button>
       </div>
       <div id="conf-inicio">
         <label for="conf-local">Local que está sendo conferido</label>
-        <select id="conf-local"><option value="estoque_r1">🏬 Estoque R1</option><option value="loja">📦 Estoque Loja</option></select>
+        <select id="conf-local" onchange="confLocalMudou()"><option value="loja">📦 Loja</option><option value="estoque_r1">🏬 Estoque R1</option><option value="assistencia">🔧 Assistência</option></select>
+        <div id="conf-assist-wrap" style="display:none"><label for="conf-assist">Qual assistência</label><select id="conf-assist"></select></div>
         <label for="conf-usuario">Quem está conferindo</label>
         <select id="conf-usuario"><option value="">Selecione…</option><option>Joana</option><option>Gaby</option><option>Michelle</option><option>Pamella</option><option>Robert</option></select>
         <div class="admin-actions"><button type="button" class="btn" style="width:100%" onclick="iniciarConferencia()">Começar a bipar</button></div>
@@ -1096,8 +1100,9 @@
         <div id="conf-ultimo" style="font-size:13px;margin-bottom:8px"></div>
         <div id="conf-listas"></div>
         <div class="admin-actions" style="display:flex;gap:8px;flex-wrap:wrap">
-          <button type="button" class="btn ghost" style="flex:1 1 160px" onclick="copiarResultadoConferencia()">📋 Copiar resultado</button>
-          <button type="button" class="btn" style="flex:1 1 160px" onclick="finalizarConferencia()">✓ Finalizar conferência</button>
+          <button type="button" id="conf-finalizar" class="btn" style="flex:1 1 100%" onclick="finalizarConferencia()">✓ Finalizar conferência</button>
+          <button type="button" class="btn ghost" style="flex:1 1 140px" onclick="copiarResultadoConferencia()">📋 Copiar resultado</button>
+          <button type="button" class="btn ghost" style="flex:1 1 140px;color:var(--danger)" onclick="cancelarConferencia()">Descartar</button>
         </div>
         <div id="conf-feedback" style="font-size:13px;margin-top:8px"></div>
       </div>
@@ -2038,6 +2043,7 @@
       return;
     }
     prev.textContent='Carregando...';
+    await carregarConferenciasHoje();
     const{inicio,fim}=inicioFimHojeISO();
     const{data,error}=await sbClient.from('aparelhos_historico').select('*').gte('criado_em',inicio).lt('criado_em',fim).order('criado_em',{ascending:true});
     if(error)console.error(error);
@@ -2093,6 +2099,15 @@
       if(a.garantiaApple)linhas.push(`*🍎 Garantia Apple*`);
       linhas.push('');
     });
+    linhas.push('━━━━━━━━━━━━━━━','🔎 *Conferência dos estoques (bipe)*');
+    Object.entries(CONF_LOCAIS).forEach(([k,nome])=>{
+      const c=_confHoje.find(x=>(x.local||'').split(':')[0]===k);
+      if(!c){linhas.push(`⏳ ${nome}: NÃO CONFERIDO HOJE`);return}
+      const nao=(c.faltando||[]).filter(f=>f.resposta&&f.resposta.destino==='nao_encontrado');
+      linhas.push(`${nao.length?'🚨':'✅'} ${nome}: ${c.esperados-(c.faltando||[]).length} de ${c.esperados} bipados · ${c.usuario} às ${new Date(c.finalizada_em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
+      nao.forEach(f=>linhas.push(`   🚨 Não encontrado: ${[f.nome,f.gb,f.cor].filter(Boolean).join(' ')} — IMEI ${f.imei}`));
+    });
+    linhas.push('');
     linhas.push(`🕐 Fechamento gerado às ${horaFmt} por ${usuario}`);
 
     _fechamentoTexto=linhas.join('\n');
@@ -2101,6 +2116,7 @@
 
   function copiarFechamentoDia(){
     if(!_fechamentoTexto){mostrarFechamentoFeedback('error','Gere o fechamento primeiro.');return}
+    if(!_confHoje.some(x=>(x.local||'').split(':')[0]==='loja')){mostrarFechamentoFeedback('error','Antes de copiar, faça a conferência da Loja (bipe todos os aparelhos) logo acima.');return}
     navigator.clipboard?.writeText(_fechamentoTexto)
       .then(()=>mostrarFechamentoFeedback('success','✓ Texto copiado! Já pode colar no WhatsApp.'))
       .catch(()=>mostrarFechamentoFeedback('error','Não foi possível copiar. Selecione o texto manualmente.'));
@@ -3637,44 +3653,73 @@
   }
 
   // ---------------------------------------------------------------- Conferência (bipar tudo e ver o que falta)
-  const LS_CONF='rrprimecell_conferencia';
-  let _conf=null;
+  // Três estoques: Loja (inclui aparelho de cliente que está na loja), R1 e Assistência.
+  // Toda diferença precisa de uma resposta antes de finalizar: nada fica sem explicação.
+  const LS_CONF='rrprimecell_conferencia_v2';
+  const CONF_LOCAIS={loja:'📦 Loja',estoque_r1:'🏬 Estoque R1',assistencia:'🔧 Assistência'};
+  const CONF_RESP={'':'📦 Está na loja',estoque_r1:'🏬 Está no R1',assistencia:'🔧 Está na assistência',vendido:'✅ Foi vendido',garantia:'🛡️ Garantia / devolvido ao cliente',outro_lojista:'🤝 Com outro lojista',troca:'🔄 Troca para cliente',nao_encontrado:'🚨 Não encontrei'};
+  let _conf=null,_confHoje=[];
+  const _confLinha=a=>[a.nome,a.gb,a.cor].filter(Boolean).join(' · ');
+  const _confDestinoDoLocal=l=>l==='loja'?'':l;
   function _confSalvarLocal(){try{_conf?localStorage.setItem(LS_CONF,JSON.stringify(_conf)):localStorage.removeItem(LS_CONF)}catch(e){}}
-  function _confEsperados(){return getAparelhos().filter(a=>a.tipo!=='cliente'&&getBucket(a)===_conf.local&&(!a.destino||a.destino==='estoque_r1'))}
-  function abrirConferencia(){
+  function _confNoLocal(a,local,assist){
+    if(statusInfo(a).cat==='concluido')return false;
+    const d=a.destino||'';
+    if(local==='loja')return d==='';
+    if(local==='estoque_r1')return d==='estoque_r1';
+    if(local==='assistencia')return d==='assistencia'&&(!assist||cgNorm(a.assistenciaNome)===cgNorm(assist));
+    return false;
+  }
+  function _confEsperados(){return _conf?getAparelhos().filter(a=>_confNoLocal(a,_conf.local,_conf.assist)):[]}
+  function _confNomesAssist(){return [...new Set(getAparelhos().filter(a=>a.destino==='assistencia'&&statusInfo(a).cat!=='concluido').map(a=>cgNorm(a.assistenciaNome)||'SEM NOME'))].sort()}
+  function abrirConferencia(local){
     try{const s=localStorage.getItem(LS_CONF);if(s&&!_conf)_conf=JSON.parse(s)}catch(e){}
     const m=document.getElementById('conf-modal');m.classList.add('open');m.setAttribute('aria-hidden','false');
     document.getElementById('conf-inicio').style.display=_conf?'none':'block';
     document.getElementById('conf-andamento').style.display=_conf?'block':'none';
-    if(!_conf){const u=obterUsuarioAtual();if(u)document.getElementById('conf-usuario').value=u}
-    else renderConferencia();
+    if(_conf){renderConferencia();return}
+    const u=document.getElementById('fechamento-usuario')?.value||obterUsuarioAtual();
+    if(u){const sel=document.getElementById('conf-usuario');if(![...sel.options].some(o=>o.value===u))sel.add(new Option(u,u));sel.value=u}
+    if(local)document.getElementById('conf-local').value=local;
+    confLocalMudou();
+  }
+  function confLocalMudou(){
+    const l=document.getElementById('conf-local').value,w=document.getElementById('conf-assist-wrap');
+    w.style.display=l==='assistencia'?'block':'none';
+    if(l==='assistencia'){const s=document.getElementById('conf-assist');s.innerHTML='<option value="">Todas as assistências</option>'+_confNomesAssist().map(n=>`<option>${esc(n)}</option>`).join('')}
   }
   function fecharConferencia(){const m=document.getElementById('conf-modal');m.classList.remove('open');m.setAttribute('aria-hidden','true')}
   function iniciarConferencia(){
     const local=document.getElementById('conf-local').value,usuario=document.getElementById('conf-usuario').value;
+    const assist=local==='assistencia'?document.getElementById('conf-assist').value:'';
     if(!usuario){alert('Selecione quem está conferindo.');return}
-    _conf={local,usuario,iniciadaEm:new Date().toISOString(),bipados:{},foraDoLocal:{}};
+    _conf={local,assist,usuario,iniciadaEm:new Date().toISOString(),bipados:{},foraDoLocal:{},resp:{}};
     _confSalvarLocal();
     document.getElementById('conf-inicio').style.display='none';
     document.getElementById('conf-andamento').style.display='block';
     renderConferencia();
     abrirScanner('conferencia');
   }
+  function cancelarConferencia(){
+    if(!_conf||!confirm('Descartar esta conferência? O que foi bipado será perdido.'))return;
+    _conf=null;_confSalvarLocal();
+    document.getElementById('conf-andamento').style.display='none';document.getElementById('conf-inicio').style.display='block';
+    confLocalMudou();
+  }
   function conferirImei(imei){
     if(!_conf)return;
     const st=document.getElementById('scan-status');
-    const esperado=_confEsperados().find(a=>a.imei===imei);
-    const linha=a=>[a.nome,a.gb,a.cor].filter(Boolean).join(' · ');
-    if(_conf.bipados[imei]){st.textContent='Já bipado: '+imei;st.style.color='var(--muted)';return}
+    if(_conf.bipados[imei]){st.textContent='Já bipado: …'+imei.slice(-6);st.style.color='var(--muted)';return}
     _conf.bipados[imei]=new Date().toISOString();
+    const esperado=_confEsperados().find(a=>a.imei===imei);
     if(esperado){
-      st.textContent='✅ '+linha(esperado)+' (…'+imei.slice(-6)+')';st.style.color='#15803d';
+      st.textContent='✅ '+_confLinha(esperado)+' (…'+imei.slice(-6)+')';st.style.color='#15803d';
       if(document.getElementById('conf-etiqueta').checked){_confSalvarLocal();renderConferencia();fecharScanner();abrirEtiqueta(esperado);return}
     }else{
       const outro=getAparelhos().filter(a=>a.imei===imei).sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0))[0];
-      _conf.foraDoLocal[imei]=outro?{id:outro.id,onde:outro.tipo==='cliente'?'aparelho de cliente':(outro.destino?statusInfo(outro).label:BUCKET_LABEL[getBucket(outro)]),modelo:linha(outro)}:{id:null,onde:'sem cadastro',modelo:''};
-      st.textContent=outro?`⚠️ Está no sistema como "${_conf.foraDoLocal[imei].onde}"`:'➕ Sem cadastro: cadastre depois da conferência';
-      st.style.color='#b45309';
+      _conf.foraDoLocal[imei]=outro?{id:outro.id,onde:localEtiqueta(outro),modelo:_confLinha(outro),cliente:outro.tipo==='cliente'}:{id:null,onde:'SEM CADASTRO',modelo:''};
+      st.textContent=outro?`⚠️ No sistema está em "${localEtiqueta(outro)}". Resolva na lista.`:'➕ Sem cadastro: cadastre na lista depois.';
+      st.style.color='#b45309';if(navigator.vibrate)navigator.vibrate([80,60,80]);
     }
     _confSalvarLocal();renderConferencia();
   }
@@ -3685,53 +3730,123 @@
   function cadastrarDaConferencia(imei){
     fecharConferencia();
     cgImeiLido(imei);
-    if(_conf){cg.destino=_conf.local==='estoque_r1'?'estoque_r1':'';cg.destinoEscolhido=true;cg.cadastrador=_conf.usuario}
+    if(_conf){cg.destino=_confDestinoDoLocal(_conf.local);cg.destinoEscolhido=true;cg.cadastrador=_conf.usuario;if(_conf.local==='assistencia')cg.localNome=_conf.assist||''}
   }
   function editarDaConferencia(id){fecharConferencia();editarAparelho(id)}
+  // resposta para quem faltou ("onde está?") ou para quem sobrou ("trazer para cá" / "bipado por engano")
+  function confResponder(chave,valor){
+    if(!_conf)return;
+    if(valor==='assistencia'||valor==='outro_lojista'){
+      const conhecidos=valor==='assistencia'?['LEGACY','BRUNO',...cgNomesConhecidos('assistenciaNome',3)]:cgNomesConhecidos('assistenciaNome',2);
+      const dig=prompt(valor==='assistencia'?'Qual assistência?':'Qual lojista?',valor==='assistencia'?'LEGACY':'');
+      if(dig===null){renderConferencia();return}
+      const r=cgCorrigirNome(dig,[...new Set(conhecidos)]);
+      if(!r.valor){alert('Informe o nome.');renderConferencia();return}
+      _conf.resp[chave]={destino:valor,nome:r.valor,acao:valor};
+    }else if(valor==='')delete _conf.resp[chave];
+    else _conf.resp[chave]={destino:valor==='aqui'?_confDestinoDoLocal(_conf.local):valor==='loja'?'':valor,nome:valor==='aqui'&&_conf.local==='assistencia'?(_conf.assist||''):'',acao:valor};
+    _confSalvarLocal();renderConferencia();
+  }
+  function confRemoverBipado(imei){if(!_conf)return;delete _conf.bipados[imei];delete _conf.foraDoLocal[imei];delete _conf.resp['s:'+imei];_confSalvarLocal();renderConferencia()}
+  function _confPendencias(){
+    const esp=_confEsperados(),b=_conf.bipados;
+    const falta=esp.filter(a=>!b[a.imei]),fora=Object.entries(_conf.foraDoLocal);
+    const semResp=falta.filter(a=>!_conf.resp['f:'+a.imei]).length+fora.filter(([i,f])=>!f.id||!_conf.resp['s:'+i]).length;
+    return{esp,falta,fora,semResp};
+  }
   function renderConferencia(){
     if(!_conf)return;
-    const esp=_confEsperados(),b=_conf.bipados;
-    const ok=esp.filter(a=>b[a.imei]),falta=esp.filter(a=>!b[a.imei]),fora=Object.entries(_conf.foraDoLocal);
-    const nomeLocal=BUCKET_LABEL[_conf.local]||_conf.local;
+    const{esp,falta,fora,semResp}=_confPendencias(),b=_conf.bipados;
+    const ok=esp.filter(a=>b[a.imei]);
+    const nomeLocal=CONF_LOCAIS[_conf.local]+(_conf.assist?' · '+_conf.assist:'');
     document.getElementById('conf-contador').textContent=`${ok.length} de ${esp.length}`;
-    document.getElementById('conf-ultimo').innerHTML=`${esc(nomeLocal)} · ${esc(_conf.usuario)} · desde ${new Date(_conf.iniciadaEm).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
-    const item=(a,extra)=>`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:13px"><div><b>${esc([a.nome,a.gb].filter(Boolean).join(' '))}</b> ${esc(a.cor||'')}<div style="color:var(--muted);font-family:ui-monospace,Menlo,monospace">${esc(a.imei||'')}</div></div>${extra||''}</div>`;
-    const btn=(txt,acao)=>`<button type="button" class="btn ghost" style="padding:6px 10px;font-size:12px;white-space:nowrap;width:auto;flex:0 0 auto" onclick="${acao}">${txt}</button>`;
+    document.getElementById('conf-ultimo').innerHTML=`<b>${esc(nomeLocal)}</b> · ${esc(_conf.usuario)} · desde ${new Date(_conf.iniciadaEm).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+    const item=(a,extra,cli)=>`<div style="padding:9px 0;border-top:1px solid var(--line);font-size:13px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><div><b>${esc([a.nome,a.gb].filter(Boolean).join(' '))}</b> ${esc(a.cor||'')}${cli?' <span style="background:#eef2ff;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:800">CLIENTE</span>':''}<div style="color:var(--muted);font-family:ui-monospace,Menlo,monospace">${esc(a.imei||'')}</div></div></div>${extra||''}</div>`;
+    const btn=(txt,acao)=>`<button type="button" class="btn ghost" style="padding:6px 10px;font-size:12px;white-space:nowrap;width:auto;flex:0 0 auto;margin:0" onclick="${acao}">${txt}</button>`;
+    const sel=(chave,ops,atual)=>`<select style="margin-top:6px;font-size:14px;padding:8px;border:2px solid ${atual?'#16a34a':'var(--danger)'};border-radius:10px" onchange="confResponder('${chave}',this.value)"><option value="">${atual?'':'⚠️ '}Onde está? (obrigatório)</option>${ops.map(([v,l])=>`<option value="${v}" ${atual&&(atual.acao||atual.destino)===v?'selected':''}>${l}${atual&&(atual.acao||atual.destino)===v&&atual.nome?' — '+esc(atual.nome):''}</option>`).join('')}</select>`;
+    const opsFalta=Object.entries(CONF_RESP).filter(([v])=>v!==_confDestinoDoLocal(_conf.local)||_conf.local==='assistencia').map(([v,l])=>[v===''?'loja':v,l]);
     let h='';
-    h+=`<p class="fieldset-title" style="margin:12px 0 4px;color:var(--danger)">❌ Faltando bipar (${falta.length})</p>`+(falta.map(a=>item(a)).join('')||'<div style="font-size:13px;color:var(--muted)">Nada faltando 🎉</div>');
-    if(fora.length)h+=`<p class="fieldset-title" style="margin:16px 0 4px;color:#b45309">⚠️ Bipados que não deviam estar aqui (${fora.length})</p>`+fora.map(([imei,f])=>item({nome:f.modelo||'Sem cadastro',imei},`<div style="text-align:right;font-size:12px;color:#b45309">${esc(f.onde)}<br>${f.id?btn('✏️ Abrir',`editarDaConferencia('${f.id}')`):btn('➕ Cadastrar',`cadastrarDaConferencia('${imei}')`)}</div>`)).join('');
-    h+=`<p class="fieldset-title" style="margin:16px 0 4px;color:#15803d">✅ Conferidos (${ok.length})</p>`+ok.map(a=>item(a,btn('🏷️',`abrirEtiquetaPorId('${a.id}')`))).join('');
+    if(semResp)h+=`<div class="feedback error" style="display:block;margin:8px 0">Faltam <b>${semResp}</b> resposta(s) para poder finalizar.</div>`;
+    h+=`<p class="fieldset-title" style="margin:12px 0 4px;color:var(--danger)">❌ Não bipados (${falta.length})</p>`;
+    h+=falta.map(a=>item(a,sel('f:'+a.imei,opsFalta,_conf.resp['f:'+a.imei]||null),a.tipo==='cliente')).join('')||'<div style="font-size:13px;color:var(--muted)">Nada faltando 🎉</div>';
+    if(fora.length){
+      h+=`<p class="fieldset-title" style="margin:16px 0 4px;color:#b45309">⚠️ Bipados que no sistema estão em outro lugar (${fora.length})</p>`;
+      h+=fora.map(([imei,f])=>{
+        if(!f.id)return item({nome:'Sem cadastro',imei},`<div style="display:flex;gap:6px;margin-top:6px">${btn('➕ Cadastrar agora',`cadastrarDaConferencia('${imei}')`)}${btn('Bipado por engano',`confRemoverBipado('${imei}')`)}</div>`);
+        const r=_conf.resp['s:'+imei];
+        return item({nome:f.modelo,imei},`<div style="font-size:12px;color:#b45309;margin-top:2px">No sistema: <b>${esc(f.onde)}</b></div>${sel('s:'+imei,[['aqui','📍 Está aqui (corrigir para '+esc(CONF_LOCAIS[_conf.local])+')'],['engano','Bipado por engano (não é deste local)']],r)}`,f.cliente);
+      }).join('');
+    }
+    h+=`<p class="fieldset-title" style="margin:16px 0 4px;color:#15803d">✅ Conferidos (${ok.length})</p>`+ok.map(a=>item(a,`<div style="margin-top:4px">${btn('🏷️ Etiqueta',`abrirEtiquetaPorId('${a.id}')`)}</div>`,a.tipo==='cliente')).join('');
     document.getElementById('conf-listas').innerHTML=h;
+    const fin=document.getElementById('conf-finalizar');fin.disabled=!!semResp;fin.style.opacity=semResp?'.5':'1';
+    fin.textContent=semResp?`Responda ${semResp} pendência(s)`:'✓ Finalizar conferência';
   }
-  function _confTexto(){
-    const esp=_confEsperados(),b=_conf.bipados,falta=esp.filter(a=>!b[a.imei]),fora=Object.entries(_conf.foraDoLocal);
-    const l=[`📋 *Conferência — ${BUCKET_LABEL[_conf.local]||_conf.local}*`,`👤 ${_conf.usuario} · ${new Date().toLocaleString('pt-BR')}`,`✅ ${esp.length-falta.length} de ${esp.length} conferidos`,''];
-    if(falta.length){l.push(`❌ Faltando (${falta.length})`);falta.forEach(a=>l.push(`• ${[a.nome,a.gb,a.cor].filter(Boolean).join(' ')} — IMEI ${a.imei}`));l.push('')}
-    if(fora.length){l.push(`⚠️ Fora do esperado (${fora.length})`);fora.forEach(([i,f])=>l.push(`• ${f.modelo||'Sem cadastro'} — IMEI ${i} — ${f.onde}`))}
+  function _confTexto(c,esp,falta,fora){
+    const nomeLocal=CONF_LOCAIS[c.local]+(c.assist?' · '+c.assist:'');
+    const l=[`📋 *Conferência — ${nomeLocal}*`,`👤 ${c.usuario} · ${new Date().toLocaleString('pt-BR')}`,`✅ ${esp.length-falta.length} de ${esp.length} conferidos`,''];
+    const nao=falta.filter(a=>c.resp['f:'+a.imei]?.destino==='nao_encontrado');
+    if(nao.length){l.push(`🚨 *NÃO ENCONTRADOS (${nao.length})*`);nao.forEach(a=>l.push(`• ${_confLinha(a)} — IMEI ${a.imei}`));l.push('')}
+    const mov=falta.filter(a=>c.resp['f:'+a.imei]&&c.resp['f:'+a.imei].destino!=='nao_encontrado');
+    if(mov.length){l.push(`🔁 Atualizados na conferência (${mov.length})`);mov.forEach(a=>{const r=c.resp['f:'+a.imei];l.push(`• ${_confLinha(a)} — ${localEtiqueta({tipo:a.tipo,destino:r.destino,assistenciaNome:r.nome})}`)});l.push('')}
+    const trazidos=fora.filter(([i,f])=>c.resp['s:'+i]?.acao==='aqui');
+    if(trazidos.length){l.push(`📍 Estavam em outro lugar no sistema e foram corrigidos (${trazidos.length})`);trazidos.forEach(([i,f])=>l.push(`• ${f.modelo} — era ${f.onde}`));l.push('')}
     return l.join('\n');
   }
   function copiarResultadoConferencia(){
     if(!_conf)return;
-    const t=_confTexto();
-    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>{document.getElementById('conf-feedback').textContent='✓ Copiado. Pode colar no WhatsApp.'}).catch(()=>prompt('Copie o resultado:',t));
+    const{esp,falta,fora}=_confPendencias(),t=_confTexto(_conf,esp,falta,fora);
+    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>{document.getElementById('conf-feedback').textContent='✓ Copiado.'}).catch(()=>prompt('Copie o resultado:',t));
+  }
+  async function _confMover(item,destino,nome,usuario){
+    const agora=new Date().toISOString();
+    const novo={...item,destino,assistenciaNome:destino==='assistencia'||destino==='outro_lojista'?nome:'',dataSaida:(destino&&destino!=='estoque_r1')?hojeISO():'',atualizadoEm:agora,atualizadoPor:usuario};
+    const{error}=await sbClient.from('aparelhos').update(toRow(novo)).eq('id',item.id);
+    if(error)throw error;
+    await sbClient.from('aparelhos_historico').insert({aparelho_id:item.id,imei:item.imei,nome:item.nome,gb:item.gb,cor:item.cor,evento:destino||'aguardando',assistencia_nome:destino==='assistencia'?nome:null,usuario:usuario+' (conferência)',criado_em:agora});
+    const i=_apCache.findIndex(a=>a.id===item.id);if(i>-1)_apCache[i]=novo;
   }
   async function finalizarConferencia(){
     if(!_conf)return;
-    const esp=_confEsperados(),b=_conf.bipados,falta=esp.filter(a=>!b[a.imei]);
-    if(falta.length&&!confirm(`Ainda faltam ${falta.length} aparelho(s). Finalizar assim mesmo? Eles ficam registrados como faltando.`))return;
-    const fb=document.getElementById('conf-feedback');fb.textContent='Salvando…';
-    const reg={local:_conf.local,usuario:_conf.usuario,iniciada_em:_conf.iniciadaEm,finalizada_em:new Date().toISOString(),esperados:esp.length,bipados:Object.keys(b).length,
-      faltando:falta.map(a=>({imei:a.imei,nome:a.nome,gb:a.gb,cor:a.cor})),sobrando:Object.entries(_conf.foraDoLocal).map(([imei,f])=>({imei,...f}))};
+    const c=_conf,{esp,falta,fora,semResp}=_confPendencias();
+    if(semResp){alert(`Ainda faltam ${semResp} resposta(s). Toda diferença precisa de explicação.`);return}
+    const fb=document.getElementById('conf-feedback'),btnF=document.getElementById('conf-finalizar');
+    btnF.disabled=true;fb.textContent='Salvando…';
+    try{
+      for(const a of falta){const r=c.resp['f:'+a.imei];if(r.destino!=='nao_encontrado')await _confMover(a,r.destino,r.nome,c.usuario)}
+      for(const [imei,f] of fora){const r=c.resp['s:'+imei];if(r&&r.acao==='aqui'){const it=getAparelhos().find(a=>a.id===f.id);if(it)await _confMover(it,r.destino,r.nome,c.usuario)}}
+    }catch(e){console.error(e);fb.textContent='Erro ao atualizar ('+(e.message||e)+'). Verifique a internet e toque em Finalizar de novo.';btnF.disabled=false;return}
+    const texto=_confTexto(c,esp,falta,fora);
+    const reg={local:c.local+(c.assist?':'+c.assist:''),usuario:c.usuario,iniciada_em:c.iniciadaEm,finalizada_em:new Date().toISOString(),esperados:esp.length,bipados:Object.keys(c.bipados).length,
+      faltando:falta.map(a=>({imei:a.imei,nome:a.nome,gb:a.gb,cor:a.cor,resposta:c.resp['f:'+a.imei]})),
+      sobrando:fora.map(([imei,f])=>({imei,...f,resposta:c.resp['s:'+imei]||null})),explicacao:texto};
     const{data,error}=await sbClient.from('contagens').insert(reg).select('id').maybeSingle();
-    if(!error&&data){await sbClient.from('contagem_itens').insert(Object.entries(b).map(([imei,em])=>({contagem_id:data.id,imei,bipado_em:em})))}
-    if(error){console.error(error);fb.textContent='Não consegui salvar no banco ('+error.message+'). Use "Copiar resultado" para não perder.';return}
-    const texto=_confTexto();
+    if(error){console.error(error);fb.textContent='Não consegui salvar a conferência ('+error.message+'). Toque em Finalizar de novo.';btnF.disabled=false;return}
+    if(data)await sbClient.from('contagem_itens').insert(Object.entries(c.bipados).map(([imei,em])=>({contagem_id:data.id,imei,bipado_em:em})));
     _conf=null;_confSalvarLocal();
     document.getElementById('conf-andamento').style.display='none';document.getElementById('conf-inicio').style.display='block';
-    fecharConferencia();
-    mostrarApFeedback('success','✓ Conferência salva. O resultado foi copiado para colar no grupo.');
+    fecharConferencia();renderAparelhos();
     try{await navigator.clipboard.writeText(texto)}catch(e){}
+    mostrarApFeedback('success','✓ Conferência salva.');
+    if(document.getElementById('tab-fechamento').classList.contains('active'))gerarFechamentoDia();
+    else carregarConferenciasHoje();
   }
+  // ---------------------------------------------------------------- Situação das conferências de hoje (aba Fechamento do Dia)
+  async function carregarConferenciasHoje(){
+    const{inicio,fim}=inicioFimHojeISO();
+    const{data,error}=await sbClient.from('contagens').select('local,usuario,finalizada_em,esperados,bipados,faltando').gte('finalizada_em',inicio).lt('finalizada_em',fim).order('finalizada_em',{ascending:false});
+    _confHoje=error?[]:(data||[]);
+    const box=document.getElementById('fech-conferencias');if(!box)return _confHoje;
+    box.innerHTML=Object.entries(CONF_LOCAIS).map(([k,nome])=>{
+      const c=_confHoje.find(x=>(x.local||'').split(':')[0]===k);
+      const nao=c?(c.faltando||[]).filter(f=>f.resposta&&f.resposta.destino==='nao_encontrado').length:0;
+      const st=c?(nao?`🚨 ${nao} não encontrado(s)`:`✅ ${new Date(c.finalizada_em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})} · ${esc(c.usuario)}`):'⏳ Pendente hoje';
+      const cor=c?(nao?'var(--danger)':'#15803d'):'#b45309';
+      return `<button type="button" onclick="abrirConferencia('${k}')" style="flex:1 1 150px;text-align:left;padding:12px;border-radius:14px;border:2px solid ${cor};background:#fff;cursor:pointer;width:auto;margin:0"><div style="font-weight:800;font-size:15px;color:var(--ink)">${nome}</div><div style="font-size:12px;font-weight:700;color:${cor};margin-top:4px">${st}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${c?'Toque para conferir de novo':'Toque para bipar'}</div></button>`;
+    }).join('');
+    return _confHoje;
+  }
+
 
   </script>
 <!-- BIA:SCRIPT -->
