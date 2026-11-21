@@ -13,6 +13,8 @@ interface Aparelho {
 }
 interface Custo { aparelho_id: string; custo: number | null; fornecedor: string | null; origem_custo: string | null; registrado_por: string | null; atualizado_em: string | null; }
 interface Contagem { local: string; usuario: string; finalizada_em: string; esperados: number; faltando: { resposta?: { destino?: string } }[] | null; }
+interface ItemVendido { chave: string; venda_id: number; produto_id: number; dia: string; cliente: string; vendedor: string; nome: string; imei: string; valor: number; custo: number | null; fornecedor: string; aparelho_id: string | null; origem: string; }
+const INICIO_MP = "2026-11-18";
 interface Linha extends Aparelho { custo: number | null; fornecedor: string; local: string; dias: number; }
 
 interface Filtros { busca: string; local: string; fornecedor: string; modelo: string; de: string; ate: string; custo: "todos" | "com" | "sem"; mp: "todos" | "no" | "fora"; parados: string; ordem: "parados" | "recentes" | "maior" | "menor" | "modelo"; }
@@ -67,6 +69,10 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
   const [aviso, setAviso] = useState("");
   const [mpStatus, setMpStatus] = useState<Record<string, string>>({});
   const [enviandoTodos, setEnviandoTodos] = useState(false);
+  const [vendidos, setVendidos] = useState<ItemVendido[]>([]);
+  const [taxasVendas, setTaxasVendas] = useState<{ dia: string; valor: number }[]>([]);
+  const [verVendidosOk, setVerVendidosOk] = useState(false);
+  const [periodoVendas, setPeriodoVendas] = useState<"hoje" | "7" | "mes" | "tudo">("mes");
 
   async function carregar() {
     setCarregando(true); setErro("");
@@ -92,12 +98,66 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
       const lista = fo.data && Array.isArray((fo.data as { valor: unknown }).valor) ? ((fo.data as { valor: string[] }).valor) : [];
       setFornecedores(lista);
       setContagens((co.data || []) as Contagem[]);
+      await carregarVendidos(custos);
     } catch (e) {
       setErro("Não consegui carregar o estoque: " + ((e as Error).message || String(e)));
     }
     setCarregando(false);
   }
   useEffect(() => { carregar(); }, []);
+
+  // Aparelhos vendidos pelo Mercado Phone (desde 18/11) e o custo real de cada um.
+  // Observação: no MP o campo custo costuma vir igual ao preço de venda; só é confiável quando veio de upgrade (cliente).
+  async function carregarVendidos(custos: Map<string, Custo>) {
+    const { data: vs } = await supabase.from("vendas_mp").select("id,dia,cliente,vendedor,status,itens,lucro_taxa_calc,lucro_taxa_ajuste").gte("dia", INICIO_MP).order("data_venda", { ascending: false });
+    const vendas = ((vs || []) as { id: number; dia: string; cliente: string; vendedor: string; status: string; itens: Record<string, unknown>[]; lucro_taxa_calc: number; lucro_taxa_ajuste: number | null }[]).filter(v => v.status === "concluido");
+    const imeis = [...new Set(vendas.flatMap(v => v.itens.filter(i => i.aparelho && i.imei).map(i => String(i.imei))))];
+    const [{ data: aps }, { data: vic }] = await Promise.all([
+      imeis.length ? supabase.from("aparelhos").select("id,imei,criado_em").in("imei", imeis) : Promise.resolve({ data: [] as { id: string; imei: string; criado_em: number }[] }),
+      supabase.from("vendas_itens_custo").select("venda_id,produto_id,custo,fornecedor"),
+    ]);
+    const porImei = new Map<string, string>();
+    for (const a of ((aps || []) as { id: string; imei: string; criado_em: number }[]).sort((x, y) => (x.criado_em || 0) - (y.criado_em || 0))) porImei.set(a.imei, a.id);
+    const manuais = new Map(((vic || []) as { venda_id: number; produto_id: number; custo: number; fornecedor: string }[]).map(x => [`${x.venda_id}-${x.produto_id}`, x]));
+    const itens: ItemVendido[] = [];
+    const taxas: { dia: string; valor: number }[] = [];
+    for (const v of vendas) {
+      taxas.push({ dia: v.dia, valor: Number(v.lucro_taxa_ajuste ?? v.lucro_taxa_calc) || 0 });
+      for (const i of v.itens) {
+        if (!i.aparelho) continue;
+        const chave = `${v.id}-${i.produtoId}`, imei = String(i.imei || ""), apId = porImei.get(imei) || null;
+        const cSis = apId ? custos.get(apId) : undefined, cMan = manuais.get(chave);
+        const cMp = i.fornecedor_mp && Number(i.custo_mp) > 0 && Number(i.custo_mp) !== Number(i.valorUnitario) ? Number(i.custo_mp) : null;
+        let custo: number | null = null, fornecedor = "", origem = "";
+        if (cSis && cSis.custo != null) { custo = Number(cSis.custo); fornecedor = cSis.fornecedor || ""; origem = "cadastro"; }
+        else if (cMan && cMan.custo != null) { custo = Number(cMan.custo); fornecedor = cMan.fornecedor || ""; origem = "preenchido"; }
+        else if (cMp != null) { custo = cMp; fornecedor = String(i.fornecedor_mp || ""); origem = "upgrade"; }
+        itens.push({ chave, venda_id: v.id, produto_id: Number(i.produtoId), dia: v.dia, cliente: v.cliente, vendedor: v.vendedor, nome: String(i.produtoNome || ""), imei, valor: Number(i.valorTotal) || 0, custo, fornecedor, aparelho_id: apId, origem });
+      }
+    }
+    setVendidos(itens);
+    setTaxasVendas(taxas);
+  }
+  async function salvarCustoVendido(it: ItemVendido, fornPadrao: string) {
+    const e0 = edicao[it.chave] || { valor: "", fornecedor: "" };
+    const e = { valor: e0.valor, fornecedor: e0.fornecedor || fornPadrao };
+    const v = valorBR(e.valor);
+    if (!(v > 0)) { setAviso("Informe o valor pago no aparelho vendido."); return; }
+    if (v >= it.valor && !confirm(`O custo (${fmt(v)}) é maior ou igual ao valor da venda (${fmt(it.valor)}). Está certo?`)) return;
+    const forn = corrigir(e.fornecedor, fornecedores);
+    if (!forn) { setAviso("Informe o fornecedor."); return; }
+    if (!fornecedores.includes(forn) && !confirm(`"${forn}" não está na lista de fornecedores. É um fornecedor novo?`)) return;
+    setSalvando(it.chave);
+    const agora = new Date().toISOString();
+    const r1 = await supabase.from("vendas_itens_custo").upsert({ venda_id: it.venda_id, produto_id: it.produto_id, imei: it.imei, custo: v, fornecedor: forn, registrado_por: "Robert", atualizado_em: agora });
+    if (!r1.error && it.aparelho_id) await supabase.from("aparelhos_custos").upsert({ aparelho_id: it.aparelho_id, custo: v, fornecedor: forn, origem_custo: "fornecedor", registrado_por: "Robert", atualizado_em: agora });
+    setSalvando("");
+    if (r1.error) { setAviso("Erro ao salvar: " + r1.error.message); return; }
+    if (!fornecedores.includes(forn)) { const nova = [...fornecedores, forn].sort(); setFornecedores(nova); await supabase.from("app_dados").upsert({ chave: "config:fornecedores_aparelhos", valor: nova, atualizado_em: agora }); }
+    setVendidos(xs => xs.map(x => x.chave === it.chave ? { ...x, custo: v, fornecedor: forn, origem: "preenchido" } : x));
+    setEdicao(ed => { const n = { ...ed }; delete n[it.chave]; return n; });
+    setAviso(`✓ Custo salvo · lucro da venda ${fmt(it.valor - v)}`);
+  }
 
   const resumo = useMemo(() => {
     const comCusto = linhas.filter(l => l.custo != null);
@@ -219,6 +279,14 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
     f.parados && ["Parados há +" + f.parados + " dias", () => setF({ parados: "" })],
   ].filter(Boolean) as [string, () => void][];
   const totalFiltrado = visiveis.reduce((s, l) => s + (l.custo || 0), 0);
+  const hojeIso = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+  const desdeVendas = periodoVendas === "hoje" ? hojeIso : periodoVendas === "7" ? (() => { const d = new Date(Date.now() - 6 * 86400000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })() : periodoVendas === "mes" ? hojeIso.slice(0, 8) + "01" : INICIO_MP;
+  const vendPeriodo = vendidos.filter(v => v.dia >= desdeVendas);
+  const vendComCusto = vendPeriodo.filter(v => v.custo != null);
+  const fatAparelhos = vendPeriodo.reduce((t, v) => t + v.valor, 0);
+  const lucroAparelhos = vendComCusto.reduce((t, v) => t + v.valor - (v.custo || 0), 0);
+  const lucroTaxasPeriodo = taxasVendas.filter(t => t.dia >= desdeVendas).reduce((t, x) => t + x.valor, 0);
+  const vendidosSemCusto = vendidos.filter(v => v.custo == null).sort((a, b) => a.dia.localeCompare(b.dia));
   const pendentes = linhas.filter(l => l.custo == null && (!f.local || l.local === f.local)).sort((a, b) => b.dias - a.dias);
   const modelos = [...new Set(linhas.map(l => [l.nome, l.gb].filter(Boolean).join(" ")))].sort();
   const fornecedoresUsados = [...new Set(linhas.map(l => l.fornecedor).filter(Boolean))].sort();
@@ -289,6 +357,57 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
         </div>
 
         {aviso && <div style={{ ...card, padding: 12, fontSize: 14, fontWeight: 700, color: aviso.startsWith("✓") ? "#15803d" : aviso.startsWith("⚠") ? "#dc2626" : "#0d1b3e" }}>{aviso}</div>}
+
+        {/* Vendas: lucro do período */}
+        <div style={card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <p style={{ ...titulo, margin: 0 }}>📈 Lucro das vendas</p>
+            <div style={{ display: "flex", gap: 4 }}>
+              {([["hoje", "Hoje"], ["7", "7 dias"], ["mes", "Mês"], ["tudo", "Desde 18/11"]] as const).map(([k, n]) =>
+                <button key={k} onClick={() => setPeriodoVendas(k)} style={{ border: "1px solid #d0daf5", background: periodoVendas === k ? "#1a3fa8" : "#fff", color: periodoVendas === k ? "#fff" : "#0d1b3e", borderRadius: 999, padding: "4px 9px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>{n}</button>)}
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+            {[["Aparelhos vendidos", String(vendPeriodo.length)], ["Faturado em aparelhos", fmt(fatAparelhos)],
+              ["Lucro nos aparelhos", vendPeriodo.length && vendComCusto.length < vendPeriodo.length ? fmt(lucroAparelhos) + " *" : fmt(lucroAparelhos)], ["Lucro com taxas", fmt(lucroTaxasPeriodo)]].map(([k, v]) =>
+              <div key={k} style={{ background: "#f8faff", borderRadius: 12, padding: 10 }}><div style={{ fontSize: 11, fontWeight: 800, color: "#6b7fa8", textTransform: "uppercase" }}>{k}</div><div style={{ fontSize: 18, fontWeight: 900 }}>{v}</div></div>)}
+          </div>
+          <div style={{ background: "#eef2ff", borderRadius: 12, padding: 10, marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <b>Lucro total</b><b style={{ fontSize: 20, color: "#15803d" }}>{fmt(lucroAparelhos + lucroTaxasPeriodo)}</b></div>
+          {vendComCusto.length < vendPeriodo.length && <div style={{ fontSize: 12, color: "#b45309", marginTop: 6 }}>* {vendPeriodo.length - vendComCusto.length} aparelho(s) vendido(s) ainda sem custo: o lucro só fica certo depois de preencher abaixo.</div>}
+          <div style={{ fontSize: 11, color: "#6b7fa8", marginTop: 6 }}>Acessórios ainda não entram nesta conta.</div>
+        </div>
+
+        {vendidosSemCusto.length > 0 && <div style={{ ...card, borderColor: "#dc2626", borderWidth: 2 }}>
+          <p style={{ ...titulo, color: "#dc2626" }}>🧾 Aparelhos vendidos sem custo ({vendidosSemCusto.length})</p>
+          <div style={{ fontSize: 13, color: "#6b7fa8", marginBottom: 4 }}>Vendas do Mercado Phone desde 18/11. Preencha o valor pago e o fornecedor para fechar o lucro de cada dia.</div>
+          {vendidosSemCusto.map((it, idx) => {
+            const ed = edicao[it.chave] || { valor: "", fornecedor: idx > 0 ? (edicao[vendidosSemCusto[idx - 1].chave]?.fornecedor || "") : "" };
+            return <div key={it.chave} style={{ padding: "10px 0", borderTop: "1px solid #eef2ff" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <div style={{ fontSize: 14 }}><b>{it.nome}</b>
+                  <div style={{ fontSize: 12, color: "#6b7fa8" }}>{it.dia.split("-").reverse().join("/")} · {it.cliente} · {it.vendedor} · IMEI {it.imei || "—"}</div></div>
+                <div style={{ textAlign: "right", whiteSpace: "nowrap", fontSize: 13 }}>vendido<br /><b>{fmt(it.valor)}</b></div>
+              </div>
+              <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                <input style={{ ...input, flex: "1 1 110px" }} inputMode="decimal" placeholder="Valor pago" value={edicao[it.chave]?.valor ?? ""}
+                  onChange={e => setEdicao(x => ({ ...x, [it.chave]: { valor: e.target.value, fornecedor: (x[it.chave] || ed).fornecedor } }))} />
+                <input style={{ ...input, flex: "1 1 140px" }} list="caixa-fornecedores" placeholder="Fornecedor" value={edicao[it.chave]?.fornecedor ?? ed.fornecedor}
+                  onChange={e => setEdicao(x => ({ ...x, [it.chave]: { valor: (x[it.chave] || { valor: "" }).valor, fornecedor: e.target.value } }))} />
+                <button style={{ ...btn, flex: "0 0 auto" }} disabled={salvando === it.chave} onClick={() => salvarCustoVendido(it, ed.fornecedor)}>{salvando === it.chave ? "…" : "Salvar"}</button>
+              </div>
+              {edicao[it.chave]?.valor && valorBR(edicao[it.chave].valor) > 0 && <div style={{ fontSize: 12, marginTop: 4, color: it.valor - valorBR(edicao[it.chave].valor) >= 0 ? "#15803d" : "#dc2626" }}>Lucro: {fmt(it.valor - valorBR(edicao[it.chave].valor))}</div>}
+            </div>;
+          })}
+        </div>}
+
+        {vendidos.length > 0 && <div style={card}>
+          <button onClick={() => setVerVendidosOk(v => !v)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", width: "100%", textAlign: "left" }}>
+            <span style={{ ...titulo, margin: 0 }}>✅ Vendidos com custo ({vendidos.length - vendidosSemCusto.length}) {verVendidosOk ? "▲" : "▼"}</span></button>
+          {verVendidosOk && vendidos.filter(v => v.custo != null).map(it => <div key={it.chave} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "8px 0", borderTop: "1px solid #eef2ff", fontSize: 13 }}>
+            <span><b>{it.nome}</b><br /><span style={{ color: "#6b7fa8" }}>{it.dia.split("-").reverse().join("/")} · {it.fornecedor || "—"} · custo {fmt(it.custo || 0)} ({it.origem})</span></span>
+            <b style={{ whiteSpace: "nowrap", color: it.valor - (it.custo || 0) >= 0 ? "#15803d" : "#dc2626" }}>{fmt(it.valor - (it.custo || 0))}</b></div>)}
+        </div>}
 
         {/* 2. Pendências: sem custo */}
         {pendentes.length > 0 && <div style={{ ...card, borderColor: "#f5c26b", borderWidth: 2 }}>
