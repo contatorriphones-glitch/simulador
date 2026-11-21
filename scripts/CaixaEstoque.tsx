@@ -71,6 +71,7 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
   const [enviandoTodos, setEnviandoTodos] = useState(false);
   const [vendidos, setVendidos] = useState<ItemVendido[]>([]);
   const [taxasVendas, setTaxasVendas] = useState<{ dia: string; valor: number }[]>([]);
+  const [acessVendas, setAcessVendas] = useState<{ dia: string; nome: string; qtd: number; valor: number; custo: number | null }[]>([]);
   const [verVendidosOk, setVerVendidosOk] = useState(false);
   const [periodoVendas, setPeriodoVendas] = useState<"hoje" | "7" | "mes" | "tudo">("mes");
 
@@ -121,9 +122,11 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
     const manuais = new Map(((vic || []) as { venda_id: number; produto_id: number; custo: number; fornecedor: string }[]).map(x => [`${x.venda_id}-${x.produto_id}`, x]));
     const itens: ItemVendido[] = [];
     const taxas: { dia: string; valor: number }[] = [];
+    const acess: { dia: string; nome: string; qtd: number; valor: number; custo: number | null }[] = [];
     for (const v of vendas) {
       taxas.push({ dia: v.dia, valor: Number(v.lucro_taxa_ajuste ?? v.lucro_taxa_calc) || 0 });
       for (const i of v.itens) {
+        if (i.acessorio) acess.push({ dia: v.dia, nome: String(i.produtoNome || "").split(" - ")[0], qtd: Number(i.quantidade) || 1, valor: Number(i.valorTotal) || 0, custo: i.custo_total == null ? null : Number(i.custo_total) });
         if (!i.aparelho) continue;
         const chave = `${v.id}-${i.produtoId}`, imei = String(i.imei || ""), apId = porImei.get(imei) || null;
         const cSis = apId ? custos.get(apId) : undefined, cMan = manuais.get(chave);
@@ -137,6 +140,7 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
     }
     setVendidos(itens);
     setTaxasVendas(taxas);
+    setAcessVendas(acess);
   }
   async function salvarCustoVendido(it: ItemVendido, fornPadrao: string) {
     const e0 = edicao[it.chave] || { valor: "", fornecedor: "" };
@@ -285,6 +289,11 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
   const vendComCusto = vendPeriodo.filter(v => v.custo != null);
   const fatAparelhos = vendPeriodo.reduce((t, v) => t + v.valor, 0);
   const lucroAparelhos = vendComCusto.reduce((t, v) => t + v.valor - (v.custo || 0), 0);
+  const acessPeriodo = acessVendas.filter(a => a.dia >= desdeVendas);
+  const fatAcess = acessPeriodo.reduce((t, a) => t + a.valor, 0);
+  const lucroAcess = acessPeriodo.reduce((t, a) => t + a.valor - (a.custo || 0), 0);
+  const acessSemCusto = [...new Set(acessPeriodo.filter(a => a.custo == null).map(a => a.nome))];
+  const brindes = acessPeriodo.filter(a => a.valor === 0).reduce((t, a) => t + (a.custo || 0), 0);
   const lucroTaxasPeriodo = taxasVendas.filter(t => t.dia >= desdeVendas).reduce((t, x) => t + x.valor, 0);
   const vendidosSemCusto = vendidos.filter(v => v.custo == null).sort((a, b) => a.dia.localeCompare(b.dia));
   const pendentes = linhas.filter(l => l.custo == null && (!f.local || l.local === f.local)).sort((a, b) => b.dias - a.dias);
@@ -368,14 +377,16 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
-            {[["Aparelhos vendidos", String(vendPeriodo.length)], ["Faturado em aparelhos", fmt(fatAparelhos)],
-              ["Lucro nos aparelhos", vendPeriodo.length && vendComCusto.length < vendPeriodo.length ? fmt(lucroAparelhos) + " *" : fmt(lucroAparelhos)], ["Lucro com taxas", fmt(lucroTaxasPeriodo)]].map(([k, v]) =>
+            {[["Faturado (aparelhos + acessórios)", fmt(fatAparelhos + fatAcess)], ["Aparelhos vendidos", String(vendPeriodo.length)],
+              ["Lucro nos aparelhos", vendPeriodo.length && vendComCusto.length < vendPeriodo.length ? fmt(lucroAparelhos) + " *" : fmt(lucroAparelhos)], ["Lucro nos acessórios", fmt(lucroAcess)],
+              ["Lucro com taxas", fmt(lucroTaxasPeriodo)], ["Brindes (custo)", fmt(brindes)]].map(([k, v]) =>
               <div key={k} style={{ background: "#f8faff", borderRadius: 12, padding: 10 }}><div style={{ fontSize: 11, fontWeight: 800, color: "#6b7fa8", textTransform: "uppercase" }}>{k}</div><div style={{ fontSize: 18, fontWeight: 900 }}>{v}</div></div>)}
           </div>
           <div style={{ background: "#eef2ff", borderRadius: 12, padding: 10, marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <b>Lucro total</b><b style={{ fontSize: 20, color: "#15803d" }}>{fmt(lucroAparelhos + lucroTaxasPeriodo)}</b></div>
+            <b>Lucro total do período</b><b style={{ fontSize: 20, color: "#15803d" }}>{fmt(lucroAparelhos + lucroAcess + lucroTaxasPeriodo)}</b></div>
           {vendComCusto.length < vendPeriodo.length && <div style={{ fontSize: 12, color: "#b45309", marginTop: 6 }}>* {vendPeriodo.length - vendComCusto.length} aparelho(s) vendido(s) ainda sem custo: o lucro só fica certo depois de preencher abaixo.</div>}
-          <div style={{ fontSize: 11, color: "#6b7fa8", marginTop: 6 }}>Acessórios ainda não entram nesta conta.</div>
+          <div style={{ fontSize: 11, color: "#6b7fa8", marginTop: 6 }}>Lucro = aparelhos (venda − custo) + acessórios (venda − custo do Mercado Phone; brindes entram como custo) + taxas da maquininha.</div>
+          {acessSemCusto.length > 0 && <div style={{ fontSize: 12, color: "#b45309", marginTop: 4 }}>⚠️ Acessórios sem custo no Mercado Phone: {acessSemCusto.join(", ")}</div>}
         </div>
 
         {vendidosSemCusto.length > 0 && <div style={{ ...card, borderColor: "#dc2626", borderWidth: 2 }}>
