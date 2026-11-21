@@ -73,7 +73,9 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
   const [taxasVendas, setTaxasVendas] = useState<{ dia: string; valor: number }[]>([]);
   const [acessVendas, setAcessVendas] = useState<{ dia: string; nome: string; qtd: number; valor: number; custo: number | null }[]>([]);
   const [verVendidosOk, setVerVendidosOk] = useState(false);
-  const [periodoVendas, setPeriodoVendas] = useState<"hoje" | "7" | "mes" | "tudo">("mes");
+  const [periodoVendas, setPeriodoVendas] = useState<"hoje" | "7" | "mes" | "tudo" | "datas">("mes");
+  const [vendasDe, setVendasDe] = useState(INICIO_MP);
+  const [vendasAte, setVendasAte] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; });
 
   async function carregar() {
     setCarregando(true); setErro("");
@@ -160,7 +162,13 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
     if (!fornecedores.includes(forn)) { const nova = [...fornecedores, forn].sort(); setFornecedores(nova); await supabase.from("app_dados").upsert({ chave: "config:fornecedores_aparelhos", valor: nova, atualizado_em: agora }); }
     setVendidos(xs => xs.map(x => x.chave === it.chave ? { ...x, custo: v, fornecedor: forn, origem: "preenchido" } : x));
     setEdicao(ed => { const n = { ...ed }; delete n[it.chave]; return n; });
-    setAviso(`✓ Custo salvo · lucro da venda ${fmt(it.valor - v)}`);
+    const base = `✓ Custo salvo · lucro da venda ${fmt(it.valor - v)}.`;
+    setAviso(base + " Atualizando no Mercado Phone…");
+    try {
+      const { data, error } = await supabase.functions.invoke("mp-estoque", { body: { produto_id: it.produto_id, custo: v, fornecedor: forn } });
+      const r = (data || {}) as { status?: string; erro?: string };
+      setAviso(base + (error || r.status !== "ok" ? ` ⚠️ Não atualizou no Mercado Phone (${r.erro || error?.message || "erro"}).` : " ✓ Também atualizado no Mercado Phone."));
+    } catch (err) { setAviso(base + " ⚠️ Não atualizou no Mercado Phone (" + String(err) + ")."); }
   }
 
   const resumo = useMemo(() => {
@@ -284,17 +292,19 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
   ].filter(Boolean) as [string, () => void][];
   const totalFiltrado = visiveis.reduce((s, l) => s + (l.custo || 0), 0);
   const hojeIso = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
-  const desdeVendas = periodoVendas === "hoje" ? hojeIso : periodoVendas === "7" ? (() => { const d = new Date(Date.now() - 6 * 86400000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })() : periodoVendas === "mes" ? hojeIso.slice(0, 8) + "01" : INICIO_MP;
-  const vendPeriodo = vendidos.filter(v => v.dia >= desdeVendas);
+  const desdeVendas = periodoVendas === "datas" ? vendasDe : periodoVendas === "hoje" ? hojeIso : periodoVendas === "7" ? (() => { const d = new Date(Date.now() - 6 * 86400000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })() : periodoVendas === "mes" ? hojeIso.slice(0, 8) + "01" : INICIO_MP;
+  const ateVendas = periodoVendas === "datas" ? vendasAte : "9999-12-31";
+  const noPeriodo = (dia: string) => dia >= desdeVendas && dia <= ateVendas;
+  const vendPeriodo = vendidos.filter(v => noPeriodo(v.dia));
   const vendComCusto = vendPeriodo.filter(v => v.custo != null);
   const fatAparelhos = vendPeriodo.reduce((t, v) => t + v.valor, 0);
   const lucroAparelhos = vendComCusto.reduce((t, v) => t + v.valor - (v.custo || 0), 0);
-  const acessPeriodo = acessVendas.filter(a => a.dia >= desdeVendas);
+  const acessPeriodo = acessVendas.filter(a => noPeriodo(a.dia));
   const fatAcess = acessPeriodo.reduce((t, a) => t + a.valor, 0);
   const lucroAcess = acessPeriodo.reduce((t, a) => t + a.valor - (a.custo || 0), 0);
   const acessSemCusto = [...new Set(acessPeriodo.filter(a => a.custo == null).map(a => a.nome))];
   const brindes = acessPeriodo.filter(a => a.valor === 0).reduce((t, a) => t + (a.custo || 0), 0);
-  const lucroTaxasPeriodo = taxasVendas.filter(t => t.dia >= desdeVendas).reduce((t, x) => t + x.valor, 0);
+  const lucroTaxasPeriodo = taxasVendas.filter(t => noPeriodo(t.dia)).reduce((t, x) => t + x.valor, 0);
   const vendidosSemCusto = vendidos.filter(v => v.custo == null).sort((a, b) => a.dia.localeCompare(b.dia));
   const pendentes = linhas.filter(l => l.custo == null && (!f.local || l.local === f.local)).sort((a, b) => b.dias - a.dias);
   const modelos = [...new Set(linhas.map(l => [l.nome, l.gb].filter(Boolean).join(" ")))].sort();
@@ -372,10 +382,15 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <p style={{ ...titulo, margin: 0 }}>📈 Lucro das vendas</p>
             <div style={{ display: "flex", gap: 4 }}>
-              {([["hoje", "Hoje"], ["7", "7 dias"], ["mes", "Mês"], ["tudo", "Desde 18/11"]] as const).map(([k, n]) =>
+              {([["hoje", "Hoje"], ["7", "7 dias"], ["mes", "Mês"], ["tudo", "Desde 18/11"], ["datas", "📅 Datas"]] as const).map(([k, n]) =>
                 <button key={k} onClick={() => setPeriodoVendas(k)} style={{ border: "1px solid #d0daf5", background: periodoVendas === k ? "#1a3fa8" : "#fff", color: periodoVendas === k ? "#fff" : "#0d1b3e", borderRadius: 999, padding: "4px 9px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>{n}</button>)}
             </div>
           </div>
+          {periodoVendas === "datas" && <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
+            <input type="date" style={{ ...input, padding: "8px 10px" }} value={vendasDe} min={INICIO_MP} onChange={e => setVendasDe(e.target.value)} />
+            <span style={{ fontSize: 13 }}>até</span>
+            <input type="date" style={{ ...input, padding: "8px 10px" }} value={vendasAte} onChange={e => setVendasAte(e.target.value)} />
+          </div>}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
             {[["Faturado (aparelhos + acessórios)", fmt(fatAparelhos + fatAcess)], ["Aparelhos vendidos", String(vendPeriodo.length)],
               ["Lucro nos aparelhos", vendPeriodo.length && vendComCusto.length < vendPeriodo.length ? fmt(lucroAparelhos) + " *" : fmt(lucroAparelhos)], ["Lucro nos acessórios", fmt(lucroAcess)],
@@ -414,10 +429,20 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
 
         {vendidos.length > 0 && <div style={card}>
           <button onClick={() => setVerVendidosOk(v => !v)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", width: "100%", textAlign: "left" }}>
-            <span style={{ ...titulo, margin: 0 }}>✅ Vendidos com custo ({vendidos.length - vendidosSemCusto.length}) {verVendidosOk ? "▲" : "▼"}</span></button>
-          {verVendidosOk && vendidos.filter(v => v.custo != null).map(it => <div key={it.chave} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "8px 0", borderTop: "1px solid #eef2ff", fontSize: 13 }}>
-            <span><b>{it.nome}</b><br /><span style={{ color: "#6b7fa8" }}>{it.dia.split("-").reverse().join("/")} · {it.fornecedor || "—"} · custo {fmt(it.custo || 0)} ({it.origem})</span></span>
-            <b style={{ whiteSpace: "nowrap", color: it.valor - (it.custo || 0) >= 0 ? "#15803d" : "#dc2626" }}>{fmt(it.valor - (it.custo || 0))}</b></div>)}
+            <span style={{ ...titulo, margin: 0 }}>✅ Vendidos com custo no período ({vendidos.filter(v => v.custo != null && noPeriodo(v.dia)).length}) {verVendidosOk ? "▲" : "▼"}</span></button>
+          {verVendidosOk && vendidos.filter(v => v.custo != null && noPeriodo(v.dia)).map(it => <div key={it.chave} style={{ padding: "8px 0", borderTop: "1px solid #eef2ff", fontSize: 13 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+              <span><b>{it.nome}</b><br /><span style={{ color: "#6b7fa8" }}>{it.dia.split("-").reverse().join("/")} · {it.fornecedor || "—"} · custo {fmt(it.custo || 0)} ({it.origem}) · vendido {fmt(it.valor)}</span></span>
+              <span style={{ textAlign: "right", whiteSpace: "nowrap" }}><b style={{ color: it.valor - (it.custo || 0) >= 0 ? "#15803d" : "#dc2626" }}>{fmt(it.valor - (it.custo || 0))}</b><br />
+                {!edicao[it.chave] && <button style={{ ...btnGhost, padding: "3px 8px", fontSize: 12, marginTop: 4 }} onClick={() => setEdicao(x => ({ ...x, [it.chave]: { valor: String(it.custo).replace(".", ","), fornecedor: it.fornecedor } }))}>✏️ Corrigir</button>}</span>
+            </div>
+            {edicao[it.chave] && <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+              <input style={{ ...input, flex: "1 1 100px" }} inputMode="decimal" value={edicao[it.chave].valor} onChange={e => setEdicao(x => ({ ...x, [it.chave]: { ...x[it.chave], valor: e.target.value } }))} />
+              <input style={{ ...input, flex: "1 1 130px" }} list="caixa-fornecedores" value={edicao[it.chave].fornecedor} onChange={e => setEdicao(x => ({ ...x, [it.chave]: { ...x[it.chave], fornecedor: e.target.value } }))} />
+              <button style={{ ...btn, flex: "0 0 auto" }} disabled={salvando === it.chave} onClick={() => salvarCustoVendido(it, "")}>Salvar</button>
+              <button style={{ ...btnGhost, flex: "0 0 auto" }} onClick={() => setEdicao(x => { const n = { ...x }; delete n[it.chave]; return n; })}>✕</button>
+            </div>}
+          </div>)}
         </div>}
 
         {/* 2. Pendências: sem custo */}

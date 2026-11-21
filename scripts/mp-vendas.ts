@@ -1,0 +1,215 @@
+// mp-vendas: traz as vendas do Mercado Phone para o banco (vendas_mp) e calcula sozinho o lucro da taxa da maquininha.
+// Também: marca como vendido no estoque o aparelho que saiu na venda, e grava o custo do aparelho que entrou de upgrade.
+// Entrada (opcional): { desde: "aaaa-mm-dd", ate: "aaaa-mm-dd" }. Sem nada: últimos 3 dias. Roda sozinho a cada 15 min.
+import { createClient } from "jsr:@supabase/supabase-js@2";
+
+const MP = "https://platform.mercadophone.tech/api/v1";
+const KEY = Deno.env.get("MERCADOPHONE_KEY") ?? "";
+const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
+const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...CORS, "Content-Type": "application/json" } });
+const norm = (t: unknown) => String(t ?? "").toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+// Taxas padrão (as mesmas da aba Taxas); as do banco têm prioridade
+const MAQ_PADRAO: Record<string, number> = { D: 0.99, "1": 2.99, "2": 4.14, "3": 4.81, "4": 5.47, "5": 6.13, "6": 6.78, "7": 7.63, "8": 8.27, "9": 8.9, "10": 9.53, "11": 10.15, "12": 10.77, "13": 11.95, "14": 12.56, "15": 13.16, "16": 13.75, "17": 14.34, "18": 14.93 };
+const CLI_PADRAO: Record<string, number> = { D: 3, "1": 5, "2": 7.5, "3": 8.5, "4": 9.5, "5": 10, "6": 10.5, "7": 11.5, "8": 12.5, "9": 13, "10": 14.5, "11": 15.5, "12": 16, "13": 16, "14": 17, "15": 17.5, "16": 17.5, "17": 18, "18": 19.3 };
+const nomeMod = (k: string) => (k === "D" ? "débito" : k === "1" ? "crédito à vista" : `${k}x`);
+
+async function mp(path: string): Promise<any> {
+  for (let t = 0; t < 5; t++) {
+    const r = await fetch(MP + path, { headers: { "X-API-Key": KEY } });
+    if (r.status === 429) { await new Promise(ok => setTimeout(ok, 4000 * (t + 1))); continue; }
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(`Mercado Phone ${r.status} em ${path.split("?")[0]}: ${JSON.stringify(j.detail ?? j).slice(0, 200)}`);
+    return j;
+  }
+  throw new Error("Mercado Phone ocupado. Tente de novo em 1 minuto.");
+}
+
+const imeiNoTexto = (t: string) => { const m = String(t || "").match(/\b(\d{14,15})\b/); return m ? m[1] : null; };
+
+// Separa o texto anotado no pagamento em pedaços "valor + como foi passado".
+// Ex.: "R$4.100,00 em 12x E R$3.789,00 em 12x" → [{4100,"12"},{3789,"12"}]; ignora pedaços de PIX/dinheiro.
+function segmentos(det: string): { valor: number; mod: string | null }[] {
+  const re = /\d{1,3}(?:\.\d{3})+,\d{2}|\d+,\d{2}|\d+\.\d{2}(?!\d)/g;
+  const achados = [...String(det || "").matchAll(re)];
+  const out: { valor: number; mod: string | null; ignorar: boolean }[] = [];
+  achados.forEach((m, i) => {
+    const fim = i + 1 < achados.length ? achados[i + 1].index! : det.length;
+    const depois = norm(det.slice(m.index! + m[0].length, fim));
+    const s = m[0], valor = s.includes(",") ? parseFloat(s.replace(/\./g, "").replace(",", ".")) : parseFloat(s);
+    const x = depois.match(/(\d{1,2})\s*X/);
+    const mod = x ? x[1] : /DEBITO/.test(depois) ? "D" : /A ?VISTA/.test(depois) ? "1" : null;
+    out.push({ valor, mod, ignorar: /PIX|DINHEIRO|ESPECIE|UPGRADE|SINAL|ENTRADA/.test(depois) && !x });
+  });
+  const validos = out.filter(o => !o.ignorar);
+  // pedaço sem parcelas herda as do próximo pedaço que tiver ("R$1.965 E R$3.435 EM 10x")
+  for (let i = validos.length - 1; i >= 0; i--) if (!validos[i].mod && i + 1 < validos.length) validos[i].mod = validos[i + 1].mod;
+  return validos.map(({ valor, mod }) => ({ valor, mod }));
+}
+
+function calcularTaxa(venda: any, maq: Record<string, number>, cli: Record<string, number>) {
+  let base = 0, bruto = 0, taxa = 0, estimada = false;
+  const alertas: string[] = [];
+  for (const p of venda.pagamentos || []) {
+    const forma = norm(p.formaPagamentoDescricao);
+    if (!/CART|CREDITO|DEBITO/.test(forma)) continue;
+    const valor = Number(p.valor) || 0;
+    if (!(valor > 0)) continue;
+    const det = String(p.detalhes || "");
+    const modPadrao = /DEBIT/.test(forma) ? "D" : String(Math.min(18, Math.max(1, parseInt(p.parcela) || 1)));
+    let segs = segmentos(det).map(s => ({ valor: s.valor, mod: s.mod || modPadrao }));
+    const soma = segs.reduce((t, s) => t + s.valor, 0);
+    const comParcelas = segs.length > 0 && segmentos(det).every(s => s.mod);
+    const semTaxaAnotado = segs.reduce((t, s) => t + s.valor / (1 + (cli[s.mod] ?? 0) / 100), 0);
+    if (comParcelas && (soma < valor || soma > valor * 1.3) && soma > 0) {
+      // O pagamento foi lançado com outro valor, mas o que passou na máquina está anotado certinho:
+      // o lucro vem do que passou na máquina (valor sem a taxa do cliente = base real do cartão)
+      alertas.push(`No Mercado Phone o cartão está como R$ ${valor.toFixed(2)}, mas o que passou na máquina (R$ ${soma.toFixed(2)}, ${segs.map(s => nomeMod(s.mod)).join(" + ")}) corresponde a R$ ${semTaxaAnotado.toFixed(2)}. Calculei pelo que passou na máquina.`);
+      base += r2(semTaxaAnotado);
+      for (const s of segs) { bruto += s.valor; taxa += s.valor * (maq[s.mod] ?? 0) / 100; }
+      continue;
+    }
+    // aceita o que foi anotado só se for coerente: entre o valor do pagamento e o valor + 30%
+    if (!segs.length || soma < valor || soma > valor * 1.3) {
+      if (segs.length) alertas.push(`O valor anotado (${det.slice(0, 50)}) não bate com o pagamento de R$ ${valor.toFixed(2)}; usei a tabela.`);
+      else alertas.push(`Não anotaram o valor passado na máquina; considerei ${nomeMod(modPadrao)} pela tabela.`);
+      segs = [{ valor: r2(valor * (1 + (cli[modPadrao] ?? 0) / 100)), mod: modPadrao }];
+      estimada = true;
+    } else {
+      const semTaxa = semTaxaAnotado;
+      if (Math.abs(semTaxa - valor) > Math.max(5, valor * 0.015)) alertas.push(`Passado na máquina R$ ${soma.toFixed(2)} (${segs.map(s => nomeMod(s.mod)).join(" + ")}); pela tabela corresponde a R$ ${semTaxa.toFixed(2)} e o pagamento é R$ ${valor.toFixed(2)}. Confira as parcelas.`);
+    }
+    base += valor;
+    for (const s of segs) { bruto += s.valor; taxa += s.valor * (maq[s.mod] ?? 0) / 100; }
+  }
+  const lucro = base > 0 ? r2(bruto - taxa - base) : 0;
+  if (base > 0 && lucro < 0) alertas.push("Lucro da taxa negativo: confira as parcelas e os valores.");
+  return { base_cartao: r2(base), bruto_cartao: r2(bruto), taxa_maquininha: r2(taxa), lucro_taxa_calc: lucro, taxa_estimada: estimada, taxa_alertas: alertas };
+}
+
+// Produtos do estoque do MP (celulares e acessórios, com estoque e já vendidos), carregados uma vez por execução
+let produtos: Map<number, any> | null = null;
+let acessoriosPorNome: Map<string, any> | null = null;
+async function carregarProdutos() {
+  produtos = new Map(); acessoriosPorNome = new Map();
+  for (const tipo of ["134765", "134764"]) {
+    for (const extra of ["", "&zero_or_negative_stock=true"]) {
+      for (let page = 1; page < 30; page++) {
+        const j = await mp(`/inventory?tipoProdutoId=${tipo}&limit=300&page=${page}${extra}`);
+        for (const x of j.items || []) {
+          produtos.set(Number(x.id), x);
+          const nome = norm(x.aparelhoDescricao || x.nome || "");
+          if (tipo === "134764" && nome && Number(x.valorCusto) && !acessoriosPorNome.has(nome)) acessoriosPorNome.set(nome, x);
+        }
+        if (!j.items?.length || page * 300 >= (j.total ?? 0)) break;
+      }
+    }
+  }
+}
+async function produto(id: number) {
+  if (!produtos) await carregarProdutos();
+  return produtos!.get(Number(id)) ?? null;
+}
+// Tabela antiga de custos de acessórios (do sistema anterior), usada só quando o MP não tem um custo confiável
+let tabelaAntiga: { nome: string; custo: number }[] = [];
+// Custo do acessório: o do cadastro "oficial" de mesmo nome no MP (o que tem estoque); senão o do produto vendido.
+// Custo igual ou maior que o preço = cadastrado errado (repetiram o preço) → tenta a tabela antiga.
+async function custoAcessorio(id: number, nome: string, preco: number): Promise<{ custo: number | null; suspeito: boolean }> {
+  const p = await produto(id);
+  const base = norm(nome).split(" - ")[0].trim();
+  const q = acessoriosPorNome!.get(base);
+  let c = q ? Math.abs(Number(q.valorCusto)) : p && Number(p.valorCusto) ? Math.abs(Number(p.valorCusto)) : null;
+  if (c != null && preco > 0 && c >= preco) {
+    const t = tabelaAntiga.find(x => norm(x.nome) === base) || tabelaAntiga.find(x => norm(x.nome).includes(base) || base.includes(norm(x.nome)));
+    if (t) return { custo: t.custo, suspeito: false };
+    return { custo: c, suspeito: true };
+  }
+  return { custo: c, suspeito: false };
+}
+const ehAparelho = (nome: string) => /IPHONE|^\s*1\d\s*PRO|^\s*\d{2}\s/.test(norm(nome));
+
+async function sincronizar(desde: string, ate: string) {
+  produtos = null; acessoriosPorNome = null;
+  const { data: tab } = await sb.from("app_dados").select("valor").eq("chave", "arquivo:tabela_custos.json").maybeSingle();
+  tabelaAntiga = Array.isArray(tab?.valor) ? (tab!.valor as any[]).map(x => ({ nome: String(x.nome || ""), custo: Number(String(x.custo).replace(",", ".")) })).filter(x => x.custo > 0) : [];
+  const { data: cfg } = await sb.from("config_taxas").select("id,taxas").in("id", [1, 2]);
+  const cli = { ...CLI_PADRAO, ...((cfg || []).find((x: any) => x.id === 1)?.taxas || {}) };
+  const maq = { ...MAQ_PADRAO, ...((cfg || []).find((x: any) => x.id === 2)?.taxas || {}) };
+
+  const vendas: any[] = [];
+  for (let page = 1; page < 30; page++) {
+    const j = await mp(`/sales?include_payments=true&limit=300&page=${page}&dataVendaInicial=${desde}&dataVendaFinal=${ate}`);
+    vendas.push(...(j.items || []));
+    if (!j.items?.length || vendas.length >= (j.total ?? 0)) break;
+  }
+
+  const resumo = { vendas: vendas.length, vendidos_baixados: 0, upgrades_com_custo: 0, erros: [] as string[] };
+  for (const v of vendas) {
+    try {
+      // IMEI de cada aparelho vendido (o item da venda só traz o id do produto no estoque do MP)
+      const itens = [];
+      for (const it of v.itens || []) {
+        const x: any = { ...it };
+        if (ehAparelho(it.produtoNome) && it.produtoId) {
+          const p = await produto(it.produtoId);
+          if (p) { x.imei = p.imei || null; x.custo_mp = p.valorCusto != null ? Math.abs(Number(p.valorCusto)) : null; x.fornecedor_mp = p.fornecedorNome || p.clienteNome || null; x.aparelho = true; }
+        } else if (it.produtoId) {
+          // acessório (película, case, fonte, brinde…): custo cadastrado no Mercado Phone × quantidade
+          const r = await custoAcessorio(it.produtoId, it.produtoNome, Number(it.valorUnitario) || 0);
+          x.acessorio = true; x.custo_unit = r.custo; x.custo_suspeito = r.suspeito; x.custo_total = r.custo != null ? r2(r.custo * (Number(it.quantidade) || 1)) : null;
+        }
+        itens.push(x);
+      }
+      const t = calcularTaxa(v, maq, cli);
+      const { error } = await sb.from("vendas_mp").upsert({
+        id: v.id, data_venda: v.dataVenda, dia: String(v.dataVenda).slice(0, 10), status: v.status, total: v.totalVenda,
+        cliente: v.clienteNome, vendedor: v.vendedorNome, tipo_venda: v.tipoVendaDescricao, observacao: v.observacao,
+        itens, pagamentos: v.pagamentos, ...t, sincronizado_em: new Date().toISOString(),
+      });
+      if (error) throw error;
+      if (v.status !== "concluido") continue;
+
+      // Aparelho vendido ainda aparece no estoque das vendedoras → dá baixa como vendido
+      for (const x of itens.filter((i: any) => i.imei)) {
+        const { data: ap } = await sb.from("aparelhos").select("*").eq("imei", x.imei).order("criado_em", { ascending: false }).limit(1).maybeSingle();
+        if (ap && ap.tipo !== "cliente" && (!ap.destino || ["estoque_r1", "assistencia"].includes(ap.destino))) {
+          const agora = new Date().toISOString();
+          await sb.from("aparelhos").update({ destino: "vendido", data_saida: String(v.dataVenda).slice(0, 10), atualizado_em: agora, atualizado_por: "Mercado Phone" }).eq("id", ap.id);
+          await sb.from("aparelhos_historico").insert({ aparelho_id: ap.id, imei: ap.imei, nome: ap.nome, gb: ap.gb, cor: ap.cor, evento: "vendido", usuario: `Mercado Phone (venda ${v.id} · ${v.vendedorNome || ""})`, criado_em: agora });
+          resumo.vendidos_baixados++;
+        }
+      }
+      // Aparelho recebido de upgrade: o valor pago na troca é o custo dele
+      for (const p of (v.pagamentos || []).filter((p: any) => /UPGRADE|APARELHO/.test(norm(p.formaPagamentoDescricao)))) {
+        const imei = imeiNoTexto(p.detalhes);
+        if (!imei || !(Number(p.valor) > 0)) continue;
+        const { data: ap } = await sb.from("aparelhos").select("id").eq("imei", imei).order("criado_em", { ascending: false }).limit(1).maybeSingle();
+        if (!ap) continue;
+        const { data: c } = await sb.from("aparelhos_custos").select("aparelho_id").eq("aparelho_id", ap.id).maybeSingle();
+        if (c) continue;
+        await sb.from("aparelhos_custos").insert({ aparelho_id: ap.id, custo: Number(p.valor), origem_custo: "upgrade", fornecedor: v.clienteNome, registrado_por: `Mercado Phone (venda ${v.id})`, atualizado_em: new Date().toISOString() });
+        resumo.upgrades_com_custo++;
+      }
+    } catch (e) {
+      resumo.erros.push(`venda ${v.id}: ${String((e as Error).message || e)}`);
+    }
+  }
+  return resumo;
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  if (!KEY) return json({ erro: "Chave do Mercado Phone não configurada" }, 500);
+  try {
+    const b = await req.json().catch(() => ({}));
+    const hoje = new Date(Date.now() - 3 * 3600 * 1000); // horário de Brasília
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const desde = /^\d{4}-\d{2}-\d{2}$/.test(b.desde || "") ? b.desde : fmt(new Date(hoje.getTime() - 3 * 86400000));
+    const ate = /^\d{4}-\d{2}-\d{2}$/.test(b.ate || "") ? b.ate : fmt(hoje);
+    return json({ desde, ate, ...(await sincronizar(desde, ate)) });
+  } catch (e) {
+    return json({ erro: String((e as Error).message || e) }, 500);
+  }
+});
