@@ -145,7 +145,7 @@ async function sincronizar(desde: string, ate: string) {
     if (!j.items?.length || vendas.length >= (j.total ?? 0)) break;
   }
 
-  const resumo = { vendas: vendas.length, vendidos_baixados: 0, upgrades_com_custo: 0, erros: [] as string[] };
+  const resumo = { vendas: vendas.length, vendidos_baixados: 0, upgrades_com_custo: 0, vendas_canceladas_devolvidas: 0, erros: [] as string[] };
   for (const v of vendas) {
     try {
       // IMEI de cada aparelho vendido (o item da venda só traz o id do produto no estoque do MP)
@@ -169,7 +169,20 @@ async function sincronizar(desde: string, ate: string) {
         itens, pagamentos: v.pagamentos, ...t, sincronizado_em: new Date().toISOString(),
       });
       if (error) throw error;
-      if (v.status !== "concluido") continue;
+      if (v.status !== "concluido") {
+        // venda cancelada/estornada: aparelho que demos baixa por esta venda volta para o estoque
+        const { data: hs } = await sb.from("aparelhos_historico").select("aparelho_id").eq("evento", "vendido").like("usuario", `Mercado Phone (venda ${v.id} %`);
+        for (const h of hs || []) {
+          const { data: ap } = await sb.from("aparelhos").select("*").eq("id", h.aparelho_id).maybeSingle();
+          if (ap && ap.destino === "vendido") {
+            const agora = new Date().toISOString();
+            await sb.from("aparelhos").update({ destino: null, data_saida: null, atualizado_em: agora, atualizado_por: "Mercado Phone" }).eq("id", ap.id);
+            await sb.from("aparelhos_historico").insert({ aparelho_id: ap.id, imei: ap.imei, nome: ap.nome, gb: ap.gb, cor: ap.cor, evento: "aguardando", usuario: `Mercado Phone (venda ${v.id} cancelada)`, criado_em: agora });
+            resumo.vendas_canceladas_devolvidas++;
+          }
+        }
+        continue;
+      }
 
       // Aparelho vendido ainda aparece no estoque das vendedoras → dá baixa como vendido
       for (const x of itens.filter((i: any) => i.imei)) {
@@ -199,6 +212,88 @@ async function sincronizar(desde: string, ate: string) {
   return resumo;
 }
 
+// ── Estoque do Mercado Phone → app das vendedoras ─────────────────────────────
+const titulo = (t: string) => String(t || "").toLowerCase().replace(/\s+/g, " ").trim().replace(/(^|[\s-])(\p{L})/gu, (_m, a, b) => a + b.toUpperCase());
+function nomeApp(desc: string) {
+  let n = norm(desc).replace(/^IPHONE\s*/, "").trim();
+  return "iPhone " + titulo(n).replace(/\bXr\b/, "XR").replace(/\bSe\b/, "SE");
+}
+const CONCLUIDO = ["vendido", "garantia", "troca", "outro_lojista"];
+// custo do MP só vale se for de verdade: de upgrade (cliente) sempre vale; de fornecedor não pode ser o preço de venda repetido
+const custoReal = (p: any) => {
+  const c = Math.abs(Number(p.valorCusto) || 0);
+  if (!(c > 0)) return null;
+  if (Number(p.flagTipoFornecedor) === 2) return c;
+  return c !== Math.abs(Number(p.valorVenda) || 0) ? c : null;
+};
+const fornecedorDe = (p: any) => String(p.fornecedorNome || p.clienteNome || "").trim().toUpperCase();
+const novoId = () => Date.now() + "-" + Math.random().toString(36).slice(2, 7);
+
+async function sincronizarEstoque() {
+  if (!produtos) await carregarProdutos();
+  const r = { criados_no_app: 0, nova_passagem: 0, custos_vindos_do_mp: 0, custos_atualizados: 0, fornecedores_novos: 0, conflitos: [] as string[] };
+  const celulares = [...produtos!.values()].filter(p => String(p.tipoProdutoId) === "134765" && Number(p.quantidade) > 0 && !p.excluido && String(p.imei || "").replace(/\D/g, "").length >= 14);
+  const imeis = celulares.map(p => String(p.imei).replace(/\D/g, ""));
+  const { data: aps } = await sb.from("aparelhos").select("*").in("imei", imeis);
+  const ultimo = new Map<string, any>();
+  for (const a of (aps || []).sort((x: any, y: any) => (x.criado_em || 0) - (y.criado_em || 0))) ultimo.set(a.imei, a);
+  const ids = (aps || []).map((a: any) => a.id);
+  const { data: cs } = ids.length ? await sb.from("aparelhos_custos").select("*").in("aparelho_id", ids) : { data: [] };
+  const custos = new Map((cs || []).map((c: any) => [c.aparelho_id, c]));
+  const agora = new Date().toISOString();
+
+  for (const p of celulares) {
+    const imei = String(p.imei).replace(/\D/g, "");
+    const a = ultimo.get(imei);
+    const cReal = custoReal(p), forn = fornecedorDe(p), upgrade = Number(p.flagTipoFornecedor) === 2;
+    let alvo = a;
+    if (a && CONCLUIDO.includes(a.destino || "") && String(p.dataEntrada || "") <= String(a.data_saida || a.data_entrada || "")) {
+      r.conflitos.push(`${p.aparelhoDescricao} IMEI ${imei}: no app saiu como "${a.destino}" em ${a.data_saida || "?"}, mas está em estoque no Mercado Phone (entrada ${p.dataEntrada || "?"})`);
+      continue;
+    }
+    if (!a || CONCLUIDO.includes(a.destino || "")) {
+      // não existe no app (cadastrado direto no MP) ou já tinha saído e voltou → nova passagem
+      const novo = {
+        id: novoId(), nome: nomeApp(p.aparelhoDescricao || ""), gb: p.gbDescricao || null, cor: p.corDescricao ? titulo(p.corDescricao) : null, imei,
+        origem: upgrade ? "UPGRADE" : "FORNECEDOR", cadastrador: "Mercado Phone", data_entrada: p.dataEntrada || agora.slice(0, 10),
+        destino: Number(p.produtoDisponibilidadeId) === 2 ? "assistencia" : null, assistencia_nome: null, data_saida: null,
+        obs: upgrade && p.clienteNome ? `Upgrade de ${p.clienteNome}` : null, criado_em: Date.now(), tipo: "loja", atualizado_em: agora, atualizado_por: "Mercado Phone",
+        bateria: p.saudeBateria != null ? String(p.saudeBateria) : null, aviso_peca: null, garantia_apple: false,
+      };
+      const { error } = await sb.from("aparelhos").insert(novo);
+      if (error) continue;
+      await sb.from("aparelhos_historico").insert({ aparelho_id: novo.id, imei, nome: novo.nome, gb: novo.gb, cor: novo.cor, evento: "entrada", usuario: "Mercado Phone (cadastrado lá)", criado_em: agora });
+      await sb.from("aparelhos_mp").upsert({ aparelho_id: novo.id, mp_id: p.id, status: cReal ? "ok" : "sem_custo", acao: "veio do Mercado Phone", erro: null, enviado_em: agora });
+      if (a) r.nova_passagem++; else r.criados_no_app++;
+      alvo = novo;
+    } else {
+      await sb.from("aparelhos_mp").upsert({ aparelho_id: a.id, mp_id: p.id, status: cReal ? "ok" : "sem_custo", acao: "ligado ao Mercado Phone", erro: null, enviado_em: agora });
+    }
+    // custo e fornecedor: o que foi mudado por último vale (app ou Mercado Phone)
+    if (cReal && forn) {
+      const c: any = custos.get(alvo.id);
+      const mudouNoMp = p.dataModificacao ? new Date(String(p.dataModificacao).replace(" ", "T") + "-03:00").toISOString() : agora;
+      if (!c) {
+        await sb.from("aparelhos_custos").insert({ aparelho_id: alvo.id, custo: cReal, fornecedor: forn, origem_custo: upgrade ? "upgrade" : "fornecedor", registrado_por: "Mercado Phone", atualizado_em: mudouNoMp });
+        r.custos_vindos_do_mp++;
+      } else if ((Number(c.custo) !== cReal || norm(c.fornecedor) !== norm(forn)) && mudouNoMp > String(c.atualizado_em || "")) {
+        await sb.from("aparelhos_custos").update({ custo: cReal, fornecedor: forn, registrado_por: "Mercado Phone", atualizado_em: mudouNoMp }).eq("aparelho_id", alvo.id);
+        r.custos_atualizados++;
+      }
+    }
+  }
+  // fornecedores criados no MP entram na lista do app
+  const sup = await mp("/suppliers?limit=300");
+  const { data: cfg } = await sb.from("app_dados").select("valor").eq("chave", "config:fornecedores_aparelhos").maybeSingle();
+  const lista: string[] = Array.isArray(cfg?.valor) ? cfg!.valor as string[] : [];
+  const novos = (sup.items || []).map((x: any) => String(x.nome || "").trim().toUpperCase()).filter((n: string) => n && !lista.some(l => norm(l) === norm(n)));
+  if (novos.length) {
+    await sb.from("app_dados").upsert({ chave: "config:fornecedores_aparelhos", valor: [...lista, ...new Set(novos)].sort(), atualizado_em: agora });
+    r.fornecedores_novos = novos.length;
+  }
+  return r;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (!KEY) return json({ erro: "Chave do Mercado Phone não configurada" }, 500);
@@ -208,7 +303,10 @@ Deno.serve(async (req: Request) => {
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
     const desde = /^\d{4}-\d{2}-\d{2}$/.test(b.desde || "") ? b.desde : fmt(new Date(hoje.getTime() - 3 * 86400000));
     const ate = /^\d{4}-\d{2}-\d{2}$/.test(b.ate || "") ? b.ate : fmt(hoje);
-    return json({ desde, ate, ...(await sincronizar(desde, ate)) });
+    const vendasRes = await sincronizar(desde, ate);
+    let estoque: unknown = null;
+    try { estoque = await sincronizarEstoque(); } catch (e) { estoque = { erro: String((e as Error).message || e) }; }
+    return json({ desde, ate, ...vendasRes, estoque });
   } catch (e) {
     return json({ erro: String((e as Error).message || e) }, 500);
   }
