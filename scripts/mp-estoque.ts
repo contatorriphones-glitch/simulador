@@ -158,7 +158,7 @@ async function sincronizar(id: string, estadoPedido?: string) {
     if (SIMULAR) { const cr = [...criaria]; criaria.length = 0; return { aparelho_id: id, simulacao: true, criaria: cr, acao: existente ? "atualizaria " + existente.id : temCusto ? "criaria" : "aguardaria custo", preco: temCusto && !existente ? await precoVenda(a, estado, Number(c.custo)) : null, corpo }; }
     if (existente) {
       corpo.id = existente.id;
-      if (!(Number(existente.quantidade) > 0)) corpo.quantidade = 1; // voltou para a loja
+      corpo.quantidade = Number(existente.quantidade) > 0 ? 1 : 0; // sempre explícito (o MP altera a quantidade se ela faltar); vendido continua 0
       await mp("/inventory", { method: "POST", body: JSON.stringify(corpo) });
       await registrar(id, { mp_id: existente.id, status: temCusto ? "ok" : "sem_custo", acao: "atualizado", erro: null, estado });
       return { aparelho_id: id, status: temCusto ? "ok" : "sem_custo", acao: "atualizado", mp_id: existente.id };
@@ -172,7 +172,7 @@ async function sincronizar(id: string, estadoPedido?: string) {
       return { aparelho_id: id, status: "erro", erro: "custo suspeito" };
     }
     corpo.quantidade = 1;
-    const pv =await precoVenda(a, estado, Number(c.custo));
+    const pv = await precoVenda(a, estado, Number(c.custo));
     corpo.valorVenda = pv.valor;
     if (pv.provisorio) corpo.observacao = "PREÇO DE VENDA PROVISÓRIO, CONFERIR · " + corpo.observacao;
     const r = await mp("/inventory", { method: "POST", body: JSON.stringify(corpo) });
@@ -187,7 +187,11 @@ async function sincronizar(id: string, estadoPedido?: string) {
 
 // Custo de um aparelho JÁ VENDIDO: corrige o custo e o fornecedor no produto do Mercado Phone (id do item da venda)
 async function custoVendido(produtoId: number, custo: number, fornecedor: string, upgrade: boolean) {
-  const corpo: Record<string, unknown> = { id: produtoId, valorCusto: custo };
+  // O Mercado Phone muda a quantidade se ela não vier na edição: manda sempre. Aparelho de venda concluída = 0 (peça única);
+  // se a venda foi cancelada e ele voltou ao estoque, mantém 1.
+  const { data: vs } = await sb.from("vendas_mp").select("status,itens").contains("itens", [{ produtoId }]).order("data_venda", { ascending: false }).limit(1);
+  const quantidade = vs?.[0] && vs[0].status !== "concluido" ? 1 : 0;
+  const corpo: Record<string, unknown> = { id: produtoId, valorCusto: custo, quantidade };
   if (fornecedor) {
     if (upgrade) { corpo.flagTipoFornecedor = 2; corpo.clienteId = await idCliente(fornecedor); }
     else { corpo.flagTipoFornecedor = 1; corpo.fornecedorId = await idFornecedor(fornecedor); }

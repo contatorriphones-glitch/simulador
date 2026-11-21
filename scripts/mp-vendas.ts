@@ -294,6 +294,26 @@ async function sincronizarEstoque() {
   return r;
 }
 
+// Custos de aparelhos vendidos preenchidos no Caixa: se o Mercado Phone ainda está com outro custo/fornecedor,
+// reenvia (pela função mp-estoque). Garante a atualização mesmo se o envio feito pelo navegador falhou.
+async function enviarCustosPendentes() {
+  const { data } = await sb.from("vendas_itens_custo").select("venda_id,produto_id,custo,fornecedor").order("atualizado_em", { ascending: false }).limit(300);
+  const enviados: unknown[] = [];
+  for (const r of data || []) {
+    if (enviados.length >= 15) break;
+    const p = await produto(Number(r.produto_id));
+    if (!p) continue;
+    const igual = Math.abs(Math.abs(Number(p.valorCusto)) - Number(r.custo)) < 0.01 && (!r.fornecedor || norm(p.fornecedorNome || p.clienteNome).trim() === norm(r.fornecedor).trim());
+    if (igual) continue;
+    const resp = await fetch(Deno.env.get("SUPABASE_URL") + "/functions/v1/mp-estoque", {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") },
+      body: JSON.stringify({ produto_id: Number(r.produto_id), custo: Number(r.custo), fornecedor: r.fornecedor || "" }),
+    }).then(x => x.json()).catch(e => ({ status: "erro", erro: String(e) }));
+    enviados.push({ produto_id: r.produto_id, de: p.valorCusto, para: r.custo, ...resp });
+  }
+  return enviados;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (!KEY) return json({ erro: "Chave do Mercado Phone não configurada" }, 500);
@@ -306,7 +326,9 @@ Deno.serve(async (req: Request) => {
     const vendasRes = await sincronizar(desde, ate);
     let estoque: unknown = null;
     try { estoque = await sincronizarEstoque(); } catch (e) { estoque = { erro: String((e as Error).message || e) }; }
-    return json({ desde, ate, ...vendasRes, estoque });
+    let custosEnviados: unknown = null;
+    try { custosEnviados = await enviarCustosPendentes(); } catch (e) { custosEnviados = { erro: String((e as Error).message || e) }; }
+    return json({ desde, ate, ...vendasRes, estoque, custosEnviados });
   } catch (e) {
     return json({ erro: String((e as Error).message || e) }, 500);
   }
