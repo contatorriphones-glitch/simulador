@@ -3433,7 +3433,7 @@
     const c={};getAparelhos().forEach(a=>{const v=cgNorm(a[campo]);if(v)c[v]=(c[v]||0)+1});
     return Object.entries(c).filter(([k,n])=>n>=minimo).sort((a,b)=>b[1]-a[1]).map(([k])=>k);
   }
-  function cgDinheiro(t){const s=String(t||'').replace(/[^\d,.]/g,'');if(!s)return NaN;return s.includes(',')?parseFloat(s.replace(/\./g,'').replace(',','.')):(/^\d+\.\d{1,2}$/.test(s)?parseFloat(s):parseFloat(s.replace(/\./g,'')))}
+  function cgDinheiro(t){const s=String(t||'').replace(/[^\d,.]/g,'');if(!s)return NaN;if(/^\d{1,3}(,\d{3})+$/.test(s))return parseFloat(s.replace(/,/g,''));return s.includes(',')?parseFloat(s.replace(/\./g,'').replace(',','.')):(/^\d+\.\d{1,2}$/.test(s)?parseFloat(s):parseFloat(s.replace(/\./g,'')))}
   const cgBRL=v=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 
   let cg=null,cgFornecedores=[];
@@ -3619,7 +3619,8 @@
         if(c.origem==='FORNECEDOR'||c.origem==='UPGRADE'){
           const v=cgDinheiro(c.valor);
           if(!(v>0))return erro('Informe o valor pago.');
-          if((v<150||v>15000)&&!confirm(`Valor de ${cgBRL(v)}? Confirme se está certo.`))return false;
+          if(v<100)return erro(`Valor de ${cgBRL(v)} está errado. Digite o valor completo, ex.: 3.449 ou 3449.`);
+          if((v<300||v>15000)&&!confirm(`Valor de ${cgBRL(v)}? Confirme se está certo.`))return false;
           c.valor=String(v);
         }else c.valor='';
       }

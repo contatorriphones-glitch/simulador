@@ -95,6 +95,26 @@ async function registrar(aparelho_id: string, dados: Record<string, unknown>) {
   await sb.from("aparelhos_mp").upsert({ aparelho_id, enviado_em: new Date().toISOString(), ...dados });
 }
 
+// Preço de venda para cadastro novo no Mercado Phone (campo obrigatório lá):
+// usa a tabela de preços do simulador (bia_tabelas → catalogo: seminovos/lacrados).
+let catalogo: any = null;
+async function precoVenda(a: any, estado: string, custo: number): Promise<{ valor: number; provisorio: boolean }> {
+  catalogo ??= (await sb.from("bia_tabelas").select("valor").eq("chave", "catalogo").maybeSingle()).data?.valor || {};
+  const lista: any[] = (estado === "lacrado" ? catalogo.lacrados : catalogo.seminovos) || [];
+  const n = String(a.gb || "").replace(/\D/g, ""), tb = /tb/i.test(String(a.gb || ""));
+  const gbs = tb ? [Number(n) * 1024, Number(n) * 1000, Number(n)] : [Number(n)];
+  const item = lista.find(x => norm(x.modelo) === norm(a.nome) && gbs.includes(Number(x.gb)));
+  let valor = 0;
+  if (item?.preco) valor = Number(item.preco);
+  else if (item?.cores) {
+    const cor = Object.entries(item.cores).find(([k]) => norm(k) === norm(a.cor));
+    valor = Number(cor ? cor[1] : Math.max(...Object.values(item.cores).map(Number)));
+  }
+  if (valor > custo) return { valor, provisorio: false };
+  // sem preço na tabela (ou preço abaixo do custo): provisório de custo + 15%, terminado em 9
+  return { valor: Math.ceil((custo * 1.15) / 50) * 50 - 1, provisorio: true };
+}
+
 async function sincronizar(id: string, estadoPedido?: string) {
   const { data: a } = await sb.from("aparelhos").select("*").eq("id", id).maybeSingle();
   if (!a) return { aparelho_id: id, status: "erro", erro: "Aparelho não encontrado" };
@@ -135,7 +155,7 @@ async function sincronizar(id: string, estadoPedido?: string) {
       else { corpo.flagTipoFornecedor = 1; corpo.fornecedorId = await idFornecedor(c.fornecedor); }
     }
 
-    if (SIMULAR) { const cr = [...criaria]; criaria.length = 0; return { aparelho_id: id, simulacao: true, criaria: cr, acao: existente ? "atualizaria " + existente.id : temCusto ? "criaria" : "aguardaria custo", corpo }; }
+    if (SIMULAR) { const cr = [...criaria]; criaria.length = 0; return { aparelho_id: id, simulacao: true, criaria: cr, acao: existente ? "atualizaria " + existente.id : temCusto ? "criaria" : "aguardaria custo", preco: temCusto && !existente ? await precoVenda(a, estado, Number(c.custo)) : null, corpo }; }
     if (existente) {
       corpo.id = existente.id;
       if (!(Number(existente.quantidade) > 0)) corpo.quantidade = 1; // voltou para a loja
@@ -147,9 +167,16 @@ async function sincronizar(id: string, estadoPedido?: string) {
       await registrar(id, { status: "sem_custo", acao: "aguardando custo e fornecedor", erro: null, estado });
       return { aparelho_id: id, status: "sem_custo" };
     }
+    if (Number(c.custo) < 100) {
+      await registrar(id, { status: "erro", acao: null, erro: `Custo suspeito (R$ ${c.custo}): provável erro de digitação. Corrija o custo no Caixa.`, estado });
+      return { aparelho_id: id, status: "erro", erro: "custo suspeito" };
+    }
     corpo.quantidade = 1;
+    const pv =await precoVenda(a, estado, Number(c.custo));
+    corpo.valorVenda = pv.valor;
+    if (pv.provisorio) corpo.observacao = "PREÇO DE VENDA PROVISÓRIO, CONFERIR · " + corpo.observacao;
     const r = await mp("/inventory", { method: "POST", body: JSON.stringify(corpo) });
-    await registrar(id, { mp_id: r.id, status: "ok", acao: "criado", erro: null, estado });
+    await registrar(id, { mp_id: r.id, status: "ok", acao: pv.provisorio ? "criado (preço provisório " + pv.valor + ")" : "criado", erro: null, estado });
     return { aparelho_id: id, status: "ok", acao: "criado", mp_id: r.id };
   } catch (e) {
     const erro = String((e as Error).message || e);
