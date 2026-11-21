@@ -15,6 +15,8 @@ interface Custo { aparelho_id: string; custo: number | null; fornecedor: string 
 interface Contagem { local: string; usuario: string; finalizada_em: string; esperados: number; faltando: { resposta?: { destino?: string } }[] | null; }
 interface Linha extends Aparelho { custo: number | null; fornecedor: string; local: string; dias: number; }
 
+interface Filtros { busca: string; local: string; fornecedor: string; modelo: string; de: string; ate: string; custo: "todos" | "com" | "sem"; mp: "todos" | "no" | "fora"; parados: string; ordem: "parados" | "recentes" | "maior" | "menor" | "modelo"; }
+const FILTROS_INICIAIS: Filtros = { busca: "", local: "", fornecedor: "", modelo: "", de: "", ate: "", custo: "todos", mp: "todos", parados: "", ordem: "parados" };
 const LOCAIS: Record<string, string> = { loja: "📦 Loja", estoque_r1: "🏬 R1", assistencia: "🔧 Assistência" };
 
 function fmt(n: number) { return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
@@ -55,8 +57,11 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
   const [contagens, setContagens] = useState<Contagem[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
-  const [busca, setBusca] = useState("");
-  const [filtroLocal, setFiltroLocal] = useState("");
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_INICIAIS);
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
+  const [verAnalises, setVerAnalises] = useState(false);
+  const [verTodasPendencias, setVerTodasPendencias] = useState(false);
+  const [limiteLista, setLimiteLista] = useState(50);
   const [edicao, setEdicao] = useState<Record<string, { valor: string; fornecedor: string }>>({});
   const [salvando, setSalvando] = useState("");
   const [aviso, setAviso] = useState("");
@@ -121,11 +126,28 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
   }, [linhas]);
 
   const visiveis = useMemo(() => {
-    const b = norm(busca);
-    return linhas.filter(l => (!filtroLocal || l.local === filtroLocal) &&
-      (!b || norm([l.nome, l.gb, l.cor, l.imei, l.fornecedor].join(" ")).includes(b)))
-      .sort((a, b) => (a.custo == null ? 0 : 1) - (b.custo == null ? 0 : 1) || b.dias - a.dias);
-  }, [linhas, busca, filtroLocal]);
+    const f = filtros, b = norm(f.busca), soDig = f.busca.replace(/\D/g, "");
+    const r = linhas.filter(l => {
+      if (f.local && l.local !== f.local) return false;
+      if (f.fornecedor && l.fornecedor !== f.fornecedor) return false;
+      if (f.modelo && [l.nome, l.gb].filter(Boolean).join(" ") !== f.modelo) return false;
+      if (f.custo === "com" && l.custo == null) return false;
+      if (f.custo === "sem" && l.custo != null) return false;
+      if (f.mp === "no" && mpStatus[l.id] !== "ok") return false;
+      if (f.mp === "fora" && mpStatus[l.id] === "ok") return false;
+      if (f.parados && l.dias <= Number(f.parados)) return false;
+      if (f.de && (!l.data_entrada || l.data_entrada < f.de)) return false;
+      if (f.ate && (!l.data_entrada || l.data_entrada > f.ate)) return false;
+      if (b && !(soDig.length >= 4 && String(l.imei || "").includes(soDig)) && !norm([l.nome, l.gb, l.cor, l.imei, l.fornecedor].join(" ")).includes(b)) return false;
+      return true;
+    });
+    const ord: Record<Filtros["ordem"], (a: Linha, b: Linha) => number> = {
+      parados: (a, b) => b.dias - a.dias, recentes: (a, b) => a.dias - b.dias,
+      maior: (a, b) => (b.custo ?? -1) - (a.custo ?? -1), menor: (a, b) => (a.custo ?? 1e9) - (b.custo ?? 1e9),
+      modelo: (a, b) => String(a.nome).localeCompare(String(b.nome)) || String(a.gb).localeCompare(String(b.gb)),
+    };
+    return r.sort(ord[f.ordem]);
+  }, [linhas, filtros, mpStatus]);
 
   async function salvarCusto(l: Linha) {
     const e = edicao[l.id] || { valor: l.custo != null ? String(l.custo) : "", fornecedor: l.fornecedor };
@@ -178,90 +200,149 @@ export default function CaixaEstoque({ onBack }: { onBack?: () => void }) {
 
   const statusContagem = (k: string) => {
     const c = contagens.find(x => (x.local || "").split(":")[0] === k || (k === "estoque_r1" && x.local === "r1"));
-    if (!c) return { txt: "⏳ Não conferido hoje", cor: "#b45309" };
+    if (!c) return { txt: "⏳ Não conferido", cor: "#b45309" };
     const nao = (c.faltando || []).filter(f => f.resposta && f.resposta.destino === "nao_encontrado").length;
     const hora = new Date(c.finalizada_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    return nao ? { txt: `🚨 ${nao} não encontrado(s) · ${hora}`, cor: "#dc2626" } : { txt: `✅ Conferido ${hora} · ${c.usuario}`, cor: "#15803d" };
+    return nao ? { txt: `🚨 ${nao} sumido(s)`, cor: "#dc2626" } : { txt: `✅ ${hora} · ${c.usuario}`, cor: "#15803d" };
   };
 
+  const f = filtros;
+  const setF = (p: Partial<Filtros>) => setFiltros(x => ({ ...x, ...p }));
+  const filtrosAtivos = [
+    f.local && ["Local: " + LOCAIS[f.local], () => setF({ local: "" })],
+    f.fornecedor && ["Fornecedor: " + f.fornecedor, () => setF({ fornecedor: "" })],
+    f.modelo && ["Modelo: " + f.modelo, () => setF({ modelo: "" })],
+    f.de && ["Desde " + f.de.split("-").reverse().join("/"), () => setF({ de: "" })],
+    f.ate && ["Até " + f.ate.split("-").reverse().join("/"), () => setF({ ate: "" })],
+    f.custo !== "todos" && [f.custo === "com" ? "Com custo" : "Sem custo", () => setF({ custo: "todos" })],
+    f.mp !== "todos" && [f.mp === "no" ? "No Mercado Phone" : "Fora do Mercado Phone", () => setF({ mp: "todos" })],
+    f.parados && ["Parados há +" + f.parados + " dias", () => setF({ parados: "" })],
+  ].filter(Boolean) as [string, () => void][];
+  const totalFiltrado = visiveis.reduce((s, l) => s + (l.custo || 0), 0);
+  const pendentes = linhas.filter(l => l.custo == null && (!f.local || l.local === f.local)).sort((a, b) => b.dias - a.dias);
+  const modelos = [...new Set(linhas.map(l => [l.nome, l.gb].filter(Boolean).join(" ")))].sort();
+  const fornecedoresUsados = [...new Set(linhas.map(l => l.fornecedor).filter(Boolean))].sort();
+  const sel: CSSProperties = { ...input, padding: "8px 10px" };
+  const rotulo: CSSProperties = { fontSize: 11, fontWeight: 800, color: "#6b7fa8", textTransform: "uppercase", margin: "8px 0 4px" };
+
+  // Linha de um aparelho; com edição de custo quando está sem custo (ou ao tocar no valor)
+  const linhaAparelho = (l: Linha, sempreEditar: boolean) => {
+    const ed = edicao[l.id], abrir = sempreEditar || !!ed;
+    return <div key={l.id} style={{ padding: "10px 0", borderTop: "1px solid #eef2ff" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ fontSize: 14 }}><b>{[l.nome, l.gb].filter(Boolean).join(" ")}</b> {l.cor}
+          <div style={{ fontSize: 12, color: "#6b7fa8", fontFamily: "ui-monospace,Menlo,monospace" }}>{l.imei} · {LOCAIS[l.local]}{l.local === "assistencia" && l.assistencia_nome ? " " + l.assistencia_nome : ""} · entrou {l.data_entrada ? l.data_entrada.split("-").reverse().join("/") : "?"} ({l.dias}d)</div>
+          <div style={{ fontSize: 11, fontWeight: 800, marginTop: 2, color: mpStatus[l.id] === "ok" ? "#15803d" : mpStatus[l.id] === "erro" ? "#dc2626" : "#b45309" }}>{mpStatus[l.id] === "ok" ? "✓ No Mercado Phone" : mpStatus[l.id] === "erro" ? "⚠️ Erro ao enviar ao Mercado Phone" : "⏳ Ainda não está no Mercado Phone"}</div></div>
+        {l.custo != null && !ed && <div style={{ textAlign: "right", cursor: "pointer", whiteSpace: "nowrap" }} onClick={() => setEdicao(x => ({ ...x, [l.id]: { valor: String(l.custo).replace(".", ","), fornecedor: l.fornecedor } }))}>
+          <b>{fmt(l.custo)}</b><div style={{ fontSize: 12, color: "#6b7fa8" }}>{l.fornecedor || "—"} ✏️</div></div>}
+        {l.custo == null && !abrir && <span style={{ fontSize: 12, fontWeight: 800, color: "#b45309", whiteSpace: "nowrap", cursor: "pointer" }} onClick={() => setEdicao(x => ({ ...x, [l.id]: { valor: "", fornecedor: "" } }))}>⚠️ sem custo ✏️</span>}
+      </div>
+      {abrir && <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+        <input style={{ ...input, flex: "1 1 110px" }} inputMode="decimal" placeholder="Valor pago" value={ed ? ed.valor : ""}
+          onChange={e => setEdicao(x => ({ ...x, [l.id]: { valor: e.target.value, fornecedor: (x[l.id] || { fornecedor: l.fornecedor }).fornecedor } }))} />
+        <input style={{ ...input, flex: "1 1 140px" }} list="caixa-fornecedores" placeholder="Fornecedor" value={ed ? ed.fornecedor : l.fornecedor}
+          onChange={e => setEdicao(x => ({ ...x, [l.id]: { valor: (x[l.id] || { valor: "" }).valor, fornecedor: e.target.value } }))} />
+        <button style={{ ...btn, flex: "0 0 auto" }} disabled={salvando === l.id} onClick={() => salvarCusto(l)}>{salvando === l.id ? "…" : "Salvar"}</button>
+        {ed && l.custo != null && <button style={{ ...btnGhost, flex: "0 0 auto" }} onClick={() => setEdicao(x => { const n = { ...x }; delete n[l.id]; return n; })}>✕</button>}
+      </div>}
+    </div>;
+  };
+  const linhaResumo = (nome: string, v: { qtd: number; valor: number; sem?: number }, onClick: () => void) =>
+    <div key={nome} onClick={onClick} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid #eef2ff", fontSize: 14, cursor: "pointer" }}>
+      <span><b>{nome}</b> <span style={{ color: "#6b7fa8" }}>· {v.qtd} un.{v.sem ? ` (${v.sem} sem custo)` : ""}</span></span><b>{fmt(v.valor)} ›</b></div>;
+
   return (
-    <div style={{ maxWidth: 760, margin: "0 auto", padding: "16px 14px 80px", fontFamily: "system-ui,-apple-system,Arial", color: "#0d1b3e" }}>
+    <div style={{ maxWidth: 760, margin: "0 auto", padding: "16px 14px 100px", fontFamily: "system-ui,-apple-system,Arial", color: "#0d1b3e" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 8 }}>
-        <div style={{ fontSize: 22, fontWeight: 900 }}>💰 Caixa · Capital em estoque</div>
+        <div style={{ fontSize: 22, fontWeight: 900 }}>🏦 Caixa · Capital em estoque</div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button style={btnGhost} onClick={carregar}>🔄</button>
+          <button style={btnGhost} onClick={carregar} title="Atualizar">🔄</button>
           {onBack && <button style={btnGhost} onClick={onBack}>← Voltar</button>}
         </div>
       </div>
       {erro && <div style={{ ...card, borderColor: "#dc2626", color: "#dc2626" }}>{erro}</div>}
+      <datalist id="caixa-fornecedores">{fornecedores.map(x => <option key={x} value={x} />)}</datalist>
       {carregando ? <div style={card}>Carregando…</div> : <>
+
+        {/* 1. Painel: quanto tenho */}
         <div style={{ ...card, background: "linear-gradient(135deg,#0d1b3e,#1a3fa8)", color: "#fff", border: "none" }}>
           <div style={{ fontSize: 13, opacity: .8, fontWeight: 700 }}>CAPITAL EM APARELHOS (pelo custo)</div>
           <div style={{ fontSize: 34, fontWeight: 900, margin: "4px 0" }}>{fmt(resumo.total)}</div>
-          <div style={{ fontSize: 14, opacity: .9 }}>{resumo.qtd} aparelhos em estoque · custo médio {fmt(resumo.medio)} · {resumo.diasMedio} dias parados em média</div>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 13, opacity: .95 }}>
+            <span><b>{resumo.qtd}</b> aparelhos</span><span>médio <b>{fmt(resumo.medio)}</b></span><span><b>{resumo.diasMedio}</b> dias parados em média</span>
+          </div>
           {resumo.sem > 0 && <div style={{ marginTop: 10, background: "rgba(255,255,255,.15)", borderRadius: 10, padding: "8px 10px", fontSize: 14, fontWeight: 700 }}>
-            ⚠️ {resumo.sem} aparelho(s) sem custo não entram no total. Preencha na lista abaixo.</div>}
+            ⚠️ {resumo.sem} aparelho(s) sem custo não entram no total ({resumo.qtd ? Math.round(resumo.comCusto / resumo.qtd * 100) : 0}% preenchido)</div>}
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
           {Object.entries(LOCAIS).map(([k, nome]) => {
             const p = resumo.porLocal[k] || { qtd: 0, valor: 0, sem: 0 }, st = statusContagem(k);
-            return <button key={k} onClick={() => setFiltroLocal(filtroLocal === k ? "" : k)}
-              style={{ ...card, flex: "1 1 200px", marginBottom: 0, textAlign: "left", cursor: "pointer", borderWidth: 2, borderColor: filtroLocal === k ? "#1a3fa8" : "#d0daf5" }}>
-              <div style={{ fontWeight: 900, fontSize: 16 }}>{nome}</div>
-              <div style={{ fontSize: 22, fontWeight: 900, margin: "4px 0" }}>{fmt(p.valor)}</div>
-              <div style={{ fontSize: 13, color: "#6b7fa8" }}>{p.qtd} aparelhos{p.sem ? ` · ${p.sem} sem custo` : ""}</div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: st.cor, marginTop: 6 }}>{st.txt}</div>
+            return <button key={k} onClick={() => setF({ local: f.local === k ? "" : k })}
+              style={{ ...card, flex: "1 1 100px", minWidth: 0, padding: 10, marginBottom: 0, textAlign: "left", cursor: "pointer", borderWidth: 2, borderColor: f.local === k ? "#1a3fa8" : "#d0daf5", background: f.local === k ? "#eef2ff" : "#fff" }}>
+              <div style={{ fontWeight: 900, fontSize: 14 }}>{nome}</div>
+              <div style={{ fontSize: 16, fontWeight: 900, margin: "4px 0", whiteSpace: "nowrap" }}>{fmt(p.valor)}</div>
+              <div style={{ fontSize: 12, color: "#6b7fa8" }}>{p.qtd} un.{p.sem ? ` · ${p.sem} s/ custo` : ""}</div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: st.cor, marginTop: 4 }}>{st.txt}</div>
             </button>;
           })}
         </div>
 
+        {aviso && <div style={{ ...card, padding: 12, fontSize: 14, fontWeight: 700, color: aviso.startsWith("✓") ? "#15803d" : aviso.startsWith("⚠") ? "#dc2626" : "#0d1b3e" }}>{aviso}</div>}
+
+        {/* 2. Pendências: sem custo */}
+        {pendentes.length > 0 && <div style={{ ...card, borderColor: "#f5c26b", borderWidth: 2 }}>
+          <p style={{ ...titulo, color: "#b45309" }}>⚠️ Precisam de custo e fornecedor ({pendentes.length}){f.local ? " · " + LOCAIS[f.local] : ""}</p>
+          <div style={{ fontSize: 13, color: "#6b7fa8", marginBottom: 4 }}>Ao salvar, o aparelho já vai para o Mercado Phone. Os mais antigos aparecem primeiro.</div>
+          {(verTodasPendencias ? pendentes : pendentes.slice(0, 8)).map(l => linhaAparelho(l, true))}
+          {pendentes.length > 8 && <button style={{ ...btnGhost, width: "100%", marginTop: 8 }} onClick={() => setVerTodasPendencias(v => !v)}>{verTodasPendencias ? "Mostrar menos" : `Ver todos os ${pendentes.length}`}</button>}
+        </div>}
+
+        {/* 3. Estoque com filtros */}
         <div style={card}>
-          <p style={titulo}>Por fornecedor</p>
-          {resumo.porFornecedor.length === 0 ? <div style={{ color: "#6b7fa8", fontSize: 14 }}>Nenhum custo cadastrado ainda.</div> :
-            resumo.porFornecedor.map(([f, v]) => <div key={f} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderTop: "1px solid #eef2ff", fontSize: 14 }}>
-              <span><b>{f}</b> <span style={{ color: "#6b7fa8" }}>· {v.qtd} un.</span></span><b>{fmt(v.valor)}</b></div>)}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+            <p style={{ ...titulo, margin: 0 }}>Estoque ({visiveis.length}) · {fmt(totalFiltrado)}</p>
+            <button style={{ ...btnGhost, padding: "8px 12px" }} onClick={() => setMostrarFiltros(v => !v)}>⚙️ Filtros{filtrosAtivos.length ? ` (${filtrosAtivos.length})` : ""}</button>
+          </div>
+          <input style={{ ...input, margin: "10px 0 6px" }} placeholder="🔎 Buscar por IMEI, modelo ou cor" value={f.busca} onChange={e => setF({ busca: e.target.value })} />
+          {mostrarFiltros && <div style={{ background: "#f8faff", border: "1px solid #eef2ff", borderRadius: 12, padding: 10, margin: "6px 0" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 8 }}>
+              <div><div style={rotulo}>Local</div><select style={sel} value={f.local} onChange={e => setF({ local: e.target.value })}><option value="">Todos</option>{Object.entries(LOCAIS).map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></div>
+              <div><div style={rotulo}>Fornecedor</div><select style={sel} value={f.fornecedor} onChange={e => setF({ fornecedor: e.target.value })}><option value="">Todos</option>{fornecedoresUsados.map(x => <option key={x}>{x}</option>)}</select></div>
+              <div><div style={rotulo}>Modelo</div><select style={sel} value={f.modelo} onChange={e => setF({ modelo: e.target.value })}><option value="">Todos</option>{modelos.map(x => <option key={x}>{x}</option>)}</select></div>
+              <div><div style={rotulo}>Custo</div><select style={sel} value={f.custo} onChange={e => setF({ custo: e.target.value as Filtros["custo"] })}><option value="todos">Todos</option><option value="com">Com custo</option><option value="sem">Sem custo</option></select></div>
+              <div><div style={rotulo}>Mercado Phone</div><select style={sel} value={f.mp} onChange={e => setF({ mp: e.target.value as Filtros["mp"] })}><option value="todos">Todos</option><option value="no">Já está lá</option><option value="fora">Ainda não está</option></select></div>
+              <div><div style={rotulo}>Parados há mais de</div><select style={sel} value={f.parados} onChange={e => setF({ parados: e.target.value })}><option value="">Qualquer tempo</option><option value="15">15 dias</option><option value="30">30 dias</option><option value="60">60 dias</option><option value="90">90 dias</option></select></div>
+              <div><div style={rotulo}>Entrada desde</div><input type="date" style={sel} value={f.de} onChange={e => setF({ de: e.target.value })} /></div>
+              <div><div style={rotulo}>Entrada até</div><input type="date" style={sel} value={f.ate} onChange={e => setF({ ate: e.target.value })} /></div>
+              <div><div style={rotulo}>Ordenar por</div><select style={sel} value={f.ordem} onChange={e => setF({ ordem: e.target.value as Filtros["ordem"] })}><option value="parados">Mais tempo parado</option><option value="recentes">Entrada mais recente</option><option value="maior">Maior custo</option><option value="menor">Menor custo</option><option value="modelo">Modelo</option></select></div>
+            </div>
+          </div>}
+          {filtrosAtivos.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "6px 0" }}>
+            {filtrosAtivos.map(([txt, limpar]) => <button key={txt} onClick={limpar} style={{ border: "1px solid #1a3fa8", background: "#eef2ff", color: "#1a3fa8", borderRadius: 999, padding: "5px 10px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>{txt} ✕</button>)}
+            <button onClick={() => setFiltros(FILTROS_INICIAIS)} style={{ border: "none", background: "none", color: "#dc2626", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>Limpar tudo</button>
+          </div>}
+          <button style={{ ...btnGhost, width: "100%", margin: "6px 0" }} disabled={enviandoTodos} onClick={enviarTodosMP}>{enviandoTodos ? "Enviando…" : "📤 Enviar ao Mercado Phone os que já têm custo"}</button>
+          {visiveis.length === 0 && <div style={{ color: "#6b7fa8", fontSize: 14, padding: "10px 0" }}>Nenhum aparelho com esses filtros.</div>}
+          {visiveis.slice(0, limiteLista).map(l => linhaAparelho(l, false))}
+          {visiveis.length > limiteLista && <button style={{ ...btnGhost, width: "100%", marginTop: 8 }} onClick={() => setLimiteLista(n => n + 50)}>Mostrar mais ({visiveis.length - limiteLista})</button>}
         </div>
 
+        {/* 4. Análises (recolhidas) */}
         <div style={card}>
-          <p style={titulo}>Por modelo</p>
-          {resumo.porModelo.map(([m, v]) => <div key={m} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderTop: "1px solid #eef2ff", fontSize: 14 }}>
-            <span><b>{m}</b> <span style={{ color: "#6b7fa8" }}>· {v.qtd} un.{v.sem ? ` (${v.sem} sem custo)` : ""}</span></span><b>{fmt(v.valor)}</b></div>)}
-        </div>
-
-        <div style={card}>
-          <p style={titulo}>Parados há mais tempo</p>
-          {resumo.parados.map(l => <div key={l.id} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderTop: "1px solid #eef2ff", fontSize: 14 }}>
-            <span>{[l.nome, l.gb, l.cor].filter(Boolean).join(" · ")} <span style={{ color: "#6b7fa8" }}>· {LOCAIS[l.local]}</span></span>
-            <b style={{ color: l.dias > 30 ? "#dc2626" : "#0d1b3e", whiteSpace: "nowrap" }}>{l.dias} dias</b></div>)}
-        </div>
-
-        <div style={card}>
-          <p style={titulo}>Aparelhos {filtroLocal ? "· " + LOCAIS[filtroLocal] : ""} ({visiveis.length})</p>
-          <button style={{ ...btn, width: "100%", marginBottom: 10 }} disabled={enviandoTodos} onClick={enviarTodosMP}>{enviandoTodos ? "Enviando…" : "📤 Enviar ao Mercado Phone os que já têm custo"}</button>
-          <input style={{ ...input, marginBottom: 10 }} placeholder="Buscar modelo, cor, IMEI ou fornecedor" value={busca} onChange={e => setBusca(e.target.value)} />
-          {aviso && <div style={{ fontSize: 14, fontWeight: 700, color: aviso.startsWith("✓") ? "#15803d" : "#dc2626", marginBottom: 8 }}>{aviso}</div>}
-          <datalist id="caixa-fornecedores">{fornecedores.map(f => <option key={f} value={f} />)}</datalist>
-          {visiveis.map(l => {
-            const ed = edicao[l.id], abrir = l.custo == null || !!ed;
-            return <div key={l.id} style={{ padding: "10px 0", borderTop: "1px solid #eef2ff" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                <div style={{ fontSize: 14 }}><b>{[l.nome, l.gb].filter(Boolean).join(" ")}</b> {l.cor}
-                  <div style={{ fontSize: 12, color: "#6b7fa8", fontFamily: "ui-monospace,Menlo,monospace" }}>{l.imei} · {LOCAIS[l.local]}{l.local === "assistencia" && l.assistencia_nome ? " " + l.assistencia_nome : ""} · {l.dias}d</div>
-                  <div style={{ fontSize: 11, fontWeight: 800, marginTop: 2, color: mpStatus[l.id] === "ok" ? "#15803d" : mpStatus[l.id] === "erro" ? "#dc2626" : "#b45309" }}>{mpStatus[l.id] === "ok" ? "✓ No Mercado Phone" : mpStatus[l.id] === "erro" ? "⚠️ Erro ao enviar ao Mercado Phone" : "⏳ Ainda não está no Mercado Phone"}</div></div>
-                {l.custo != null && !ed && <div style={{ textAlign: "right", cursor: "pointer" }} onClick={() => setEdicao(x => ({ ...x, [l.id]: { valor: String(l.custo).replace(".", ","), fornecedor: l.fornecedor } }))}>
-                  <b>{fmt(l.custo)}</b><div style={{ fontSize: 12, color: "#6b7fa8" }}>{l.fornecedor || "—"} ✏️</div></div>}
-                {l.custo == null && !ed && <span style={{ fontSize: 12, fontWeight: 800, color: "#b45309", whiteSpace: "nowrap" }}>⚠️ sem custo</span>}
-              </div>
-              {abrir && <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                <input style={{ ...input, flex: "1 1 110px" }} inputMode="decimal" placeholder="Valor pago" value={ed ? ed.valor : ""}
-                  onChange={e => setEdicao(x => ({ ...x, [l.id]: { valor: e.target.value, fornecedor: (x[l.id] || { fornecedor: l.fornecedor }).fornecedor } }))} />
-                <input style={{ ...input, flex: "1 1 140px" }} list="caixa-fornecedores" placeholder="Fornecedor" value={ed ? ed.fornecedor : l.fornecedor}
-                  onChange={e => setEdicao(x => ({ ...x, [l.id]: { valor: (x[l.id] || { valor: "" }).valor, fornecedor: e.target.value } }))} />
-                <button style={{ ...btn, flex: "0 0 auto" }} disabled={salvando === l.id} onClick={() => salvarCusto(l)}>{salvando === l.id ? "…" : "Salvar"}</button>
-              </div>}
-            </div>;
-          })}
+          <button onClick={() => setVerAnalises(v => !v)} style={{ ...btnGhost, width: "100%", textAlign: "left", border: "none", padding: 0, background: "none" }}>
+            <span style={{ ...titulo, margin: 0 }}>📊 Análises {verAnalises ? "▲" : "▼"}</span></button>
+          {verAnalises && <>
+            <div style={rotulo}>Por fornecedor (toque para filtrar)</div>
+            {resumo.porFornecedor.length === 0 ? <div style={{ color: "#6b7fa8", fontSize: 14 }}>Nenhum custo cadastrado ainda.</div> :
+              resumo.porFornecedor.map(([n, v]) => linhaResumo(n, v, () => { setF({ fornecedor: n === "SEM FORNECEDOR" ? "" : n }); window.scrollTo({ top: 0, behavior: "smooth" }); }))}
+            <div style={rotulo}>Por modelo (toque para filtrar)</div>
+            {resumo.porModelo.map(([n, v]) => linhaResumo(n, v, () => setF({ modelo: n })))}
+            <div style={rotulo}>Parados há mais tempo</div>
+            {resumo.parados.map(l => <div key={l.id} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderTop: "1px solid #eef2ff", fontSize: 14 }}>
+              <span>{[l.nome, l.gb, l.cor].filter(Boolean).join(" · ")} <span style={{ color: "#6b7fa8" }}>· {LOCAIS[l.local]}</span></span>
+              <b style={{ color: l.dias > 30 ? "#dc2626" : "#0d1b3e", whiteSpace: "nowrap" }}>{l.dias} dias</b></div>)}
+          </>}
         </div>
       </>}
     </div>
