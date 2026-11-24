@@ -184,6 +184,19 @@ async function sincronizar(desde: string, ate: string) {
         continue;
       }
 
+      // Venda alterada no Mercado Phone (trocaram o aparelho): o que saiu da venda volta para o estoque no app
+      const imeisVenda = new Set(itens.filter((i: any) => i.imei).map((i: any) => String(i.imei)));
+      const { data: baixas } = await sb.from("aparelhos_historico").select("aparelho_id,imei").eq("evento", "vendido").like("usuario", `Mercado Phone (venda ${v.id} %`);
+      for (const h of baixas || []) {
+        if (!h.imei || imeisVenda.has(String(h.imei))) continue;
+        const { data: ap } = await sb.from("aparelhos").select("*").eq("id", h.aparelho_id).maybeSingle();
+        if (ap && ap.destino === "vendido" && ap.data_saida === String(v.dataVenda).slice(0, 10)) {
+          const agora = new Date().toISOString();
+          await sb.from("aparelhos").update({ destino: null, data_saida: null, atualizado_em: agora, atualizado_por: "Mercado Phone" }).eq("id", ap.id);
+          await sb.from("aparelhos_historico").insert({ aparelho_id: ap.id, imei: ap.imei, nome: ap.nome, gb: ap.gb, cor: ap.cor, evento: "aguardando", usuario: `Mercado Phone (venda ${v.id} alterada: aparelho trocado)`, criado_em: agora });
+          resumo.vendas_canceladas_devolvidas++;
+        }
+      }
       // Aparelho vendido ainda aparece no estoque das vendedoras → dá baixa como vendido
       for (const x of itens.filter((i: any) => i.imei)) {
         const { data: ap } = await sb.from("aparelhos").select("*").eq("imei", x.imei).order("criado_em", { ascending: false }).limit(1).maybeSingle();
@@ -303,6 +316,9 @@ async function enviarCustosPendentes() {
     if (enviados.length >= 15) break;
     const p = await produto(Number(r.produto_id));
     if (!p) continue;
+    // só reenvia se o aparelho ainda faz parte daquela venda (venda pode ter sido alterada)
+    const { data: aindaNaVenda } = await sb.from("vendas_mp").select("id").eq("id", r.venda_id).eq("status", "concluido").contains("itens", [{ produtoId: Number(r.produto_id) }]).limit(1);
+    if (!aindaNaVenda?.length) continue;
     const igual = Math.abs(Math.abs(Number(p.valorCusto)) - Number(r.custo)) < 0.01 && (!r.fornecedor || norm(p.fornecedorNome || p.clienteNome).trim() === norm(r.fornecedor).trim());
     if (igual) continue;
     const resp = await fetch(Deno.env.get("SUPABASE_URL") + "/functions/v1/mp-estoque", {
