@@ -187,7 +187,7 @@ async function sincronizar(desde: string, ate: string) {
       // Aparelho vendido ainda aparece no estoque das vendedoras → dá baixa como vendido
       for (const x of itens.filter((i: any) => i.imei)) {
         const { data: ap } = await sb.from("aparelhos").select("*").eq("imei", x.imei).order("criado_em", { ascending: false }).limit(1).maybeSingle();
-        if (ap && ap.tipo !== "cliente" && (!ap.destino || ["estoque_r1", "assistencia"].includes(ap.destino))) {
+        if (ap && ap.tipo !== "cliente" && (!ap.destino || ["estoque_r1", "assistencia"].includes(ap.destino)) && String(ap.data_entrada || "") <= String(v.dataVenda).slice(0, 10)) { // não dá baixa em aparelho que voltou para a loja depois desta venda
           const agora = new Date().toISOString();
           await sb.from("aparelhos").update({ destino: "vendido", data_saida: String(v.dataVenda).slice(0, 10), atualizado_em: agora, atualizado_por: "Mercado Phone" }).eq("id", ap.id);
           await sb.from("aparelhos_historico").insert({ aparelho_id: ap.id, imei: ap.imei, nome: ap.nome, gb: ap.gb, cor: ap.cor, evento: "vendido", usuario: `Mercado Phone (venda ${v.id} · ${v.vendedorNome || ""})`, criado_em: agora });
@@ -321,7 +321,9 @@ Deno.serve(async (req: Request) => {
     const b = await req.json().catch(() => ({}));
     const hoje = new Date(Date.now() - 3 * 3600 * 1000); // horário de Brasília
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    const desde = /^\d{4}-\d{2}-\d{2}$/.test(b.desde || "") ? b.desde : fmt(new Date(hoje.getTime() - 3 * 86400000));
+    // sem datas: desde o início do Mercado Phone (18/11), no máximo os últimos 30 dias, para pegar custos corrigidos em vendas antigas
+    const trintaDias = fmt(new Date(hoje.getTime() - 30 * 86400000));
+    const desde = /^\d{4}-\d{2}-\d{2}$/.test(b.desde || "") ? b.desde : (trintaDias > "2026-11-18" ? trintaDias : "2026-11-18");
     const ate = /^\d{4}-\d{2}-\d{2}$/.test(b.ate || "") ? b.ate : fmt(hoje);
     const vendasRes = await sincronizar(desde, ate);
     let estoque: unknown = null;
