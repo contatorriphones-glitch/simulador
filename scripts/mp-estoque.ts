@@ -190,7 +190,7 @@ async function sincronizar(id: string, estadoPedido?: string) {
 async function custoVendido(produtoId: number, custo: number, fornecedor: string, upgrade: boolean) {
   // O Mercado Phone muda a quantidade se ela não vier na edição: manda sempre. Aparelho de venda concluída = 0 (peça única);
   // se a venda foi cancelada e ele voltou ao estoque, mantém 1.
-  const { data: vs } = await sb.from("vendas_mp").select("status,itens").contains("itens", [{ produtoId }]).order("data_venda", { ascending: false }).limit(1);
+  const { data: vs } = await sb.from("vendas_mp").select("status,itens").contains("itens", JSON.stringify([{ produtoId }])).order("data_venda", { ascending: false }).limit(1);
   // aparelho que saiu da venda (venda alterada no Mercado Phone) não é mexido: poderia zerar o estoque de um aparelho que voltou para a loja
   if (!vs?.[0]) throw new Error("Este aparelho não está mais em nenhuma venda (a venda foi alterada no Mercado Phone). Nada foi mudado.");
   const quantidade = vs[0].status !== "concluido" ? 1 : 0;

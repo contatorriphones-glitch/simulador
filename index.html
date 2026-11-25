@@ -3704,6 +3704,7 @@
           const v=cgDinheiro(c.valor);
           if(!(v>0))return erro('Informe o valor pago.');
           if(v<100)return erro(`Valor de ${cgBRL(v)} está errado. Digite o valor completo, ex.: 3.449 ou 3449.`);
+          if(v>20000)return erro(`Valor de ${cgBRL(v)} está errado (acima de R$ 20.000). Se for R$ ${cgBRL(v/100).replace('R$','').trim()}, digite com a vírgula: ex. 2.550,00.`);
           if((v<300||v>15000)&&!confirm(`Valor de ${cgBRL(v)}? Confirme se está certo.`))return false;
           c.valor=String(v);
         }else c.valor='';

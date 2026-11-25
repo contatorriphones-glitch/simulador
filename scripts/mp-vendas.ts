@@ -361,7 +361,7 @@ async function enviarCustosPendentes() {
     const p = await produto(Number(r.produto_id));
     if (!p) continue;
     // só reenvia se o aparelho ainda faz parte daquela venda (venda pode ter sido alterada)
-    const { data: aindaNaVenda } = await sb.from("vendas_mp").select("id").eq("id", r.venda_id).eq("status", "concluido").contains("itens", [{ produtoId: Number(r.produto_id) }]).limit(1);
+    const { data: aindaNaVenda } = await sb.from("vendas_mp").select("id").eq("id", r.venda_id).eq("status", "concluido").contains("itens", JSON.stringify([{ produtoId: Number(r.produto_id) }])).limit(1);
     if (!aindaNaVenda?.length) continue;
     const igual = Math.abs(Math.abs(Number(p.valorCusto)) - Number(r.custo)) < 0.01 && (!r.fornecedor || norm(p.fornecedorNome || p.clienteNome).trim() === norm(r.fornecedor).trim());
     if (igual) continue;
