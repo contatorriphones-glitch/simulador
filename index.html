@@ -628,9 +628,10 @@
               <option value="troca">Troca para cliente</option>
               <option value="outro_lojista">Foi para outro lojista</option>
               <option value="estoque_r1">Foi para Estoque R1</option>
+              <option value="transferencia_cliente">Cliente levou para transferir em casa</option>
             </select>
             <div id="ap-assistencia-wrap" style="display:none">
-              <label for="ap-assistencia-nome">Qual assistência</label>
+              <label for="ap-assistencia-nome" id="ap-assistencia-label">Qual assistência</label>
               <input id="ap-assistencia-nome" type="text" placeholder="Nome da assistência técnica" autocomplete="off">
             </div>
             <div id="ap-saida-wrap" style="display:none">
@@ -1756,6 +1757,7 @@
     if(item.destino==='troca')return{cls:'st-concluido',label:'🟢 Troca concluída',cat:'concluido'};
     if(item.destino==='outro_lojista')return{cls:'st-concluido',label:'🟢 Foi para outro lojista',cat:'concluido'};
     if(item.destino==='estoque_r1')return{cls:'st-r1',label:'🏬 No Estoque R1',cat:'aguardando'};
+    if(item.destino==='transferencia_cliente')return{cls:'st-assistencia',label:'📲 Com cliente (transferindo dados)',cat:'assistencia'};
     return{cls:'st-aguardando',label:'🔘 Aguardando',cat:'aguardando'};
   }
   function montarMetaHtml(item){
@@ -1775,7 +1777,8 @@
 
   function onDestinoChange(){
     const v=document.getElementById('ap-destino').value;
-    document.getElementById('ap-assistencia-wrap').style.display=v==='assistencia'?'block':'none';
+    document.getElementById('ap-assistencia-wrap').style.display=v==='assistencia'||v==='transferencia_cliente'?'block':'none';
+    document.getElementById('ap-assistencia-label').textContent=v==='transferencia_cliente'?'Nome do cliente que levou':'Qual assistência';
     document.getElementById('ap-saida-wrap').style.display=v?'block':'none';
     const saidaEl=document.getElementById('ap-data-saida');
     if(v && !saidaEl.value)saidaEl.value=hojeISO();
@@ -1831,6 +1834,7 @@
     if(!imeiValido(imei)&&!confirm(`O IMEI "${imei}" parece inválido (todo IMEI tem 15 números e um dígito de conferência).\n\nO certo é bipar o *#06# ou a caixa. Salvar assim mesmo?`))return;
     if(!cadastrador){mostrarApFeedback('error','Selecione quem está fazendo esta ação.');return}
     if(destino==='assistencia'&&!assistenciaNome){mostrarApFeedback('error','Informe para qual assistência o aparelho foi enviado.');return}
+    if(destino==='transferencia_cliente'&&assistenciaNome.length<3){mostrarApFeedback('error','Informe o nome do cliente que levou o aparelho.');return}
     if(destino&&!dataSaida){mostrarApFeedback('error','Informe a data de saída.');return}
 
     const isEdit=!!_apEditandoId;
@@ -2036,7 +2040,7 @@
   function indiceModelo(nome){const i=ORDEM_MODELOS_NORM.indexOf(normalizarNomeModelo(nome));return i===-1?ORDEM_MODELOS.length:i}
   function gbNum(gb){if(!gb)return 0;const m=String(gb).match(/[\d.]+/);if(!m)return 0;let n=parseFloat(m[0]);if(/TB/i.test(gb))n*=1024;return n}
   function inicioFimHojeISO(){const a=new Date();const inicio=new Date(a.getFullYear(),a.getMonth(),a.getDate(),0,0,0,0);const fim=new Date(inicio.getTime()+86400000);return{inicio:inicio.toISOString(),fim:fim.toISOString()}}
-  const EVENTO_LABEL={vendido:'✅ Vendidos',garantia:'✅ Retirados por garantia',assistencia:'🔧 Foi para assistência',troca:'🔄 Trocas para cliente',outro_lojista:'🔄 Foi para outro lojista',estoque_r1:'🏬 Foi para Estoque R1'};
+  const EVENTO_LABEL={transferencia_cliente:'📲 Cliente levou para transferir em casa',editado:'✏️ Cadastro editado',vendido:'✅ Vendidos',garantia:'✅ Retirados por garantia',assistencia:'🔧 Foi para assistência',troca:'🔄 Trocas para cliente',outro_lojista:'🔄 Foi para outro lojista',estoque_r1:'🏬 Foi para Estoque R1'};
   const EVENTO_ORDEM=['vendido','assistencia','troca','garantia','outro_lojista','estoque_r1'];
   let _fechamentoTexto='';
 
@@ -3237,6 +3241,7 @@
     const d=item.destino||'';
     if(d==='estoque_r1')return 'R1';
     if(d==='assistencia')return ('ASSIST. '+(item.assistenciaNome||'').toUpperCase()).trim();
+    if(d==='transferencia_cliente')return ('COM CLIENTE '+(item.assistenciaNome||'').toUpperCase()).trim();
     return ({'':'LOJA',garantia:'GARANTIA',outro_lojista:'OUTRO LOJISTA',troca:'TROCA',vendido:'VENDIDO'})[d]||d.toUpperCase();
   }
   function abrirEtiquetaPorId(id){const it=getAparelhos().find(a=>a.id===id);if(it)abrirEtiqueta(it)}
@@ -3262,7 +3267,7 @@
     const avisos=[];
     if(item.garantiaApple)avisos.push('GARANTIA APPLE');
     const peca=String(item.avisoPeca||'').trim();
-    if(peca){const m=peca.match(/^pe[çc]a n[ãa]o genu[íi]na:\s*(.+)$/i);avisos.push(m?'NÃO GENUÍNA: '+m[1].toUpperCase():peca.toUpperCase())}
+    if(peca)avisos.push(...avisosPecas(peca));
     let y=avisos.length?38:44;
     linha(nome,y,'800 26px system-ui,-apple-system,Arial');
     y+=avisos.length?28:32;linha([item.gb,item.cor].filter(Boolean).join(' · '),y,'700 21px system-ui,-apple-system,Arial');
@@ -3271,11 +3276,14 @@
       y+=34;x.font='600 13px system-ui,-apple-system,Arial';x.fillText('IMEI',tx,y);
       const ix=tx+x.measureText('IMEI ').width;x.font='900 28px ui-monospace,Menlo,monospace';x.fillText(imei.slice(-6),ix,y);
       // cada aviso numa caixa com borda, para chamar atenção
-      avisos.slice(0,2).forEach(a=>{
-        y+=6;let tf=15;x.font=`800 ${tf}px system-ui,-apple-system,Arial`;
+      // até 2 avisos: caixas normais; 3: caixas menores; mais que 3: junta as peças numa linha só
+      const lista=avisos.length>3?[avisos[0],avisos[1],avisos.slice(2).join(' · ').replace(/PEÇA /g,'')]:avisos;
+      const muitos=lista.length>2;
+      lista.forEach(a=>{
+        y+=muitos?3:6;let tf=muitos?12:15;x.font=`800 ${tf}px system-ui,-apple-system,Arial`;
         while(tf>10&&x.measureText(a).width>larg-10){tf--;x.font=`800 ${tf}px system-ui,-apple-system,Arial`}
         let t=a;while(t&&x.measureText(t).width>larg-10)t=t.slice(0,-1);
-        const bh=tf+8;x.lineWidth=2;x.strokeRect(tx+1,y,Math.min(larg-2,x.measureText(t).width+10),bh);
+        const bh=tf+(muitos?6:8);x.lineWidth=2;x.strokeRect(tx+1,y,Math.min(larg-2,x.measureText(t).width+10),bh);
         x.textBaseline='middle';x.fillText(t,tx+6,y+bh/2+1);x.textBaseline='alphabetic';y+=bh;
       });
     }else{
@@ -3404,8 +3412,8 @@
     'iPhone Air':{gb:['256GB','512GB','1TB'],cor:['Preto-espacial','Branco-nuvem','Dourado-claro','Azul-céu']},
     'iPhone 17 Pro':{gb:['256GB','512GB','1TB'],cor:['Laranja-cósmico','Azul-profundo','Prateado']},
     'iPhone 17 Pro Max':{gb:['256GB','512GB','1TB','2TB'],cor:['Laranja-cósmico','Azul-profundo','Prateado']},
-    'iPhone 18 Pro':{gb:['256GB','512GB','1TB'],cor:['Bordô']},
-    'iPhone 18 Pro Max':{gb:['256GB','512GB','1TB','2TB'],cor:['Bordô']}
+    'iPhone 18 Pro':{gb:['256GB','512GB','1TB'],cor:['Preto','Prateado','Glacial','Bordô']},
+    'iPhone 18 Pro Max':{gb:['256GB','512GB','1TB','2TB'],cor:['Preto','Prateado','Glacial','Bordô']}
   };
   const CG_LISTA_MODELOS=Object.keys(CG_MODELOS);
   const cgNorm=t=>String(t||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
@@ -3413,9 +3421,13 @@
     const n=cgNorm(nome).replace(/^APPLE /,'').replace(/^IPHONE ?/,'').replace('PROMAX','PRO MAX');
     return CG_LISTA_MODELOS.find(m=>cgNorm(m).replace(/^IPHONE ?/,'')===n)||null;
   }
+  // nomes que a loja usa no dia a dia → nome oficial da cor
+  const CG_COR_APELIDO={'iPhone 18 Pro':{AZUL:'Glacial','AZUL GLACIAL':'Glacial',PRATA:'Prateado',SILVER:'Prateado',BRANCO:'Prateado',BORDO:'Bordô',VINHO:'Bordô',BLACK:'Preto'},
+    'iPhone 18 Pro Max':{AZUL:'Glacial','AZUL GLACIAL':'Glacial',PRATA:'Prateado',SILVER:'Prateado',BRANCO:'Prateado',BORDO:'Bordô',VINHO:'Bordô',BLACK:'Preto'}};
   function cgCorCanonica(modelo,cor){
     const lista=(CG_MODELOS[modelo]||{}).cor||[],n=cgNorm(cor);
     if(!n)return '';
+    const ap=(CG_COR_APELIDO[modelo]||{})[n];if(ap)return ap;
     return lista.find(c=>cgNorm(c)===n)||lista.find(c=>cgNorm(c).includes(n)||n.includes(cgNorm(c)))||'';
   }
   function cgDist(a,b){const m=a.length,n=b.length,d=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]);for(let j=1;j<=n;j++)d[0][j]=j;
@@ -3438,7 +3450,7 @@
 
   let cg=null,cgFornecedores=[];
   const CG_PASSOS=['Bipar','Aparelho','Condição','Origem','Local','Revisão'];
-  function cgNovo(){cg={passo:0,imei:'',existente:null,tipo:'loja',modelo:'',gb:'',cor:'',estado:'',bateria:'',pecas:[],garantiaApple:null,
+  function cgNovo(){cg={passo:0,imei:'',existente:null,editandoId:null,tipo:'loja',modelo:'',gb:'',cor:'',estado:'',bateria:'',pecaSt:{},outraNaoGenuina:false,garantiaApple:null,
     origem:'',fornecedor:'',valor:'',clienteNome:'',clienteTel:'',defeito:'',destino:'',localNome:'',cadastrador:obterUsuarioAtual()||'',avisos:[]}}
   async function cgCarregarFornecedores(){
     try{const{data}=await sbClient.from('app_dados').select('valor').eq('chave','config:fornecedores_aparelhos').maybeSingle();if(data&&Array.isArray(data.valor))cgFornecedores=data.valor}catch(e){}
@@ -3452,7 +3464,33 @@
   const cgGrupo=(titulo,html,obrig)=>`<p class="fieldset-title" style="margin:16px 0 8px">${titulo}${obrig?' <span style="color:var(--danger)">*</span>':''}</p><div style="display:flex;flex-wrap:wrap;gap:8px">${html}</div>`;
   const cgQ=s=>String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   function cgSet(campo,valor){cg[campo]=valor;cgFeedback();cgRender()}
-  function cgTogglePeca(p){if(p==='Nenhuma')cg.pecas=['Nenhuma'];else{cg.pecas=cg.pecas.filter(x=>x!=='Nenhuma');cg.pecas=cg.pecas.includes(p)?cg.pecas.filter(x=>x!==p):[...cg.pecas,p]}cgRender()}
+  // Peças: para Tela, Bateria e Câmera escolhe-se o que aparece em Ajustes › Geral › Sobre
+  const PECAS=['Tela','Bateria','Câmera'];
+  const PECA_ST={original:'Original (sem mensagem)',genuina:'Peça genuína',usada:'Peça usada',nao_genuina:'Não genuína'};
+  function cgPecaSet(p,st){cg.pecaSt={...(cg.pecaSt||{}),[p]:st};cgFeedback();cgRender()}
+  function cgOutraPeca(){cg.outraNaoGenuina=!cg.outraNaoGenuina;cgRender()}
+  // texto gravado no cadastro: "Tela: peça genuína · Bateria: peça usada · Câmera: não genuína"
+  function pecasParaTexto(st,outra){
+    const l=PECAS.filter(p=>st&&st[p]&&st[p]!=='original').map(p=>`${p}: ${PECA_ST[st[p]].toLowerCase()}`);
+    if(outra)l.push('Outra peça: não genuína');return l.join(' · ');
+  }
+  // lê o texto (formato novo e o antigo "Peça não genuína: Bateria, Tela")
+  function pecasDeTexto(t){
+    const st={},s=String(t||'');let outra=false;
+    const antigo=s.match(/^pe[çc]a n[ãa]o genu[íi]na:\s*(.+)$/i);
+    if(antigo){antigo[1].split(/,\s*/).forEach(x=>{const p=PECAS.find(q=>cgNorm(q)===cgNorm(x));if(p)st[p]='nao_genuina';else if(x.trim())outra=true});return{st,outra}}
+    s.split(/\s*·\s*/).forEach(x=>{const m=x.match(/^(.+?):\s*(.+)$/);if(!m)return;const p=PECAS.find(q=>cgNorm(q)===cgNorm(m[1]));const v=cgNorm(m[2]);
+      const k=/NAO GENUINA/.test(v)?'nao_genuina':/USADA/.test(v)?'usada':/GENUINA/.test(v)?'genuina':null;if(!k)return;if(p)st[p]=k;else outra=true});
+    return{st,outra};
+  }
+  // avisos para a etiqueta, agrupados: "NÃO GENUÍNA: TELA", "USADA: BATERIA", "GENUÍNA: CÂMERA"
+  function avisosPecas(t){
+    const{st,outra}=pecasDeTexto(t),g={nao_genuina:[],usada:[],genuina:[]};
+    PECAS.forEach(p=>{if(g[st[p]])g[st[p]].push(p.toUpperCase())});if(outra)g.nao_genuina.push('OUTRA PEÇA');
+    const r=[];if(g.nao_genuina.length)r.push('NÃO GENUÍNA: '+g.nao_genuina.join(', '));if(g.usada.length)r.push('PEÇA USADA: '+g.usada.join(', '));if(g.genuina.length)r.push('PEÇA GENUÍNA: '+g.genuina.join(', '));
+    if(!r.length&&String(t||'').trim())r.push(String(t).toUpperCase());
+    return r;
+  }
 
   function cgRender(){
     document.getElementById('cg-cancelar').style.display=cg.passo>0?'':'none';
@@ -3482,7 +3520,9 @@
       if(c.tipo==='loja')h+=cgGrupo('Estado',cgChip('Lacrado',c.estado==='lacrado',"cgSet('estado','lacrado')")+cgChip('Seminovo',c.estado==='seminovo',"cgSet('estado','seminovo')"),true);
       if(c.tipo==='cliente'||c.estado==='seminovo'){
         h+=`<p class="fieldset-title" style="margin:16px 0 8px">Saúde da bateria (%) <span style="color:var(--danger)">*</span></p><input id="cg-bateria" type="number" inputmode="numeric" min="1" max="100" value="${esc(c.bateria)}" oninput="cg.bateria=this.value" placeholder="Ajustes › Bateria › Saúde" style="font-size:18px">`;
-        h+=cgGrupo('Mensagem de peça não genuína (Ajustes › Geral › Sobre)',['Nenhuma','Bateria','Tela','Câmera','Outra peça'].map(p=>cgChip(p,c.pecas.includes(p),`cgTogglePeca('${p}')`)).join(''),true);
+        h+=`<p class="fieldset-title" style="margin:16px 0 4px">Mensagens de peças (Ajustes › Geral › Sobre) <span style="color:var(--danger)">*</span></p><p style="margin:0 0 6px;font-size:12px;color:var(--muted)">Para cada peça, marque o que aparece. Sem mensagem = Original.</p>`;
+        h+=PECAS.map(p=>`<div style="margin:8px 0 2px;font-weight:800;font-size:14px">${p}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${Object.entries(PECA_ST).map(([k,l])=>cgChip(l,(c.pecaSt||{})[p]===k,`cgPecaSet('${p}','${k}')`,'padding:9px 11px;font-size:13px')).join('')}</div>`).join('');
+        h+=`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${cgChip('Outra peça não genuína',!!c.outraNaoGenuina,'cgOutraPeca()','padding:9px 11px;font-size:13px')}</div>`;
         h+=cgGrupo('Garantia Apple ativa',cgChip('Sim',c.garantiaApple===true,"cgSet('garantiaApple',true)")+cgChip('Não',c.garantiaApple===false,"cgSet('garantiaApple',false)"),true);
       }
       h+=nav(true,true);
@@ -3508,6 +3548,7 @@
     }else if(c.passo===4){
       h=resumo;
       const ops=c.tipo==='cliente'?[['assistencia','🔧 Assistência'],['','🏬 Fica na loja']]:[['','📦 Loja'],['estoque_r1','🏬 R1'],['assistencia','🔧 Assistência'],['garantia','🛡️ Garantia'],['outro_lojista','🤝 Outro lojista']];
+      if(c.editandoId&&!ops.some(([v])=>v===(c.destino||''))){const atual=CG_MOVER.find(([v])=>v===c.destino);ops.push([c.destino,atual?atual[1]:c.destino])}
       h+=cgGrupo('Onde o aparelho vai ficar',ops.map(([v,l])=>cgChip(l,c.destino===v&&c.destinoEscolhido,`cgEscolherDestino('${v}')`)).join(''),true);
       if(c.destinoEscolhido&&(c.destino==='assistencia'||c.destino==='outro_lojista')){
         const conhecidos=c.destino==='assistencia'?['LEGACY','BRUNO',...cgNomesConhecidos('assistenciaNome',3)]:cgNomesConhecidos('assistenciaNome',2);
@@ -3520,12 +3561,12 @@
       h+=nav(true,true,'Revisar →');
     }else if(c.passo===5){
       const linhas=[['Aparelho',[c.modelo,c.gb,c.cor].filter(Boolean).join(' · ')],['IMEI',c.imei],['Tipo',c.tipo==='cliente'?'Aparelho de cliente':'Estoque da loja'+(c.estado?' · '+c.estado:'')],
-        ['Bateria',c.bateria?c.bateria+'%':''],['Peças',c.pecas.filter(p=>p!=='Nenhuma').join(', ')||(c.pecas.length?'Sem aviso':'')],['Garantia Apple',c.garantiaApple===true?'Sim':c.garantiaApple===false?'Não':''],
+        ['Bateria',c.bateria?c.bateria+'%':''],['Peças',pecasParaTexto(c.pecaSt,c.outraNaoGenuina)||(c.pecaSt&&Object.keys(c.pecaSt).length?'Todas originais':'')],['Garantia Apple',c.garantiaApple===true?'Sim':c.garantiaApple===false?'Não':''],
         ['Origem',c.tipo==='cliente'?'Cliente: '+c.clienteNome+(c.clienteTel?' · '+c.clienteTel:''):({FORNECEDOR:'Fornecedor: '+c.fornecedor,UPGRADE:'Upgrade: '+c.clienteNome,RETORNO:'Voltou para a loja'})[c.origem]],
         ['Valor',c.valor?cgBRL(cgDinheiro(c.valor)):''],['Defeito',c.defeito],['Local',localEtiqueta({tipo:c.tipo,destino:c.destino,assistenciaNome:c.localNome})],['Cadastrado por',c.cadastrador]].filter(l=>l[1]);
       h=`<div style="border:1px solid var(--line);border-radius:12px;overflow:hidden">${linhas.map(([k,v],i)=>`<div style="display:flex;justify-content:space-between;gap:12px;padding:10px 12px;font-size:14px;${i?'border-top:1px solid var(--line)':''}"><span style="color:var(--muted)">${k}</span><b style="text-align:right">${esc(v)}</b></div>`).join('')}</div>`;
       if(c.avisos.length)h+=`<div class="feedback info" style="display:block;margin-top:10px">${c.avisos.map(esc).join('<br>')}</div>`;
-      h+=nav(true,true,'✓ Salvar e imprimir etiqueta');
+      h+=nav(true,true,c.editandoId?'✓ Salvar alterações e imprimir etiqueta':'✓ Salvar e imprimir etiqueta');
     }
     t.innerHTML=h;
   }
@@ -3552,16 +3593,59 @@
     cg.passo=1;cgFeedback('success',cg.modelo?`✓ IMEI lido. Modelo identificado: ${cg.modelo}. Confira e escolha GB e cor.`:'✓ IMEI lido. Escolha o modelo, o GB e a cor.');cgRender();
     document.getElementById('cg-card').scrollIntoView({behavior:'smooth',block:'start'});
   }
-  // O aparelho já está no estoque: em vez de cadastrar de novo, oferece mudar o local ou reimprimir
-  function cgAtivo(item){
+  // O aparelho já está no estoque: mostra a ficha completa, com edição rápida, mudança de local e etiqueta
+  const CG_MOVER=[['','📦 Loja'],['estoque_r1','🏬 R1'],['assistencia','🔧 Assistência'],['transferencia_cliente','📲 Cliente levou p/ transferir'],['garantia','🛡️ Garantia'],['outro_lojista','🤝 Outro lojista'],['vendido','✅ Vendido']];
+  async function cgAtivo(item){
     cg.passo=0;cg.ativo=item;cgRender();
-    document.getElementById('cg-tela').innerHTML=`<div class="feedback info" style="display:block">Este aparelho <b>já está no estoque</b>: ${esc([item.nome,item.gb,item.cor].filter(Boolean).join(' · '))} — ${esc(localEtiqueta(item))}.</div>
-      ${cgGrupo('Mudar para',[['','📦 Loja'],['estoque_r1','🏬 R1'],['assistencia','🔧 Assistência'],['garantia','🛡️ Garantia'],['outro_lojista','🤝 Outro lojista'],['vendido','✅ Vendido']].filter(([v])=>v!==(item.destino||'')).map(([v,l])=>cgChip(l,false,`cgMover('${v}')`)).join(''),false)}
+    const tela=document.getElementById('cg-tela');
+    let custo=null,mp=null,hist=[];
+    try{
+      const[r1,r2,r3]=await Promise.all([sbClient.from('aparelhos_custos').select('custo,fornecedor,origem_custo').eq('aparelho_id',item.id).maybeSingle(),
+        sbClient.from('aparelhos_mp').select('status,acao,estado').eq('aparelho_id',item.id).maybeSingle(),
+        sbClient.from('aparelhos_historico').select('evento,usuario,criado_em,assistencia_nome').eq('aparelho_id',item.id).order('criado_em',{ascending:false}).limit(5)]);
+      custo=r1.data;mp=r2.data;hist=r3.data||[];
+    }catch(e){}
+    if(!cg||cg.ativo!==item)return;
+    const fmtD=d=>d?String(d).slice(0,10).split('-').reverse().join('/'):'';
+    const origem=item.tipo==='cliente'?'Aparelho de cliente':({FORNECEDOR:'Fornecedor',UPGRADE:'Upgrade (troca)',RETORNO:'Voltou para a loja'})[String(item.origem||'').toUpperCase()]||item.origem||'';
+    const linhas=[['Aparelho',[item.nome,item.gb,item.cor].filter(Boolean).join(' · ')],['IMEI',item.imei],['Onde está',localEtiqueta(item)+(item.dataSaida&&item.destino?' · desde '+fmtD(item.dataSaida):'')],
+      ['Estado',mp&&mp.estado?(mp.estado==='lacrado'?'Lacrado':'Seminovo'):''],['Bateria',item.bateria?item.bateria+'%':''],['Peças',item.avisoPeca||'Todas originais'],['Garantia Apple',item.garantiaApple?'Sim':'Não'],
+      ['Origem',origem],[custo&&custo.origem_custo==='upgrade'?'Cliente da troca':'Fornecedor',custo?custo.fornecedor:''],['Valor pago',custo&&custo.custo!=null?cgBRL(Number(custo.custo)):'⚠️ sem valor'],
+      ['Observação',item.obs],['Cadastrado por',[item.cadastrador,fmtD(item.dataEntrada)].filter(Boolean).join(' · ')],
+      ['Mercado Phone',mp?({ok:'✓ ligado',sem_custo:'⏳ aguardando valor',erro:'⚠️ erro: '+(mp.acao||''),ignorado:'—'})[mp.status]||mp.status:'—']].filter(l=>l[1]);
+    tela.innerHTML=`<div class="feedback info" style="display:block;margin-bottom:10px">Este aparelho <b>já está cadastrado</b>. Confira os dados abaixo.</div>
+      <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden">${linhas.map(([k,v],i)=>`<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 12px;font-size:14px;${i?'border-top:1px solid var(--line)':''}"><span style="color:var(--muted)">${k}</span><b style="text-align:right">${esc(v)}</b></div>`).join('')}</div>
+      ${hist.length?`<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--muted);font-weight:700;font-size:13px">Últimas movimentações</summary>${hist.map(h=>`<div style="font-size:13px;padding:4px 0">${fmtD(h.criado_em)} · ${esc(h.evento)}${h.assistencia_nome?' ('+esc(h.assistencia_nome)+')':''} · ${esc(h.usuario||'')}</div>`).join('')}</details>`:''}
+      <button type="button" class="btn" style="width:100%;margin-top:12px" onclick="cgEditar()">✏️ Editar cadastro</button>
+      ${cgGrupo('Mudar para',CG_MOVER.filter(([v])=>v!==(item.destino||'')).map(([v,l])=>cgChip(l,false,`cgMover('${v}')`)).join(''),false)}
       <div style="display:flex;gap:8px;margin-top:16px"><button type="button" class="btn ghost" style="flex:1" onclick="_cgProximo=true;abrirEtiqueta(cg.ativo)">🏷️ Reimprimir etiqueta</button><button type="button" class="btn ghost" style="flex:1" onclick="cgIniciar();abrirScanner('guiado')">📷 Bipar outro</button></div>`;
+  }
+  // Edição rápida: abre o passo a passo já preenchido com o cadastro atual; ao salvar, atualiza o MESMO registro
+  async function cgEditar(){
+    const item=cg.ativo;if(!item)return;
+    let custo=null,mp=null;
+    try{const[r1,r2]=await Promise.all([sbClient.from('aparelhos_custos').select('custo,fornecedor,origem_custo').eq('aparelho_id',item.id).maybeSingle(),sbClient.from('aparelhos_mp').select('estado').eq('aparelho_id',item.id).maybeSingle()]);custo=r1.data;mp=r2.data}catch(e){}
+    cgNovo();
+    const c=cg,{st,outra}=pecasDeTexto(item.avisoPeca);
+    c.editandoId=item.id;c.editOriginal=item;c.imei=item.imei;c.tipo=item.tipo==='cliente'?'cliente':'loja';
+    c.modelo=cgModeloCanonico(item.nome)||item.nome||'';c.gb=item.gb||'';c.cor=cgCorCanonica(c.modelo,item.cor)||item.cor||'';
+    c.estado=mp&&mp.estado?mp.estado:(c.tipo==='loja'?'seminovo':'');c.bateria=item.bateria||'';
+    c.pecaSt={Tela:'original',Bateria:'original','Câmera':'original',...st};c.outraNaoGenuina=outra;c.garantiaApple=!!item.garantiaApple;
+    const org=String(item.origem||'').toUpperCase();c.origem=['FORNECEDOR','UPGRADE','RETORNO'].includes(org)?org:(custo&&custo.origem_custo==='upgrade'?'UPGRADE':custo?'FORNECEDOR':'');
+    if(c.origem==='FORNECEDOR')c.fornecedor=custo?custo.fornecedor||'':'';
+    if(c.origem==='UPGRADE')c.clienteNome=(custo&&custo.fornecedor)||((String(item.obs||'').match(/Upgrade de ([^·(]+)/i)||[])[1]||'').trim();
+    if(c.tipo==='cliente'){const m=String(item.obs||'').match(/Cliente:\s*([^·]+)(?:·\s*([\d\s()+-]{8,}))?.*Defeito:\s*(.+)$/i);if(m){c.clienteNome=m[1].trim();c.clienteTel=(m[2]||'').trim();c.defeito=m[3].trim()}}
+    c.valor=custo&&custo.custo!=null?String(custo.custo):'';
+    c.destino=item.destino||'';c.destinoEscolhido=true;c.localNome=item.assistenciaNome||'';c.cadastrador=obterUsuarioAtual()||'';
+    c.passo=1;cgFeedback('info','✏️ Editando o cadastro. Altere o que precisar e salve no final.');cgRender();
+    document.getElementById('cg-card').scrollIntoView({behavior:'smooth',block:'start'});
   }
   async function cgMover(destino){
     const item=cg.ativo;let nome='';
-    if(destino==='assistencia'||destino==='outro_lojista'){
+    if(destino==='transferencia_cliente'){
+      const dig=prompt('Nome do cliente que levou o aparelho para transferir os dados em casa:','');if(dig===null)return;
+      nome=cgNorm(dig);if(nome.length<3){alert('Informe o nome do cliente.');return}
+    }else if(destino==='assistencia'||destino==='outro_lojista'){
       const dig=prompt(destino==='assistencia'?'Qual assistência?':'Qual lojista?',destino==='assistencia'?'LEGACY':'');if(dig===null)return;
       const conhecidos=destino==='assistencia'?['LEGACY','BRUNO',...cgNomesConhecidos('assistenciaNome',3)]:cgNomesConhecidos('assistenciaNome',2);
       const r=cgCorrigirNome(dig,[...new Set(conhecidos)]);nome=r.valor;
@@ -3573,7 +3657,7 @@
     const novo={...item,destino,assistenciaNome:nome,dataSaida:(destino&&destino!=='estoque_r1')?hojeISO():'',atualizadoEm:agora,atualizadoPor:usuario};
     const{error}=await sbClient.from('aparelhos').update(toRow(novo)).eq('id',item.id);
     if(error){cgFeedback('error','Não consegui salvar. Verifique a internet e tente de novo.');return}
-    sbClient.from('aparelhos_historico').insert({aparelho_id:item.id,imei:item.imei,nome:item.nome,gb:item.gb,cor:item.cor,evento:destino||'aguardando',assistencia_nome:destino==='assistencia'?nome:null,usuario,criado_em:agora}).then(()=>{});
+    sbClient.from('aparelhos_historico').insert({aparelho_id:item.id,imei:item.imei,nome:item.nome,gb:item.gb,cor:item.cor,evento:destino||'aguardando',assistencia_nome:['assistencia','transferencia_cliente','outro_lojista'].includes(destino)?nome:null,usuario,criado_em:agora}).then(()=>{});
     const idx=_apCache.findIndex(a=>a.id===item.id);if(idx>-1)_apCache[idx]=novo;
     salvarUsuarioAtual(usuario);renderAparelhos();
     cgFeedback('success',`✓ Movido para ${localEtiqueta(novo)}.`);
@@ -3591,12 +3675,12 @@
       if(!c.cor)return erro('Escolha a cor.');
     }else if(c.passo===2){
       if(c.tipo==='loja'&&!c.estado)return erro('Informe se é lacrado ou seminovo.');
-      if(c.tipo==='loja'&&c.estado==='lacrado'){c.bateria='100';c.pecas=['Nenhuma'];c.garantiaApple=true}
+      if(c.tipo==='loja'&&c.estado==='lacrado'){c.bateria='100';c.pecaSt={Tela:'original',Bateria:'original','Câmera':'original'};c.outraNaoGenuina=false;c.garantiaApple=true}
       if(c.tipo==='cliente'||c.estado==='seminovo'){
         const b=parseInt(c.bateria,10);
         if(!(b>=1&&b<=100))return erro('Informe a saúde da bateria entre 1 e 100.');
         if(b<70&&!confirm(`Bateria em ${b}%? Confirme se está certo.`))return false;
-        if(!c.pecas.length)return erro('Informe se aparece mensagem de peça não genuína (ou "Nenhuma").');
+        const semResp=PECAS.filter(p=>!(c.pecaSt||{})[p]);if(semResp.length)return erro(`Informe a mensagem de: ${semResp.join(', ')} (se não aparece nada, marque "Original").`);
         if(c.garantiaApple===null)return erro('Informe se tem garantia Apple.');
       }
     }else if(c.passo===3){
@@ -3642,18 +3726,19 @@
 
   async function cgSalvar(){
     const c=cg,agora=new Date().toISOString();
-    const dup=_apCache.find(a=>a.imei===c.imei&&(statusInfo(a).cat==='aguardando'||statusInfo(a).cat==='assistencia'));
+    const dup=_apCache.find(a=>a.imei===c.imei&&a.id!==c.editandoId&&(statusInfo(a).cat==='aguardando'||statusInfo(a).cat==='assistencia'));
     if(dup){cgFeedback('error','Este IMEI já está ativo no estoque. Bipe de novo para mudar o local dele.');return}
-    const pecas=c.pecas.filter(p=>p!=='Nenhuma');
     const obs=c.tipo==='cliente'?`Cliente: ${c.clienteNome}${c.clienteTel?' · '+c.clienteTel:''} · Defeito: ${c.defeito}`:(c.origem==='UPGRADE'?`Upgrade de ${c.clienteNome}`:'');
-    const registro={id:Date.now()+'-'+Math.random().toString(36).slice(2,7),nome:c.modelo,gb:c.gb,cor:c.cor,imei:c.imei,
-      origem:c.tipo==='cliente'?'CLIENTE':c.origem,cadastrador:c.cadastrador,dataEntrada:hojeISO(),destino:c.destino,assistenciaNome:c.localNome,
-      dataSaida:(c.destino&&c.destino!=='estoque_r1')?hojeISO():'',obs,tipo:c.tipo,bateria:c.bateria,avisoPeca:pecas.length?'Peça não genuína: '+pecas.join(', '):'',
-      garantiaApple:!!c.garantiaApple,criadoEm:Date.now(),atualizadoEm:agora,atualizadoPor:c.cadastrador};
+    const ant=c.editandoId?c.editOriginal:null;
+    const mudouLocal=!ant||(ant.destino||'')!==(c.destino||'');
+    const registro={id:ant?ant.id:Date.now()+'-'+Math.random().toString(36).slice(2,7),nome:c.modelo,gb:c.gb,cor:c.cor,imei:c.imei,
+      origem:c.tipo==='cliente'?'CLIENTE':c.origem,cadastrador:ant?ant.cadastrador:c.cadastrador,dataEntrada:ant?ant.dataEntrada:hojeISO(),destino:c.destino,assistenciaNome:c.localNome,
+      dataSaida:!mudouLocal?ant.dataSaida:(c.destino&&c.destino!=='estoque_r1')?hojeISO():'',obs:ant&&c.tipo!=='cliente'&&c.origem!=='UPGRADE'?(ant.obs||''):obs,tipo:c.tipo,bateria:c.bateria,avisoPeca:pecasParaTexto(c.pecaSt,c.outraNaoGenuina),
+      garantiaApple:!!c.garantiaApple,criadoEm:ant?ant.criadoEm:Date.now(),atualizadoEm:agora,atualizadoPor:c.cadastrador};
     cgFeedback('info','Salvando…');
-    const{error}=await sbClient.from('aparelhos').insert(toRow(registro));
+    const{error}=ant?await sbClient.from('aparelhos').update(toRow(registro)).eq('id',ant.id):await sbClient.from('aparelhos').insert(toRow(registro));
     if(error){console.error(error);cgFeedback('error','Erro ao salvar. Verifique a internet e tente de novo (nada foi perdido).');return}
-    sbClient.from('aparelhos_historico').insert({aparelho_id:registro.id,imei:registro.imei,nome:registro.nome,gb:registro.gb,cor:registro.cor,evento:'entrada',assistencia_nome:registro.destino==='assistencia'?registro.assistenciaNome:null,usuario:c.cadastrador,criado_em:agora}).then(({error:e})=>{if(e)console.error('historico:',e)});
+    sbClient.from('aparelhos_historico').insert({aparelho_id:registro.id,imei:registro.imei,nome:registro.nome,gb:registro.gb,cor:registro.cor,evento:ant?(mudouLocal?(registro.destino||'aguardando'):'editado'):'entrada',assistencia_nome:registro.destino==='assistencia'?registro.assistenciaNome:null,usuario:c.cadastrador,criado_em:agora}).then(({error:e})=>{if(e)console.error('historico:',e)});
     if(c.valor){
       const{error:eC}=await sbClient.from('aparelhos_custos').upsert({aparelho_id:registro.id,custo:Number(c.valor),origem_custo:c.origem==='UPGRADE'?'upgrade':'fornecedor',fornecedor:c.origem==='FORNECEDOR'?c.fornecedor:c.clienteNome,registrado_por:c.cadastrador,atualizado_em:agora});
       if(eC)console.error('custo:',eC);
@@ -3663,11 +3748,12 @@
       }
     }
     salvarUsuarioAtual(c.cadastrador);
-    _apCache.unshift(registro);renderAparelhos();_confRegistrarCadastro(registro);
+    if(ant){const ix=_apCache.findIndex(a=>a.id===ant.id);if(ix>-1)_apCache[ix]=registro}else _apCache.unshift(registro);
+    renderAparelhos();if(!ant)_confRegistrarCadastro(registro);
     _cgProximo=true;
     abrirEtiqueta(registro);
     cgIniciar();
-    const msg=`✓ ${registro.nome} ${registro.gb} cadastrado (${localEtiqueta(registro)}).`;
+    const msg=`✓ ${registro.nome} ${registro.gb} ${ant?'atualizado':'cadastrado'} (${localEtiqueta(registro)}).`;
     cgFeedback('success',msg+' Enviando ao Mercado Phone…');
     if(registro.tipo!=='cliente')enviarMP(registro.id,c.estado).then(r=>cgFeedback(r.status==='erro'?'error':'success',msg+' '+textoMP(r)));
     else cgFeedback('success',msg);
@@ -3692,7 +3778,7 @@
   // Toda diferença precisa de uma resposta antes de finalizar: nada fica sem explicação.
   const LS_CONF='rrprimecell_conferencia_v2';
   const CONF_LOCAIS={loja:'📦 Loja',estoque_r1:'🏬 Estoque R1',assistencia:'🔧 Assistência'};
-  const CONF_RESP={'':'📦 Está na loja',estoque_r1:'🏬 Está no R1',assistencia:'🔧 Está na assistência',vendido:'✅ Foi vendido',garantia:'🛡️ Garantia / devolvido ao cliente',outro_lojista:'🤝 Com outro lojista',troca:'🔄 Troca para cliente',nao_encontrado:'🚨 Não encontrei'};
+  const CONF_RESP={'':'📦 Está na loja',estoque_r1:'🏬 Está no R1',assistencia:'🔧 Está na assistência',vendido:'✅ Foi vendido',garantia:'🛡️ Garantia / devolvido ao cliente',outro_lojista:'🤝 Com outro lojista',transferencia_cliente:'📲 Cliente levou para transferir em casa',troca:'🔄 Troca para cliente',nao_encontrado:'🚨 Não encontrei'};
   let _conf=null,_confHoje=[];
   const _confLinha=a=>[a.nome,a.gb,a.cor].filter(Boolean).join(' · ');
   const _confDestinoDoLocal=l=>l==='loja'?'':l;
@@ -3772,7 +3858,12 @@
   // resposta para quem faltou ("onde está?") ou para quem sobrou ("trazer para cá" / "bipado por engano")
   function confResponder(chave,valor){
     if(!_conf)return;
-    if(valor==='assistencia'||valor==='outro_lojista'){
+    if(valor==='transferencia_cliente'){
+      const dig=prompt('Nome do cliente que levou o aparelho para transferir em casa:','');
+      if(dig===null){renderConferencia();return}
+      const nome=cgNorm(dig);if(nome.length<3){alert('Informe o nome do cliente.');renderConferencia();return}
+      _conf.resp[chave]={destino:valor,nome,acao:valor};
+    }else if(valor==='assistencia'||valor==='outro_lojista'){
       const conhecidos=valor==='assistencia'?['LEGACY','BRUNO',...cgNomesConhecidos('assistenciaNome',3)]:cgNomesConhecidos('assistenciaNome',2);
       const dig=prompt(valor==='assistencia'?'Qual assistência?':'Qual lojista?',valor==='assistencia'?'LEGACY':'');
       if(dig===null){renderConferencia();return}
@@ -3851,10 +3942,10 @@
   }
   async function _confMover(item,destino,nome,usuario){
     const agora=new Date().toISOString();
-    const novo={...item,destino,assistenciaNome:destino==='assistencia'||destino==='outro_lojista'?nome:'',dataSaida:(destino&&destino!=='estoque_r1')?hojeISO():'',atualizadoEm:agora,atualizadoPor:usuario};
+    const novo={...item,destino,assistenciaNome:['assistencia','outro_lojista','transferencia_cliente'].includes(destino)?nome:'',dataSaida:(destino&&destino!=='estoque_r1')?hojeISO():'',atualizadoEm:agora,atualizadoPor:usuario};
     const{error}=await sbClient.from('aparelhos').update(toRow(novo)).eq('id',item.id);
     if(error)throw error;
-    await sbClient.from('aparelhos_historico').insert({aparelho_id:item.id,imei:item.imei,nome:item.nome,gb:item.gb,cor:item.cor,evento:destino||'aguardando',assistencia_nome:destino==='assistencia'?nome:null,usuario:usuario+' (conferência)',criado_em:agora});
+    await sbClient.from('aparelhos_historico').insert({aparelho_id:item.id,imei:item.imei,nome:item.nome,gb:item.gb,cor:item.cor,evento:destino||'aguardando',assistencia_nome:['assistencia','transferencia_cliente'].includes(destino)?nome:null,usuario:usuario+' (conferência)',criado_em:agora});
     const i=_apCache.findIndex(a=>a.id===item.id);if(i>-1)_apCache[i]=novo;
     if(destino!=='vendido'&&destino!=='nao_encontrado'&&novo.tipo!=='cliente')enviarMP(item.id);
   }
