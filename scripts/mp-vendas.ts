@@ -145,7 +145,7 @@ async function sincronizar(desde: string, ate: string) {
     if (!j.items?.length || vendas.length >= (j.total ?? 0)) break;
   }
 
-  const resumo = { vendas: vendas.length, vendidos_baixados: 0, upgrades_com_custo: 0, vendas_canceladas_devolvidas: 0, erros: [] as string[] };
+  const resumo = { vendas: vendas.length, vendidos_baixados: 0, upgrades_criados: 0, upgrades_com_custo: 0, vendas_canceladas_devolvidas: 0, erros: [] as string[] };
   for (const v of vendas) {
     try {
       // IMEI de cada aparelho vendido (o item da venda só traz o id do produto no estoque do MP)
@@ -200,7 +200,7 @@ async function sincronizar(desde: string, ate: string) {
       // Aparelho vendido ainda aparece no estoque das vendedoras → dá baixa como vendido
       for (const x of itens.filter((i: any) => i.imei)) {
         const { data: ap } = await sb.from("aparelhos").select("*").eq("imei", x.imei).order("criado_em", { ascending: false }).limit(1).maybeSingle();
-        if (ap && ap.tipo !== "cliente" && (!ap.destino || ["estoque_r1", "assistencia"].includes(ap.destino)) && String(ap.data_entrada || "") <= String(v.dataVenda).slice(0, 10)) { // não dá baixa em aparelho que voltou para a loja depois desta venda
+        if (ap && ap.tipo !== "cliente" && (!ap.destino || ["estoque_r1", "assistencia", "transferencia_cliente"].includes(ap.destino)) && String(ap.data_entrada || "") <= String(v.dataVenda).slice(0, 10)) { // não dá baixa em aparelho que voltou para a loja depois desta venda
           const agora = new Date().toISOString();
           await sb.from("aparelhos").update({ destino: "vendido", data_saida: String(v.dataVenda).slice(0, 10), atualizado_em: agora, atualizado_por: "Mercado Phone" }).eq("id", ap.id);
           await sb.from("aparelhos_historico").insert({ aparelho_id: ap.id, imei: ap.imei, nome: ap.nome, gb: ap.gb, cor: ap.cor, evento: "vendido", usuario: `Mercado Phone (venda ${v.id} · ${v.vendedorNome || ""})`, criado_em: agora });
@@ -211,15 +211,56 @@ async function sincronizar(desde: string, ate: string) {
       for (const p of (v.pagamentos || []).filter((p: any) => /UPGRADE|APARELHO/.test(norm(p.formaPagamentoDescricao)))) {
         const imei = imeiNoTexto(p.detalhes);
         if (!imei || !(Number(p.valor) > 0)) continue;
-        const { data: ap } = await sb.from("aparelhos").select("id").eq("imei", imei).order("criado_em", { ascending: false }).limit(1).maybeSingle();
-        if (!ap) continue;
-        const { data: c } = await sb.from("aparelhos_custos").select("aparelho_id").eq("aparelho_id", ap.id).maybeSingle();
-        if (c) continue;
-        await sb.from("aparelhos_custos").insert({ aparelho_id: ap.id, custo: Number(p.valor), origem_custo: "upgrade", fornecedor: v.clienteNome, registrado_por: `Mercado Phone (venda ${v.id})`, atualizado_em: new Date().toISOString() });
-        resumo.upgrades_com_custo++;
+        const diaVenda = String(v.dataVenda).slice(0, 10), cliente = String(v.clienteNome || "").trim().toUpperCase(), valorTroca = Number(p.valor);
+        let { data: ap } = await sb.from("aparelhos").select("*").eq("imei", imei).order("criado_em", { ascending: false }).limit(1).maybeSingle();
+        // não está no sistema de bipe (ou já tinha saído antes desta troca): entra no estoque da LOJA com o cliente e o valor da troca
+        if (!ap || (CONCLUIDO.includes(ap.destino || "") && String(ap.data_saida || ap.data_entrada || "") < diaVenda)) {
+          const desc = String(p.detalhes || "").split(/\s*-?\s*IMEI/i)[0].trim();
+          const modelo = desc.split(/\s*-\s*/)[0] || "iPhone";
+          const gbm = desc.match(/(\d+)\s*(GB|TB)/i);
+          const corTxt = desc.slice(modelo.length).replace(gbm ? gbm[0] : "", "").replace(/[-–]/g, " ").replace(/\s+/g, " ").trim();
+          const agora = new Date().toISOString();
+          const novo = {
+            id: novoId(), nome: nomeApp(modelo), gb: gbm ? gbm[1] + gbm[2].toUpperCase() : null, cor: corTxt ? titulo(corTxt) : null, imei,
+            origem: "UPGRADE", cadastrador: "Mercado Phone", data_entrada: diaVenda, destino: null, assistencia_nome: null, data_saida: null,
+            obs: `Upgrade de ${cliente} · R$ ${valorTroca.toLocaleString("pt-BR")} (venda ${v.id})`, criado_em: Date.now(), tipo: "loja", atualizado_em: agora, atualizado_por: "Mercado Phone",
+            bateria: null, aviso_peca: null, garantia_apple: false,
+          };
+          const { error } = await sb.from("aparelhos").insert(novo);
+          if (error) { resumo.erros.push(`upgrade ${imei}: ${error.message}`); continue; }
+          await sb.from("aparelhos_historico").insert({ aparelho_id: novo.id, imei, nome: novo.nome, gb: novo.gb, cor: novo.cor, evento: "entrada", usuario: `Mercado Phone (upgrade na venda ${v.id})`, criado_em: agora });
+          ap = novo; resumo.upgrades_criados++;
+        }
+        const { data: c } = await sb.from("aparelhos_custos").select("*").eq("aparelho_id", ap.id).maybeSingle();
+        if (!c) {
+          await sb.from("aparelhos_custos").insert({ aparelho_id: ap.id, custo: valorTroca, origem_custo: "upgrade", fornecedor: cliente, registrado_por: `Mercado Phone (venda ${v.id})`, atualizado_em: new Date().toISOString() });
+          resumo.upgrades_com_custo++;
+        } else if (generico(c.fornecedor)) {
+          // fornecedor genérico ("CONSUMIDOR PADRÃO"): troca pelo nome do cliente da venda (valor mantido se alguém já corrigiu à mão)
+          await sb.from("aparelhos_custos").update({ fornecedor: cliente, origem_custo: "upgrade", atualizado_em: new Date().toISOString(), ...(String(c.registrado_por || "").startsWith("Mercado Phone") ? { custo: valorTroca } : {}) }).eq("aparelho_id", ap.id);
+          resumo.upgrades_com_custo++;
+        }
+        const obsCerta = `Upgrade de ${cliente} · R$ ${valorTroca.toLocaleString("pt-BR")}`;
+        if (!ap.obs || !/upgrade/i.test(ap.obs)) await sb.from("aparelhos").update({ obs: [ap.obs, obsCerta].filter(Boolean).join(" · ") }).eq("id", ap.id);
+        else if (/upgrade de consumidor/i.test(norm(ap.obs))) await sb.from("aparelhos").update({ obs: String(ap.obs).replace(/Upgrade de Consumidor Padr[aã]o/i, obsCerta) }).eq("id", ap.id);
       }
     } catch (e) {
       resumo.erros.push(`venda ${v.id}: ${String((e as Error).message || e)}`);
+    }
+  }
+  // 2ª passada: aparelho que entrou por upgrade e foi vendido na mesma rodada também recebe a baixa
+  for (const v of vendas.filter((v: any) => v.status === "concluido")) {
+    for (const it of v.itens || []) {
+      const p = it.produtoId ? await produto(it.produtoId) : null;
+      const imei = p?.imei ? String(p.imei) : null;
+      if (!imei || !ehAparelho(it.produtoNome)) continue;
+      const { data: ap } = await sb.from("aparelhos").select("*").eq("imei", imei).order("criado_em", { ascending: false }).limit(1).maybeSingle();
+      if (ap && ap.tipo !== "cliente" && (!ap.destino || ["estoque_r1", "assistencia", "transferencia_cliente"].includes(ap.destino)) && String(ap.data_entrada || "") <= String(v.dataVenda).slice(0, 10)) {
+        const agora = new Date().toISOString();
+        await sb.from("aparelhos").update({ destino: "vendido", data_saida: String(v.dataVenda).slice(0, 10), atualizado_em: agora, atualizado_por: "Mercado Phone" }).eq("id", ap.id);
+        await sb.from("aparelhos_historico").insert({ aparelho_id: ap.id, imei: ap.imei, nome: ap.nome, gb: ap.gb, cor: ap.cor, evento: "vendido", usuario: `Mercado Phone (venda ${v.id} · ${v.vendedorNome || ""})`, criado_em: agora });
+        resumo.vendidos_baixados++;
+      }
     }
   }
   return resumo;
@@ -241,6 +282,8 @@ const custoReal = (p: any) => {
 };
 const fornecedorDe = (p: any) => String(p.fornecedorNome || p.clienteNome || "").trim().toUpperCase();
 const novoId = () => Date.now() + "-" + Math.random().toString(36).slice(2, 7);
+// fornecedor/cliente genérico do Mercado Phone ("CONSUMIDOR PADRÃO") não serve como nome
+const generico = (f: unknown) => !String(f || "").trim() || /CONSUMIDOR|PADRAO|CLIENTE$/.test(norm(f));
 
 async function sincronizarEstoque() {
   if (!produtos) await carregarProdutos();
@@ -285,6 +328,7 @@ async function sincronizarEstoque() {
     // custo e fornecedor: o que foi mudado por último vale (app ou Mercado Phone)
     if (cReal && forn) {
       const c: any = custos.get(alvo.id);
+      if (c && generico(forn) && !generico(c.fornecedor)) continue; // o app já tem o nome real do cliente
       const mudouNoMp = p.dataModificacao ? new Date(String(p.dataModificacao).replace(" ", "T") + "-03:00").toISOString() : agora;
       if (!c) {
         await sb.from("aparelhos_custos").insert({ aparelho_id: alvo.id, custo: cReal, fornecedor: forn, origem_custo: upgrade ? "upgrade" : "fornecedor", registrado_por: "Mercado Phone", atualizado_em: mudouNoMp });
@@ -339,13 +383,15 @@ Deno.serve(async (req: Request) => {
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
     // sem datas: desde o início do Mercado Phone (18/11), no máximo os últimos 30 dias, para pegar custos corrigidos em vendas antigas
     const trintaDias = fmt(new Date(hoje.getTime() - 30 * 86400000));
-    const desde = /^\d{4}-\d{2}-\d{2}$/.test(b.desde || "") ? b.desde : (trintaDias > "2026-11-18" ? trintaDias : "2026-11-18");
+    const desde = /^\d{4}-\d{2}-\d{2}$/.test(b.desde || "") ? b.desde : b.rapido ? fmt(new Date(hoje.getTime() - 86400000)) : (trintaDias > "2026-11-18" ? trintaDias : "2026-11-18");
     const ate = /^\d{4}-\d{2}-\d{2}$/.test(b.ate || "") ? b.ate : fmt(hoje);
     const vendasRes = await sincronizar(desde, ate);
     let estoque: unknown = null;
     try { estoque = await sincronizarEstoque(); } catch (e) { estoque = { erro: String((e as Error).message || e) }; }
     let custosEnviados: unknown = null;
     try { custosEnviados = await enviarCustosPendentes(); } catch (e) { custosEnviados = { erro: String((e as Error).message || e) }; }
+    const conflitos = (estoque as { conflitos?: string[] } | null)?.conflitos;
+    if (Array.isArray(conflitos)) await sb.from("app_dados").upsert({ chave: "mp:conflitos", valor: { conflitos, em: new Date().toISOString() }, atualizado_em: new Date().toISOString() });
     return json({ desde, ate, ...vendasRes, estoque, custosEnviados });
   } catch (e) {
     return json({ erro: String((e as Error).message || e) }, 500);

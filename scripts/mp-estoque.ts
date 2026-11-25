@@ -82,7 +82,7 @@ function modeloMP(nome: string): string | null {
   return n === "XR" ? "IPHONE XR" : "IPHONE " + n;
 }
 // Cor no padrão do Mercado Phone (sinônimos e cores titânio dos Pro)
-const SINONIMOS: Record<string, string> = { GOLD: "DOURADO", OURO: "DOURADO", PRATA: "PRATEADO", SILVER: "PRATEADO", LILAS: "ROXO", PURPLE: "ROXO", RED: "VERMELHO", "PRODUCT RED": "VERMELHO", MIDNIGHT: "MEIA NOITE", STARLIGHT: "ESTELAR", CINZA: "CINZA ESPACIAL", BLACK: "PRETO", WHITE: "BRANCO", BLUE: "AZUL", GREEN: "VERDE", PINK: "ROSA", YELLOW: "AMARELO", DESERT: "DESERTO", "TITANIO DESERT": "TITANIO DESERTO" };
+const SINONIMOS: Record<string, string> = { GOLD: "DOURADO", OURO: "DOURADO", PRATA: "PRATEADO", SILVER: "PRATEADO", LILAS: "ROXO", PURPLE: "ROXO", RED: "VERMELHO", "PRODUCT RED": "VERMELHO", MIDNIGHT: "MEIA NOITE", STARLIGHT: "ESTELAR", CINZA: "CINZA ESPACIAL", BLACK: "PRETO", WHITE: "BRANCO", BLUE: "AZUL", GREEN: "VERDE", PINK: "ROSA", YELLOW: "AMARELO", DESERT: "DESERTO", "TITANIO DESERT": "TITANIO DESERTO", GLACIAL: "AZUL", "AZUL GLACIAL": "AZUL" };
 function corMP(modelo: string, cor: string): string {
   let c = norm(cor).replace(/TITANIUM/g, "TITANIO");
   c = SINONIMOS[c] ?? c;
@@ -132,6 +132,7 @@ async function sincronizar(id: string, estadoPedido?: string) {
     const obs: string[] = [];
     if (a.destino === "estoque_r1") obs.push("Local: R1");
     if (a.destino === "assistencia") obs.push("Na assistência: " + (a.assistencia_nome || ""));
+    if (a.destino === "transferencia_cliente") obs.push("Com cliente transferindo dados: " + (a.assistencia_nome || ""));
     if (a.aviso_peca) obs.push(a.aviso_peca);
     if (a.garantia_apple) obs.push("Garantia Apple");
     obs.push("Enviado pelo sistema de estoque (" + (a.cadastrador || "") + ")");
