@@ -1,5 +1,5 @@
 // Despesas da loja (aluguel, salários, empréstimos…) entre o sistema e o financeiro do Mercado Phone.
-// {}                      → traz as despesas lançadas no Mercado Phone desde 18/11 para a tabela despesas (roda sozinho a cada 30 min)
+// {}                      → traz as despesas lançadas no Mercado Phone desde 01/12 para a tabela despesas (roda sozinho a cada 30 min)
 // { enviar: true, ids? }  → lança no Mercado Phone as despesas importadas do GestaoClick (só as que contam como despesa e ainda não foram)
 // A chave do Mercado Phone fica só aqui no servidor.
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -10,7 +10,7 @@ const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 const norm = (t: unknown) => String(t ?? "").toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
-const INICIO_MP = "2026-11-18";
+const INICIO_MP = "2026-12-01"; // novembro/2026 inteiro fica no GestaoClick
 const CAT_DESPESAS = 154622, CAT_COMPRA = 154623, CAT_OUTRAS = 154624;
 const PAG_DINHEIRO = 63068, PAG_PIX = 63069;
 const CHAVE_ENVIO = "5f3d31d129e207f7f7d75594"; // só eu (Claude) disparo o envio em lote, para não lançar em duplicidade
