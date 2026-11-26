@@ -3602,20 +3602,24 @@
     try{
       const[r1,r2,r3]=await Promise.all([sbClient.from('aparelhos_custos').select('custo,fornecedor,origem_custo').eq('aparelho_id',item.id).maybeSingle(),
         sbClient.from('aparelhos_mp').select('status,acao,estado').eq('aparelho_id',item.id).maybeSingle(),
-        sbClient.from('aparelhos_historico').select('evento,usuario,criado_em,assistencia_nome').eq('aparelho_id',item.id).order('criado_em',{ascending:false}).limit(5)]);
+        sbClient.from('aparelhos_historico').select('evento,usuario,criado_em,assistencia_nome').eq('aparelho_id',item.id).order('criado_em',{ascending:false}).limit(40)]);
       custo=r1.data;mp=r2.data;hist=r3.data||[];
     }catch(e){}
     if(!cg||cg.ativo!==item)return;
     const fmtD=d=>d?String(d).slice(0,10).split('-').reverse().join('/'):'';
+    // data e hora (horário de Brasília) de cadastros e movimentações
+    const fmtDH=d=>{if(!d)return'';const t=new Date(typeof d==='number'?d:String(d).replace(' ','T').replace(/([+-]\d\d)$/,'$1:00'));if(isNaN(t))return fmtD(d);return t.toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',',' às')};
+    const EV={entrada:'📥 Cadastrado',editado:'✏️ Cadastro editado',aguardando:'📦 Voltou para a loja',estoque_r1:'🏬 Foi para o R1',assistencia:'🔧 Foi para assistência',transferencia_cliente:'📲 Cliente levou p/ transferir',garantia:'🛡️ Garantia',outro_lojista:'🤝 Outro lojista',vendido:'✅ Vendido',troca:'🔄 Troca para cliente',excluido:'🗑️ Excluído'};
+    const quem=u=>String(u||'').replace(/^Mercado Phone \(venda (\d+) · ([^)]+)\)$/,'Mercado Phone · venda $1 · $2').replace(/^Mercado Phone \(cadastrado lá\)$/,'Mercado Phone (cadastrado lá)');
     const origem=item.tipo==='cliente'?'Aparelho de cliente':({FORNECEDOR:'Fornecedor',UPGRADE:'Upgrade (troca)',RETORNO:'Voltou para a loja'})[String(item.origem||'').toUpperCase()]||item.origem||'';
     const linhas=[['Aparelho',[item.nome,item.gb,item.cor].filter(Boolean).join(' · ')],['IMEI',item.imei],['Onde está',localEtiqueta(item)+(item.dataSaida&&item.destino?' · desde '+fmtD(item.dataSaida):'')],
       ['Estado',mp&&mp.estado?(mp.estado==='lacrado'?'Lacrado':'Seminovo'):''],['Bateria',item.bateria?item.bateria+'%':''],['Peças',item.avisoPeca||'Todas originais'],['Garantia Apple',item.garantiaApple?'Sim':'Não'],
       ['Origem',origem],[custo&&custo.origem_custo==='upgrade'?'Cliente da troca':'Fornecedor',custo?custo.fornecedor:''],['Valor pago',custo&&custo.custo!=null?cgBRL(Number(custo.custo)):'⚠️ sem valor'],
-      ['Observação',item.obs],['Cadastrado por',[item.cadastrador,fmtD(item.dataEntrada)].filter(Boolean).join(' · ')],
+      ['Observação',item.obs],['Cadastrado por',item.cadastrador],['Cadastrado em',item.criadoEm?fmtDH(Number(item.criadoEm)):fmtD(item.dataEntrada)],['Última alteração',item.atualizadoEm?fmtDH(item.atualizadoEm)+(item.atualizadoPor?' · '+item.atualizadoPor:''):''],
       ['Mercado Phone',mp?({ok:'✓ ligado',sem_custo:'⏳ aguardando valor',erro:'⚠️ erro: '+(mp.acao||''),ignorado:'—'})[mp.status]||mp.status:'—']].filter(l=>l[1]);
     tela.innerHTML=`<div class="feedback info" style="display:block;margin-bottom:10px">Este aparelho <b>já está cadastrado</b>. Confira os dados abaixo.</div>
       <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden">${linhas.map(([k,v],i)=>`<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 12px;font-size:14px;${i?'border-top:1px solid var(--line)':''}"><span style="color:var(--muted)">${k}</span><b style="text-align:right">${esc(v)}</b></div>`).join('')}</div>
-      ${hist.length?`<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--muted);font-weight:700;font-size:13px">Últimas movimentações</summary>${hist.map(h=>`<div style="font-size:13px;padding:4px 0">${fmtD(h.criado_em)} · ${esc(h.evento)}${h.assistencia_nome?' ('+esc(h.assistencia_nome)+')':''} · ${esc(h.usuario||'')}</div>`).join('')}</details>`:''}
+      ${hist.length?`<div style="margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:10px 12px"><div style="font-weight:800;font-size:13px;color:var(--muted);margin-bottom:4px">🕒 HISTÓRICO (${hist.length})</div>${hist.map((h,i)=>`<div style="display:flex;gap:10px;font-size:13px;padding:6px 0;${i?'border-top:1px solid var(--line)':''}"><span style="white-space:nowrap;color:var(--muted);min-width:112px">${esc(fmtDH(h.criado_em))}</span><span><b>${esc(EV[h.evento]||h.evento)}</b>${h.assistencia_nome?' ('+esc(h.assistencia_nome)+')':''}<br><span style="color:var(--muted)">por ${esc(quem(h.usuario)||'—')}</span></span></div>`).join('')}</div>`:''}
       <button type="button" class="btn" style="width:100%;margin-top:12px" onclick="cgEditar()">✏️ Editar cadastro</button>
       ${cgGrupo('Mudar para',CG_MOVER.filter(([v])=>v!==(item.destino||'')).map(([v,l])=>cgChip(l,false,`cgMover('${v}')`)).join(''),false)}
       <div style="display:flex;gap:8px;margin-top:16px"><button type="button" class="btn ghost" style="flex:1" onclick="_cgProximo=true;abrirEtiqueta(cg.ativo)">🏷️ Reimprimir etiqueta</button><button type="button" class="btn ghost" style="flex:1" onclick="cgIniciar();abrirScanner('guiado')">📷 Bipar outro</button></div>`;
