@@ -145,6 +145,24 @@ async function sincronizar(desde: string, ate: string) {
     if (!j.items?.length || vendas.length >= (j.total ?? 0)) break;
   }
 
+  // Anotação do cartão ("R$2.535,03 EM 10X"): se a venda foi editada pela API, o Mercado Phone apaga esse texto.
+  // Guardamos uma cópia e, quando vier vazio, usamos a anotação guardada (o lucro da taxa não se perde).
+  const anotados = new Map<number, any[]>();
+  for (let i = 0; i < vendas.length; i += 200) {
+    const { data: bk } = await sb.from("vendas_mp_pagamentos_anotados").select("venda_id,pagamentos").in("venda_id", vendas.slice(i, i + 200).map((v: any) => v.id));
+    for (const b of bk || []) anotados.set(Number(b.venda_id), (b.pagamentos as any[]) || []);
+  }
+  for (const v of vendas) {
+    const antigos = anotados.get(Number(v.id)) || [];
+    let temNova = false;
+    for (const p of v.pagamentos || []) {
+      if (p.detalhes) { temNova = true; continue; }
+      const a = antigos.find((o: any) => o.detalhes && o.formaPagamentoId === p.formaPagamentoId && Number(o.valor) === Number(p.valor)) || antigos.find((o: any) => o.detalhes && o.formaPagamentoId === p.formaPagamentoId);
+      if (a) p.detalhes = a.detalhes;
+    }
+    if (temNova || !anotados.has(Number(v.id))) await sb.from("vendas_mp_pagamentos_anotados").upsert({ venda_id: v.id, pagamentos: v.pagamentos || [], guardado_em: new Date().toISOString() });
+  }
+
   const resumo = { vendas: vendas.length, vendidos_baixados: 0, upgrades_criados: 0, upgrades_com_custo: 0, vendas_canceladas_devolvidas: 0, erros: [] as string[] };
   for (const v of vendas) {
     try {
