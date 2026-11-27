@@ -70,14 +70,14 @@ Deno.serve(async (req: Request) => {
     const linha: any = { venda: v.id, dia: v.dia, mudancas, diferenca: r2(mudancas.reduce((t: number, m: any) => t + (m.de - m.para), 0)) };
     if (!b.aplicar) { res.push(linha); continue; }
     // anotação do cartão: guarda no nosso banco e na observação da venda (a edição apaga o campo do pagamento lá)
-    const anot = (s.pagamentos || []).filter((p: any) => p.detalhes && !/UPGRADE|APARELHO/i.test(String(p.formaPagamentoDescricao))).map((p: any) => `${p.formaPagamentoDescricao}: ${p.detalhes}`).join(" | ");
+    const anot = (s.pagamentos || []).filter((p: any) => p.detalhes).map((p: any) => `${p.formaPagamentoDescricao}: ${p.detalhes}`).join(" | ");
     await sb.from("vendas_mp_pagamentos_anotados").upsert({ venda_id: v.id, pagamentos: s.pagamentos, guardado_em: new Date().toISOString() });
     const obsAtual = String(s.observacao || "");
     const corpo: any = {
       id: s.id, dataVenda: s.dataVenda, totalVenda: s.totalVenda, clienteId: s.clienteId, vendedorId: s.vendedorId, tipoVendaId: s.tipoVendaId,
       caixaId: s.caixaId, canalVendaId: s.canalVendaId, naturezaOperacaoId: s.naturezaOperacaoId, tipoEntregaId: s.tipoEntregaId,
       paramEmpresaId: s.paramEmpresaId, clienteIndicadorId: s.clienteIndicadorId, status: "concluido",
-      observacao: anot && !obsAtual.includes(anot) ? [obsAtual, `Anotação do cartão: ${anot}`].filter(Boolean).join(" · ") : (s.observacao ?? null),
+      observacao: anot && !obsAtual.includes(anot) ? [obsAtual, `Anotações dos pagamentos: ${anot}`].filter(Boolean).join(" · ") : (s.observacao ?? null),
       itens: (s.itens || []).map((i: any) => ({ id: i.id, produtoId: i.produtoId, quantidade: i.quantidade, valorUnitario: i.valorUnitario, valorCliente: i.valorCliente, desconto: i.desconto, valorTotal: i.valorTotal, observacao: i.observacao, valorCusto: nossos.get(Number(i.produtoId)) ?? i.valorCusto })),
       pagamentos: (s.pagamentos || []).map((p: any) => ({ id: p.id, formaPagamentoId: p.formaPagamentoId, valor: p.valor, parcela: p.parcela, produtoId: p.produtoId, detalhes: p.detalhes, diaVencimento: p.diaVencimento, caixaId: p.caixaId })),
     };
