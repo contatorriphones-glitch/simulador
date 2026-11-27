@@ -1,6 +1,6 @@
 // mp-custos-vendas: deixa o custo de cada item das vendas do Mercado Phone igual ao custo do nosso sistema,
 // para o lucro do Mercado Phone bater com o Relatório (o Mercado Phone guarda o custo dentro da venda).
-// { chave, desde, ate, aplicar?: boolean, ids?: number[], limite?: number }
+// { chave, desde, ate, aplicar?: boolean, ids?: number[], limite?: number, vendedorSubstituto?: number }
 // Sem `aplicar` só mostra o que mudaria. A anotação do cartão (que a edição apaga lá) vai para a observação da venda
 // e fica guardada no nosso banco (vendas_mp_pagamentos_anotados).
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -54,6 +54,14 @@ Deno.serve(async (req: Request) => {
     return null;
   };
 
+  // cópia original das anotações dos pagamentos (nunca é sobrescrita por uma versão já apagada)
+  const backup = new Map<number, any[]>();
+  for (let i = 0; i < (vendas || []).length; i += 200) {
+    const { data: bk } = await sb.from("vendas_mp_pagamentos_anotados").select("venda_id,pagamentos").in("venda_id", (vendas || []).slice(i, i + 200).map((v: any) => v.id));
+    for (const x of bk || []) backup.set(Number(x.venda_id), (x.pagamentos as any[]) || []);
+  }
+  const textoAnot = (pags: any[]) => pags.filter((p: any) => p.detalhes).map((p: any) => `${p.formaPagamentoDescricao}: ${p.detalhes}`).join(" | ");
+
   const res: any[] = [];
   let feitas = 0;
   for (const v of vendas || []) {
@@ -65,13 +73,15 @@ Deno.serve(async (req: Request) => {
     try { s = await mp(`/sales/${v.id}`); } catch (e) { res.push({ venda: v.id, erro: String((e as Error).message) }); feitas++; continue; }
     const mudancas = (s.itens || []).filter((i: any) => nossos.has(Number(i.produtoId)) && Math.abs(Number(i.valorCusto) - nossos.get(Number(i.produtoId))!) > 0.009)
       .map((i: any) => ({ item: i.produtoNome, de: Number(i.valorCusto), para: nossos.get(Number(i.produtoId)) }));
-    if (!mudancas.length) continue;
+    const originais = backup.get(Number(v.id)) || [];
+    const anot = textoAnot(originais.some((p: any) => p.detalhes) ? originais : (s.pagamentos || []));
+    const faltaObs = !!anot && !String(s.observacao || "").includes(anot);
+    if (!mudancas.length && !(b.aplicar && faltaObs)) continue;
     feitas++;
     const linha: any = { venda: v.id, dia: v.dia, mudancas, diferenca: r2(mudancas.reduce((t: number, m: any) => t + (m.de - m.para), 0)) };
     if (!b.aplicar) { res.push(linha); continue; }
-    // anotação do cartão: guarda no nosso banco e na observação da venda (a edição apaga o campo do pagamento lá)
-    const anot = (s.pagamentos || []).filter((p: any) => p.detalhes).map((p: any) => `${p.formaPagamentoDescricao}: ${p.detalhes}`).join(" | ");
-    await sb.from("vendas_mp_pagamentos_anotados").upsert({ venda_id: v.id, pagamentos: s.pagamentos, guardado_em: new Date().toISOString() });
+    // anotações dos pagamentos: a edição apaga o campo lá → ficam na observação da venda e na cópia do nosso banco
+    if (!backup.has(Number(v.id)) && (s.pagamentos || []).some((p: any) => p.detalhes)) await sb.from("vendas_mp_pagamentos_anotados").insert({ venda_id: v.id, pagamentos: s.pagamentos, guardado_em: new Date().toISOString() });
     const obsAtual = String(s.observacao || "");
     const corpo: any = {
       id: s.id, dataVenda: s.dataVenda, totalVenda: s.totalVenda, clienteId: s.clienteId, vendedorId: s.vendedorId, tipoVendaId: s.tipoVendaId,
@@ -82,7 +92,16 @@ Deno.serve(async (req: Request) => {
       pagamentos: (s.pagamentos || []).map((p: any) => ({ id: p.id, formaPagamentoId: p.formaPagamentoId, valor: p.valor, parcela: p.parcela, produtoId: p.produtoId, detalhes: p.detalhes, diaVencimento: p.diaVencimento, caixaId: p.caixaId })),
     };
     try {
-      await mp("/sales", corpo);
+      try { await mp("/sales", corpo); }
+      catch (e) {
+        // vendedor que não existe mais no Mercado Phone (ex.: "RR PRIME CELL LTDA"): usa a vendedora indicada e anota o original
+        if (!b.vendedorSubstituto || !/Vendedor/i.test(String((e as Error).message))) throw e;
+        const nota = `Vendedor original: ${s.vendedorNome || s.vendedorId} (cadastro excluído no Mercado Phone)`;
+        corpo.vendedorId = Number(b.vendedorSubstituto);
+        if (!String(corpo.observacao || "").includes(nota)) corpo.observacao = [corpo.observacao, nota].filter(Boolean).join(" · ");
+        await mp("/sales", corpo);
+        linha.vendedor_trocado = `${s.vendedorNome} → ${b.vendedorSubstituto}`;
+      }
       const d = await mp(`/sales/${v.id}`);
       const ok = (d.itens || []).length === (s.itens || []).length && Math.abs(Number(d.totalVenda) - Number(s.totalVenda)) < 0.01
         && (d.pagamentos || []).length === (s.pagamentos || []).length

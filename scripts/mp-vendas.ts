@@ -128,6 +128,8 @@ async function custoAcessorio(id: number, nome: string, preco: number): Promise<
   }
   return { custo: c, suspeito: false };
 }
+// venda corrigida com outra vendedora porque o cadastro original foi excluído no Mercado Phone: vale o vendedor original
+const vendedorOriginal = (v: any) => ((String(v.observacao || "").match(/Vendedor original: ([^(·]+)/) || [])[1] || "").trim() || v.vendedorNome;
 const ehAparelho = (nome: string) => /IPHONE|^\s*1\d\s*PRO|^\s*\d{2}\s/.test(norm(nome));
 
 async function sincronizar(desde: string, ate: string) {
@@ -183,7 +185,7 @@ async function sincronizar(desde: string, ate: string) {
       const t = calcularTaxa(v, maq, cli);
       const { error } = await sb.from("vendas_mp").upsert({
         id: v.id, data_venda: v.dataVenda, dia: String(v.dataVenda).slice(0, 10), status: v.status, total: v.totalVenda,
-        cliente: v.clienteNome, vendedor: v.vendedorNome, tipo_venda: v.tipoVendaDescricao, observacao: v.observacao,
+        cliente: v.clienteNome, vendedor: vendedorOriginal(v), tipo_venda: v.tipoVendaDescricao, observacao: v.observacao,
         itens, pagamentos: v.pagamentos, ...t, sincronizado_em: new Date().toISOString(),
       });
       if (error) throw error;
