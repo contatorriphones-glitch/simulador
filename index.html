@@ -3659,7 +3659,7 @@
   async function cgMover(destino){
     const item=cg.ativo;let nome='';
     if(destino==='transferencia_cliente'){
-      const dig=prompt('Nome do cliente que levou o aparelho para transferir os dados em casa:','');if(dig===null)return;
+      const sugUp=((String(item.obs||'').match(/Upgrade de ([^·(]+)/i)||[])[1]||'').trim();const dig=prompt('Nome do cliente que levou o aparelho para transferir os dados em casa:',sugUp&&!/CONSUMIDOR/i.test(sugUp)?sugUp:'');if(dig===null)return;
       nome=cgNorm(dig);if(nome.length<3){alert('Informe o nome do cliente.');return}
     }else if(destino==='assistencia'||destino==='outro_lojista'){
       const dig=prompt(destino==='assistencia'?'Qual assistência?':'Qual lojista?',destino==='assistencia'?'LEGACY':'');if(dig===null)return;
@@ -3876,7 +3876,10 @@
   function confResponder(chave,valor){
     if(!_conf)return;
     if(valor==='transferencia_cliente'){
-      const dig=prompt('Nome do cliente que levou o aparelho para transferir em casa:','');
+      // aparelho que entrou de upgrade: o cliente que levou para transferir é quase sempre o dono da troca
+      const imeiR=String(chave).slice(2),apR=getAparelhos().find(x=>x.imei===imeiR&&!['vendido','garantia','troca','outro_lojista'].includes(x.destino||''));
+      const sugerido=apR?((String(apR.obs||'').match(/Upgrade de ([^·(]+)/i)||[])[1]||'').trim():'';
+      const dig=prompt('Nome do cliente que levou o aparelho para transferir em casa:',sugerido&&!/CONSUMIDOR/i.test(sugerido)?sugerido:'');
       if(dig===null){renderConferencia();return}
       const nome=cgNorm(dig);if(nome.length<3){alert('Informe o nome do cliente.');renderConferencia();return}
       _conf.resp[chave]={destino:valor,nome,acao:valor};
