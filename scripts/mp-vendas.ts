@@ -1,6 +1,6 @@
 // mp-vendas: traz as vendas do Mercado Phone para o banco (vendas_mp) e calcula sozinho o lucro da taxa da maquininha.
 // Também: marca como vendido no estoque o aparelho que saiu na venda, e grava o custo do aparelho que entrou de upgrade.
-// Entrada (opcional): { desde: "aaaa-mm-dd", ate: "aaaa-mm-dd" }. Sem nada: últimos 3 dias. Roda sozinho a cada 15 min.
+// Entrada (opcional): { desde, ate, rapido?, soVendas? }. Roda sozinho a cada 3 min (rápido) e a cada 30 min (completo).
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const MP = "https://platform.mercadophone.tech/api/v1";
@@ -386,6 +386,8 @@ Deno.serve(async (req: Request) => {
     const desde = /^\d{4}-\d{2}-\d{2}$/.test(b.desde || "") ? b.desde : b.rapido ? fmt(new Date(hoje.getTime() - 86400000)) : (trintaDias > "2026-11-18" ? trintaDias : "2026-11-18");
     const ate = /^\d{4}-\d{2}-\d{2}$/.test(b.ate || "") ? b.ate : fmt(hoje);
     const vendasRes = await sincronizar(desde, ate);
+    // soVendas: pedido do pente fino → só as vendas do período (rápido); estoque e custos seguem no automático a cada 3/30 min
+    if (b.soVendas) return json({ desde, ate, ...vendasRes });
     let estoque: unknown = null;
     try { estoque = await sincronizarEstoque(); } catch (e) { estoque = { erro: String((e as Error).message || e) }; }
     let custosEnviados: unknown = null;
