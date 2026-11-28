@@ -102,7 +102,14 @@ Deno.serve(async (req: Request) => {
         await mp("/sales", corpo);
         linha.vendedor_trocado = `${s.vendedorNome} → ${b.vendedorSubstituto}`;
       }
-      const d = await mp(`/sales/${v.id}`);
+      let d = await mp(`/sales/${v.id}`);
+      // o Mercado Phone recalcula o total pela soma dos itens; se caiu, os itens voltam para "preço − desconto"
+      // (é o que soma os pagamentos) e o total original volta
+      if (Math.abs(Number(d.totalVenda) - Number(s.totalVenda)) > 0.01) {
+        const itensFix = corpo.itens.map((i: any) => ({ ...i, valorUnitario: i.valorCliente, valorTotal: r2(Number(i.valorCliente) - Number(i.desconto || 0)) }));
+        const soma = itensFix.reduce((t: number, i: any) => t + Number(i.valorTotal), 0);
+        if (Math.abs(soma - Number(s.totalVenda)) < 0.01) { await mp("/sales", { ...corpo, itens: itensFix }); d = await mp(`/sales/${v.id}`); linha.total_restaurado = true; }
+      }
       const ok = (d.itens || []).length === (s.itens || []).length && Math.abs(Number(d.totalVenda) - Number(s.totalVenda)) < 0.01
         && (d.pagamentos || []).length === (s.pagamentos || []).length
         && Math.abs((d.pagamentos || []).reduce((t: number, p: any) => t + Number(p.valor), 0) - (s.pagamentos || []).reduce((t: number, p: any) => t + Number(p.valor), 0)) < 0.01;
